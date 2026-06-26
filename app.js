@@ -30,16 +30,31 @@
     };
   }
 
+  async function fetchAllProduccion(){
+    let all = [];
+    let from = 0;
+    const pageSize = 1000;
+    while(true){
+      const { data, error } = await sb.from('produccion').select('*')
+        .order('fecha', { ascending: false })
+        .range(from, from + pageSize - 1);
+      if(error) throw error;
+      all = all.concat(data || []);
+      if(!data || data.length < pageSize) break;
+      from += pageSize;
+    }
+    return all;
+  }
+
   async function loadAll(){
     setNote('Cargando datos desde Supabase…');
-    const [p1, p2, p3, p4, p5] = await Promise.all([
+    const [p1, p2, p3, p4] = await Promise.all([
       sb.from('personal').select('*'),
       sb.from('maquinas').select('*'),
       sb.from('actividades').select('*'),
-      sb.from('pedidos').select('*'),
-      sb.from('produccion').select('*').order('fecha', { ascending: false }).limit(5000)
+      sb.from('pedidos').select('*')
     ]);
-    const errors = [p1.error, p2.error, p3.error, p4.error, p5.error].filter(Boolean);
+    const errors = [p1.error, p2.error, p3.error, p4.error].filter(Boolean);
     if(errors.length){
       console.error(errors);
       setNote('No se pudo conectar a Supabase. Revisa config.js', true);
@@ -49,7 +64,7 @@
     DB.maquinas = p2.data || [];
     DB.actividades = p3.data || [];
     DB.pedidos = p4.data || [];
-    DB.produccion = (p5.data || []).map(normProd);
+    DB.produccion = (await fetchAllProduccion()).map(normProd);
     setNote('Conectado · ' + DB.produccion.length + ' registros');
   }
 
