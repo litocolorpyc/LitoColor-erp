@@ -7,5 +7,5 @@
 // versión de config.js automáticamente usando build.js y las variables de
 // entorno que configures en su panel.
 
-cconst SUPABASE_URL = "https://nvczpuelhdgrnghxzked.supabase.co";
-   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52Y3pwdWVsaGRncm5naHh6a2VkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1MDI5MzAsImV4cCI6MjA5ODA3ODkzMH0.viXBUa6UCwkbQ21TAMnhIPxrLJnni3VMHzgmimgAdKM";
+const SUPABASE_URL = "https://nvczpuelhdgrnghxzked.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52Y3pwdWVsaGRncm5naHh6a2VkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1MDI5MzAsImV4cCI6MjA5ODA3ODkzMH0.viXBUa6UCwkbQ21TAMnhIPxrLJnni3VMHzgmimgAdKM";
