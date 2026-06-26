@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LitoColor · Panel de operación</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 20 20" width="22" height="22"><circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" stroke-width="1"/><line x1="10" y1="0" x2="10" y2="20" stroke="currentColor" stroke-width="1"/><line x1="0" y1="10" x2="20" y2="10" stroke="currentColor" stroke-width="1"/></svg>
+      </span>
+      <div>
+        <div class="brand-name">LitoColor</div>
+        <div class="brand-sub">Panel de operación</div>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab-btn active" data-tab="gerencial" role="tab">Gerencial</button>
+      <button class="tab-btn" data-tab="produccion" role="tab">Producción</button>
+      <button class="tab-btn" data-tab="operario" role="tab">Operario</button>
+      <button class="tab-btn" data-tab="registrar" role="tab">Registrar</button>
+    </nav>
+    <div class="data-note" id="data-note">Conectando con la base de datos…</div>
+  </header>
+
+  <main>
+    <section class="tab-panel active" id="panel-gerencial">
+      <div class="kpi-row" id="ger-kpis"></div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head"><h3>Ingresos vs costo de mano de obra</h3><span class="card-hint">por mes</span></div>
+          <canvas id="chart-ger-mes" height="220"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Clientes principales</h3><span class="card-hint">por ingreso facturado</span></div>
+          <canvas id="chart-ger-clientes" height="220"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Rentabilidad por orden</h3><span class="card-hint">ingreso vs costo de mano de obra registrado</span></div>
+        <div class="table-wrap">
+          <table id="tbl-ger-ordenes">
+            <thead><tr><th>Orden</th><th>Cliente</th><th>Trabajo</th><th class="num">Ingreso</th><th class="num">Costo M.O.</th><th class="num">Margen</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-produccion">
+      <div class="kpi-row" id="prod-kpis"></div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head"><h3>Horas por área</h3><span class="card-hint">total registrado</span></div>
+          <canvas id="chart-prod-area" height="220"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Uso del tiempo</h3><span class="card-hint">directa, indirecta, paro, legal</span></div>
+          <canvas id="chart-prod-categoria" height="220"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Producción por área</h3><span class="card-hint">horas, piezas y costo acumulado</span></div>
+        <div class="table-wrap">
+          <table id="tbl-prod-area">
+            <thead><tr><th>Área</th><th class="num">Horas</th><th class="num">Piezas producidas</th><th class="num">Costo M.O.</th><th class="num">Registros</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-operario">
+      <div class="op-select-row">
+        <label for="op-select">Operario</label>
+        <select id="op-select"></select>
+      </div>
+      <div class="kpi-row" id="op-kpis"></div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head"><h3>Horas por área</h3><span class="card-hint" id="op-chart-hint">de este operario</span></div>
+          <canvas id="chart-op-area" height="220"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Bitácora reciente</h3><span class="card-hint">últimos 15 registros</span></div>
+          <div class="table-wrap">
+            <table id="tbl-op-log">
+              <thead><tr><th>Fecha</th><th>Actividad</th><th>Orden</th><th class="num">Cant.</th><th class="num">Hrs</th><th class="num">Valor</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-registrar">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head"><h3>Nuevo registro de producción</h3><span class="card-hint">se guarda para todo el equipo</span></div>
+          <form id="form-registro">
+            <div class="form-row">
+              <div class="field"><label>Fecha</label><input type="date" id="f-fecha" required></div>
+              <div class="field"><label>Operario</label><select id="f-operario" required></select></div>
+            </div>
+            <div class="form-row">
+              <div class="field"><label>Área</label><select id="f-area" required></select></div>
+              <div class="field"><label>Actividad</label><select id="f-actividad" required></select></div>
+            </div>
+            <div class="form-row">
+              <div class="field"><label>Hora inicio</label><input type="time" id="f-horaini" required></div>
+              <div class="field"><label>Hora fin</label><input type="time" id="f-horafin" required></div>
+            </div>
+            <div class="form-row">
+              <div class="field"><label>Orden (OPP)</label><input type="text" id="f-orden" placeholder="ej. 5944"></div>
+              <div class="field"><label>Cliente</label><input type="text" id="f-cliente" placeholder="ej. Magic Medios"></div>
+            </div>
+            <div class="form-row">
+              <div class="field"><label>Trabajo</label><input type="text" id="f-trabajo" placeholder="descripción corta"></div>
+              <div class="field"><label>Cantidad producida</label><input type="number" id="f-cantidad" min="0"></div>
+            </div>
+            <div class="form-row">
+              <div class="field"><label>Materia prima</label><input type="text" id="f-materia" placeholder="opcional"></div>
+              <div class="field"><label>Consumo</label><input type="text" id="f-consumo" placeholder="ej. 2kg, 5 pliegos"></div>
+            </div>
+            <div class="field full"><label>Comentario</label><textarea id="f-comentario" rows="2" placeholder="opcional"></textarea></div>
+            <div class="form-foot">
+              <div class="preview" id="f-preview">Tiempo: — · Costo estimado: —</div>
+              <button type="submit" class="btn-primary">Guardar registro</button>
+            </div>
+          </form>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Últimos registros guardados</h3><span class="card-hint">de toda la planta</span></div>
+          <div class="table-wrap">
+            <table id="tbl-reg-recent">
+              <thead><tr><th>Fecha</th><th>Operario</th><th>Actividad</th><th>Orden</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
