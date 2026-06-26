@@ -79,36 +79,44 @@ git push -u origin main
 
 ---
 
-## 3. Pegar tus credenciales de Supabase en el código
+## 3. Tus credenciales de Supabase — sin escribirlas en el código
 
-1. Abre el archivo `config.js` (en GitHub puedes hacerlo directo en el navegador: ábrelo y click en el ícono de lápiz para editar).
-2. Reemplaza:
-   ```js
-   const SUPABASE_URL = "PEGA_AQUI_TU_PROJECT_URL";
-   const SUPABASE_ANON_KEY = "PEGA_AQUI_TU_ANON_KEY";
-   ```
-   con tus valores reales del paso 1.1.
-3. Guarda los cambios (en GitHub: "Commit changes").
+A diferencia de lo que hicimos al principio, **ya no vas a pegar tus
+credenciales dentro de ningún archivo que subas a GitHub**. En su lugar,
+Vercel las va a guardar de forma privada y va a generar `config.js`
+automáticamente cada vez que publique el sitio.
 
-> Nota de seguridad: esta llave "anon" está diseñada para ser pública — vive en
-> el navegador de cualquiera que abra la página. Lo que realmente protege tus
-> datos es la configuración de seguridad (RLS) que ya quedó en `schema.sql`:
-> solo permite leer datos y guardar nuevos registros de producción, nunca
-> editar ni borrar nada.
+> Nota de seguridad: la llave "anon" de Supabase está diseñada para ser
+> pública — vive en el navegador de cualquiera que abra la página, y lo que
+> realmente protege tus datos es la configuración de seguridad (RLS) que ya
+> quedó en `schema.sql`. Aun así, es buena práctica no dejarla escrita en
+> texto plano dentro del repositorio, así que la guardamos en Vercel en vez
+> de en GitHub.
+
+No necesitas hacer nada en este paso todavía — vas a pegar tus credenciales
+directamente en Vercel en el Paso 6. Solo ten a la mano el **Project URL**
+y la llave **anon public** que copiaste en el paso 1.1.
 
 ---
 
 ## 4. Publicar el sitio en Vercel
 
-1. Entra a **https://vercel.com** y crea una cuenta usando **"Continue with GitHub"** (así Vercel puede ver tus repositorios).
+1. Entra a **https://vercel.com** y crea una cuenta usando **"Continue with GitHub"**.
 2. Click en **"Add New..."** → **"Project"**.
 3. Busca y selecciona el repositorio `litocolor-erp` → click **"Import"**.
-4. Vercel va a detectar que es un sitio estático (HTML simple). No necesitas cambiar ninguna configuración — déjalo todo por defecto.
-5. Click en **"Deploy"**.
-6. Espera 30-60 segundos. Cuando termine, Vercel te da una URL como `https://litocolor-erp.vercel.app`.
-7. Abre esa URL. Deberías ver el dashboard cargando tus datos reales.
+4. **Antes de darle Deploy**, despliega la sección **"Build and Output Settings"**:
+   - **Framework Preset**: déjalo en "Other".
+   - **Build Command**: activa el override (el switch) y escribe: `node build.js`
+   - **Output Directory**: activa el override y escribe un solo punto: `.`
+5. Despliega también la sección **"Environment Variables"** y agrega dos:
+   - **Name**: `SUPABASE_URL` → **Value**: tu Project URL (ej. `https://nvczpuelhdgrnghxzked.supabase.co`)
+   - **Name**: `SUPABASE_ANON_KEY` → **Value**: tu llave anon public
+   - Click **"Add"** después de cada una.
+6. Ahora sí, click en **"Deploy"**.
+7. Espera 30-60 segundos. Vercel va a correr `build.js`, que genera `config.js` con tus credenciales por dentro — sin que jamás queden escritas en GitHub.
+8. Cuando termine, te da una URL como `https://litocolor-erp.vercel.app`. Ábrela y confirma que el dashboard carga tus datos.
 
-**A partir de ahora**: cada vez que subas un cambio a GitHub (a la rama `main`), Vercel va a publicar la nueva versión automáticamente. No tienes que repetir estos pasos.
+**A partir de ahora**: cada vez que subas un cambio a GitHub (rama `main`), Vercel repite este mismo proceso automáticamente — no tienes que volver a tocar el Build Command ni las variables de entorno, ya quedan guardadas en el proyecto.
 
 ---
 
@@ -141,7 +149,10 @@ litocolor-erp/
 ├── index.html          → estructura de las 4 pestañas
 ├── styles.css           → diseño visual
 ├── app.js                → lógica: conecta a Supabase, calcula KPIs, dibuja gráficas
-├── config.js             → tus credenciales de Supabase (edítalo en el paso 3)
+├── build.js               → genera config.js en cada despliegue de Vercel
+├── config.example.js      → plantilla de referencia (sí se sube a GitHub)
+├── config.js               → credenciales reales — lo genera Vercel, NUNCA se sube
+├── .gitignore               → evita que config.js real se suba por accidente
 ├── supabase/
 │   ├── schema.sql        → crea las tablas y la seguridad
 │   └── seed.sql          → tus 1.200 registros de producción y 458 pedidos reales
