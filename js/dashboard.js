@@ -88,13 +88,22 @@ export function renderGerencial(){
   actual.pedidos.forEach(p=>{ ordIng[p.orden]=(ordIng[p.orden]||0)+(p.total||0); ordCliente[p.orden]=p.cliente; ordTrabajo[p.orden]=ordTrabajo[p.orden]||p.trabajo; });
   const ordCost = {};
   actual.produccion.forEach(r=>{ if(r.orden==null) return; ordCost[r.orden]=(ordCost[r.orden]||0)+(r.valorActividad||0); });
-  const rows = Object.keys(ordIng).map(o=>({orden:o, cliente:ordCliente[o], trabajo:ordTrabajo[o], ing:ordIng[o], cost:ordCost[o]||0}))
+
+  // tasa de prorrateo: otros costos (fijos+variables, SIN mano de obra) como
+  // % del ingreso del periodo — se reparte a cada orden/producto según lo
+  // que facturó. La mano de obra nunca entra aquí, ya está exacta por orden.
+  const tasaOtros = actual.ingresos > 0 ? (actual.otrosCostos / actual.ingresos) : 0;
+
+  const rows = Object.keys(ordIng).map(o=>({
+      orden:o, cliente:ordCliente[o], trabajo:ordTrabajo[o], ing:ordIng[o], cost:ordCost[o]||0,
+      otros: ordIng[o]*tasaOtros
+    }))
     .sort((a,b)=>b.ing-a.ing).slice(0,15);
   ultimaRentabilidad = rows;
   document.querySelector('#tbl-ger-ordenes tbody').innerHTML = rows.map(r=>{
-    const m=r.ing-r.cost;
-    return `<tr><td>${r.orden}</td><td>${r.cliente||'—'}</td><td>${(r.trabajo||'—').toString().trim()}</td><td class="num">${fmtCOP(r.ing)}</td><td class="num">${fmtCOP(r.cost)}</td><td class="num" style="color:${m>=0?'var(--good)':'var(--bad)'}">${fmtCOP(m)}</td></tr>`;
-  }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin datos en este rango</td></tr>';
+    const m=r.ing-r.cost-r.otros;
+    return `<tr><td>${r.orden}</td><td>${r.cliente||'—'}</td><td>${(r.trabajo||'—').toString().trim()}</td><td class="num">${fmtCOP(r.ing)}</td><td class="num">${fmtCOP(r.cost)}</td><td class="num">${fmtCOP(r.otros)}</td><td class="num" style="color:${m>=0?'var(--good)':'var(--bad)'}">${fmtCOP(m)}</td></tr>`;
+  }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint)">Sin datos en este rango</td></tr>';
 
   // ---- rentabilidad por tipo de producto ----
   const ordProducto = {};
@@ -109,15 +118,19 @@ export function renderGerencial(){
     prodMap[prod].ordenes.add(o);
   });
   const filasProducto = Object.entries(prodMap)
-    .map(([prod, v]) => ({ producto: prod, ordenes: v.ordenes.size, ing: v.ing, cost: v.cost, margen: v.ing - v.cost, margenPct: v.ing>0 ? ((v.ing-v.cost)/v.ing*100) : 0 }))
+    .map(([prod, v]) => {
+      const otros = v.ing * tasaOtros;
+      const margen = v.ing - v.cost - otros;
+      return { producto: prod, ordenes: v.ordenes.size, ing: v.ing, cost: v.cost, otros, margen, margenPct: v.ing>0 ? (margen/v.ing*100) : 0 };
+    })
     .sort((a,b) => b.margen - a.margen);
   ultimaRentabilidadProducto = filasProducto;
 
   document.querySelector('#tbl-ger-productos tbody').innerHTML = filasProducto.slice(0,20).map(f => `<tr>
-    <td>${f.producto}</td><td class="num">${f.ordenes}</td><td class="num">${fmtCOP(f.ing)}</td><td class="num">${fmtCOP(f.cost)}</td>
+    <td>${f.producto}</td><td class="num">${f.ordenes}</td><td class="num">${fmtCOP(f.ing)}</td><td class="num">${fmtCOP(f.cost)}</td><td class="num">${fmtCOP(f.otros)}</td>
     <td class="num" style="color:${f.margen>=0?'var(--good)':'var(--bad)'}">${fmtCOP(f.margen)}</td>
     <td class="num">${fmtNum(f.margenPct,0)}%</td>
-  </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin datos en este rango</td></tr>';
+  </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint)">Sin datos en este rango</td></tr>';
 
   const topProd = filasProducto.slice(0,12).sort((a,b) => b.margen - a.margen);
 
@@ -127,7 +140,8 @@ export function renderGerencial(){
       labels: topProd.map(f => `${f.producto}  (${fmtNum(f.margenPct,0)}%)`),
       datasets: [
         { label: 'Margen', data: topProd.map(f=>f.margen), backgroundColor: '#2E8FC0', stack: 's' },
-        { label: 'Costo de mano de obra', data: topProd.map(f=>f.cost), backgroundColor: '#D8854A', stack: 's' }
+        { label: 'Costo de mano de obra', data: topProd.map(f=>f.cost), backgroundColor: '#D8854A', stack: 's' },
+        { label: 'Otros costos', data: topProd.map(f=>f.otros), backgroundColor: '#AC2478', stack: 's' }
       ]
     },
     options: {
@@ -139,7 +153,8 @@ export function renderGerencial(){
           label: (ctx) => {
             const f = topProd[ctx.dataIndex];
             if(ctx.dataset.label === 'Margen') return `Margen: ${fmtCOP(f.margen)} (${fmtNum(f.margenPct,0)}%)`;
-            return `Costo de mano de obra: ${fmtCOP(f.cost)}`;
+            if(ctx.dataset.label === 'Costo de mano de obra') return `Costo de mano de obra: ${fmtCOP(f.cost)}`;
+            return `Otros costos (prorrateado): ${fmtCOP(f.otros)}`;
           },
           footer: (items) => `Ingreso total: ${fmtCOP(topProd[items[0].dataIndex].ing)}`
         } }
@@ -264,7 +279,7 @@ function wireExportButtons(){
   if(btnRent) btnRent.addEventListener('click', () => {
     exportarExcel('LitoColor_rentabilidad_por_orden.xlsx', [{
       nombre: 'Rentabilidad',
-      filas: ultimaRentabilidad.map(r => ({ Orden: r.orden, Cliente: r.cliente, Trabajo: r.trabajo, Ingreso: r.ing, 'Costo M.O.': r.cost, Margen: r.ing - r.cost }))
+      filas: ultimaRentabilidad.map(r => ({ Orden: r.orden, Cliente: r.cliente, Trabajo: r.trabajo, Ingreso: r.ing, 'Costo M.O.': r.cost, 'Otros costos (prorrateado)': Math.round(r.otros), Margen: Math.round(r.ing - r.cost - r.otros) }))
     }]);
   });
 
@@ -272,7 +287,7 @@ function wireExportButtons(){
   if(btnRentProd) btnRentProd.addEventListener('click', () => {
     exportarExcel('LitoColor_rentabilidad_por_producto.xlsx', [{
       nombre: 'Rentabilidad por producto',
-      filas: ultimaRentabilidadProducto.map(f => ({ Producto: f.producto, Órdenes: f.ordenes, Ingreso: f.ing, 'Costo M.O.': f.cost, Margen: f.margen, 'Margen %': Math.round(f.margenPct) }))
+      filas: ultimaRentabilidadProducto.map(f => ({ Producto: f.producto, Órdenes: f.ordenes, Ingreso: f.ing, 'Costo M.O.': f.cost, 'Otros costos (prorrateado)': Math.round(f.otros), Margen: Math.round(f.margen), 'Margen %': Math.round(f.margenPct) }))
     }]);
   });
 
