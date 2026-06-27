@@ -43,6 +43,8 @@
       <div class="sidebar-group">
         <div class="sidebar-group-label">Operación</div>
         <button class="tab-btn" data-tab="ordenes" role="tab">Órdenes</button>
+        <button class="tab-btn" data-tab="calendario" role="tab">Calendario</button>
+        <button class="tab-btn" data-tab="alertas" role="tab">Alertas</button>
         <button class="tab-btn" data-tab="registrar" role="tab">Registrar</button>
       </div>
       <div class="sidebar-group">
@@ -92,6 +94,7 @@
         </div>
         <div class="field" style="max-width:140px"><label>Desde</label><input type="date" id="ger-desde"></div>
         <div class="field" style="max-width:140px"><label>Hasta</label><input type="date" id="ger-hasta"></div>
+        <button type="button" class="btn-secondary" id="export-respaldo" style="margin-left:auto">⬇ Respaldo completo (.xlsx)</button>
       </div>
       <div class="kpi-row" id="ger-kpis"></div>
       <div class="grid-2">
@@ -106,6 +109,7 @@
       </div>
       <div class="card">
         <div class="card-head"><h3>Rentabilidad por orden</h3><span class="card-hint">ingreso vs costo de mano de obra registrado</span></div>
+        <div class="form-foot" style="margin-top:0;margin-bottom:10px"><span></span><button type="button" class="btn-secondary" id="export-rentabilidad" style="margin:0">⬇ Exportar a Excel</button></div>
         <div class="table-wrap">
           <table id="tbl-ger-ordenes">
             <thead><tr><th>Orden</th><th>Cliente</th><th>Trabajo</th><th class="num">Ingreso</th><th class="num">Costo M.O.</th><th class="num">Margen</th></tr></thead>
@@ -141,6 +145,7 @@
       </div>
       <div class="card">
         <div class="card-head"><h3>Producción por área</h3><span class="card-hint">horas, piezas y costo acumulado</span></div>
+        <div class="form-foot" style="margin-top:0;margin-bottom:10px"><span></span><button type="button" class="btn-secondary" id="export-produccion" style="margin:0">⬇ Exportar a Excel</button></div>
         <div class="table-wrap">
           <table id="tbl-prod-area">
             <thead><tr><th>Área</th><th class="num">Horas</th><th class="num">Piezas producidas</th><th class="num">Costo M.O.</th><th class="num">Registros</th></tr></thead>
@@ -222,6 +227,7 @@
 
       <div class="card">
         <div class="card-head"><h3>Buscar y administrar órdenes</h3><span class="card-hint">edita, duplica o cancela cualquier orden</span></div>
+        <div class="form-foot" style="margin-top:0;margin-bottom:10px"><span></span><button type="button" class="btn-secondary" id="export-ordenes" style="margin:0">⬇ Exportar a Excel</button></div>
         <div class="form-row">
           <div class="field"><label>Buscar por orden, cliente o producto</label><input type="text" id="opp-buscar" placeholder="ej. 5944, Magic Medios, Cuadernos…"></div>
         </div>
@@ -329,6 +335,27 @@
         <div class="opp-pliegos-result">Pliegos necesarios: <span class="f-pliegos-result">—</span></div>
       </div>
     </template>
+
+    <section class="tab-panel" id="panel-calendario">
+      <div class="card">
+        <div class="card-head"><h3>Línea de tiempo de producción</h3><span class="card-hint">qué máquina está ocupada con qué orden</span></div>
+        <div class="form-row" style="align-items:flex-end">
+          <div class="field" style="max-width:160px"><label>Fecha</label><input type="date" id="cal-fecha"></div>
+          <button type="button" class="preset-btn" id="cal-hoy">Hoy</button>
+          <button type="button" class="preset-btn" id="cal-prev">← Anterior</button>
+          <button type="button" class="preset-btn" id="cal-next">Siguiente →</button>
+        </div>
+        <div id="cal-timeline" style="margin-top:16px"></div>
+        <div class="cal-legend" id="cal-legend"></div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-alertas">
+      <div class="card">
+        <div class="card-head"><h3>Alertas</h3><span class="card-hint">detectadas automáticamente con tus propios datos</span></div>
+        <div id="alertas-list"></div>
+      </div>
+    </section>
 
     <section class="tab-panel" id="panel-registrar">
       <div class="card">
@@ -539,6 +566,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="config.js"></script>
 <script type="module" src="js/app.js"></script>
 </body>
