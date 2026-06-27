@@ -6,7 +6,7 @@ import { setNote } from './helpers.js';
 export const DB = {
   personal: [], maquinas: [], actividades: [], pedidos: [], produccion: [],
   materias_primas: [], clientes: [], proveedores: [], opp_ordenes: [], opp_piezas: [],
-  productos: [], productos_combinaciones: []
+  productos: []
 };
 
 export function normProd(r){
@@ -49,10 +49,9 @@ export async function loadCatalogos(){
     sb.from('materias_primas').select('*').order('nombre'),
     sb.from('clientes').select('*').order('nombre'),
     sb.from('proveedores').select('*').order('nombre'),
-    sb.from('productos').select('*').order('nombre'),
-    sb.from('productos_combinaciones').select('*')
+    sb.from('productos').select('*').order('nombre')
   ]);
-  const [p1, p2, p3, p4, p5, p6, p7, p8, p9] = results;
+  const [p1, p2, p3, p4, p5, p6, p7, p8] = results;
   // Solo personal/maquinas/actividades/pedidos son indispensables para arrancar.
   // Las tablas más nuevas (materias_primas, clientes, proveedores) pueden no
   // existir todavía si no se ha corrido el SQL más reciente — no rompen el arranque.
@@ -70,7 +69,6 @@ export async function loadCatalogos(){
   DB.clientes = p6.data || [];
   DB.proveedores = p7.data || [];
   DB.productos = p8.data || [];
-  DB.productos_combinaciones = p9.data || [];
 }
 
 export async function loadProduccion(){

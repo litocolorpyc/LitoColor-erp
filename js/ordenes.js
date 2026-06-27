@@ -162,11 +162,25 @@ export function populateProductoSelect(){
   if(valorPrevio) ensureOptionExists(sel, valorPrevio === '__nuevo__' ? '' : valorPrevio);
 }
 
-function renderProductoRef(){
+const cacheCombinaciones = new Map(); // producto -> filas (para no repetir la consulta)
+
+async function renderProductoRef(){
   const nombre = document.getElementById('opp-producto').value;
   const cont = document.getElementById('opp-producto-ref');
-  const combos = DB.productos_combinaciones.filter(c => c.producto === nombre);
-  if(!nombre || nombre === '__nuevo__' || !combos.length){ cont.style.display = 'none'; return; }
+  if(!nombre || nombre === '__nuevo__'){ cont.style.display = 'none'; return; }
+
+  cont.style.display = '';
+  cont.innerHTML = '<div class="producto-ref-box">Consultando combinaciones…</div>';
+
+  let combos = cacheCombinaciones.get(nombre);
+  if(!combos){
+    const { data, error } = await sb.from('productos_combinaciones').select('*').eq('producto', nombre);
+    if(error){ console.error(error); cont.style.display = 'none'; return; }
+    combos = data || [];
+    cacheCombinaciones.set(nombre, combos);
+  }
+
+  if(!combos.length){ cont.style.display = 'none'; return; }
   const tamanos = [...new Set(combos.map(c=>c.tamano).filter(Boolean))];
   const papeles = [...new Set(combos.map(c=>c.papel).filter(Boolean))];
   const acabados = [...new Set(combos.map(c=>c.acabados).filter(Boolean))];
@@ -176,7 +190,6 @@ function renderProductoRef(){
     <div class="producto-ref-row"><b>Papeles:</b> ${papeles.join(', ')}</div>
     <div class="producto-ref-row"><b>Acabados posibles:</b> ${acabados.slice(0,12).join(', ')}${acabados.length>12?'…':''}</div>
   </div>`;
-  cont.style.display = '';
 }
 
 function wireNuevoInline(selectId, wrapId, inputId, btnId, table, onCreated){
