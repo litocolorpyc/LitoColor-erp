@@ -34,6 +34,7 @@ function codeFromLabel(label){
 // ---------- GERENCIAL ----------
 let rangoGer = rangoFechas('todo');
 let ultimaRentabilidad = [];
+let ultimaRentabilidadProducto = [];
 
 function calcularGerencial(desde, hasta){
   const pedidos = DB.pedidos.filter(p => enRango(p.fecha, desde, hasta));
@@ -86,6 +87,36 @@ export function renderGerencial(){
     const m=r.ing-r.cost;
     return `<tr><td>${r.orden}</td><td>${r.cliente||'—'}</td><td>${(r.trabajo||'—').toString().trim()}</td><td class="num">${fmtCOP(r.ing)}</td><td class="num">${fmtCOP(r.cost)}</td><td class="num" style="color:${m>=0?'var(--good)':'var(--bad)'}">${fmtCOP(m)}</td></tr>`;
   }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin datos en este rango</td></tr>';
+
+  // ---- rentabilidad por tipo de producto ----
+  const ordProducto = {};
+  actual.pedidos.forEach(p => { if(!ordProducto[p.orden]) ordProducto[p.orden] = p.producto || 'Sin producto'; });
+
+  const prodMap = {};
+  Object.keys(ordIng).forEach(o => {
+    const prod = ordProducto[o] || 'Sin producto';
+    prodMap[prod] = prodMap[prod] || { ing:0, cost:0, ordenes:new Set() };
+    prodMap[prod].ing += ordIng[o];
+    prodMap[prod].cost += (ordCost[o] || 0);
+    prodMap[prod].ordenes.add(o);
+  });
+  const filasProducto = Object.entries(prodMap)
+    .map(([prod, v]) => ({ producto: prod, ordenes: v.ordenes.size, ing: v.ing, cost: v.cost, margen: v.ing - v.cost, margenPct: v.ing>0 ? ((v.ing-v.cost)/v.ing*100) : 0 }))
+    .sort((a,b) => b.margen - a.margen);
+  ultimaRentabilidadProducto = filasProducto;
+
+  document.querySelector('#tbl-ger-productos tbody').innerHTML = filasProducto.slice(0,20).map(f => `<tr>
+    <td>${f.producto}</td><td class="num">${f.ordenes}</td><td class="num">${fmtCOP(f.ing)}</td><td class="num">${fmtCOP(f.cost)}</td>
+    <td class="num" style="color:${f.margen>=0?'var(--good)':'var(--bad)'}">${fmtCOP(f.margen)}</td>
+    <td class="num">${fmtNum(f.margenPct,0)}%</td>
+  </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin datos en este rango</td></tr>';
+
+  const topProd = filasProducto.slice(0,10);
+  makeChart('chart-ger-productos', { type:'bar', data:{ labels: topProd.map(f=>f.producto),
+    datasets:[
+      { label:'Ingreso', data: topProd.map(f=>f.ing), backgroundColor:'#185FA5' },
+      { label:'Margen', data: topProd.map(f=>f.margen), backgroundColor:'#3B6D11' }
+    ]}, options: baseBarOpts(false, true) });
 }
 
 function wireRangePresets(presetContainerId, desdeId, hastaId, getRango, setRango, onApply){
@@ -201,6 +232,14 @@ function wireExportButtons(){
     exportarExcel('LitoColor_rentabilidad_por_orden.xlsx', [{
       nombre: 'Rentabilidad',
       filas: ultimaRentabilidad.map(r => ({ Orden: r.orden, Cliente: r.cliente, Trabajo: r.trabajo, Ingreso: r.ing, 'Costo M.O.': r.cost, Margen: r.ing - r.cost }))
+    }]);
+  });
+
+  const btnRentProd = document.getElementById('export-rentabilidad-producto');
+  if(btnRentProd) btnRentProd.addEventListener('click', () => {
+    exportarExcel('LitoColor_rentabilidad_por_producto.xlsx', [{
+      nombre: 'Rentabilidad por producto',
+      filas: ultimaRentabilidadProducto.map(f => ({ Producto: f.producto, Órdenes: f.ordenes, Ingreso: f.ing, 'Costo M.O.': f.cost, Margen: f.margen, 'Margen %': Math.round(f.margenPct) }))
     }]);
   });
 
