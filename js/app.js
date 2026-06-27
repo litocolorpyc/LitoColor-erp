@@ -1,7 +1,7 @@
 import { loadAll } from './store.js';
 import { renderGerencial, renderProduccion, renderOperario, populateOperarioSelect, initDashboardFilters } from './dashboard.js';
 import { initRegistrar, populateReg } from './registrar.js';
-import { initOppForm, renderOppRecent, populateClienteSelect, populateProductoSelect } from './ordenes.js';
+import { initOppForm, renderOppRecent, populateClienteSelect, populateProductoSelect, refreshPapelPliegoSelects } from './ordenes.js';
 import { initMaestros, renderMaestros } from './maestros.js';
 
 // ---------- pestañas ----------
@@ -26,6 +26,7 @@ function onMaestrosChange(){
   populateOperarioSelect(); // refresca el selector de la pestaña Operario
   populateClienteSelect();
   populateProductoSelect();
+  refreshPapelPliegoSelects();
 }
 
 (async function init(){

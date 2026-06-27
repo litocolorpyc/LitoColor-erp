@@ -13,6 +13,39 @@ function calcPorPliego(pliegoW, pliegoH, piezaW, piezaH){
   return Math.max(a, b);
 }
 
+export function refreshPapelPliegoSelects(){
+  document.querySelectorAll('#opp-piezas-list .opp-pieza-card').forEach(node => {
+    populatePapelSelect(node);
+    populatePliegoSelect(node);
+  });
+}
+
+function distinctPliegos(){
+  const set = new Set();
+  DB.materias_primas.forEach(m => {
+    if(m.pliego_ancho && m.pliego_alto) set.add(m.pliego_ancho + 'x' + m.pliego_alto);
+  });
+  return Array.from(set).sort();
+}
+
+function populatePapelSelect(node){
+  const sel = node.querySelector('.f-papel');
+  const valorPrevio = sel.value;
+  sel.innerHTML = '<option value="">Selecciona un papel…</option>' +
+    DB.materias_primas.filter(m=>m.activo!==false).map(m =>
+      `<option value="${m.nombre}" data-pliego="${m.pliego_ancho && m.pliego_alto ? m.pliego_ancho+'x'+m.pliego_alto : ''}">${m.nombre}</option>`
+    ).join('');
+  if(valorPrevio) ensureOptionExists(sel, valorPrevio);
+}
+
+function populatePliegoSelect(node){
+  const sel = node.querySelector('.f-pliego');
+  const valorPrevio = sel.value;
+  const pliegos = distinctPliegos();
+  sel.innerHTML = pliegos.map(p => `<option value="${p}">${p.replace('x',' x ')} cm</option>`).join('') || '<option value="">— sin papeles con pliego definido —</option>';
+  if(valorPrevio) ensureOptionExists(sel, valorPrevio);
+}
+
 function addPiezaCard(prefill){
   oppPiezaCount++;
   const tpl = document.getElementById('opp-pieza-template');
@@ -35,6 +68,20 @@ function addPiezaCard(prefill){
   });
 
   document.getElementById('opp-piezas-list').appendChild(node);
+  populatePapelSelect(node);
+  populatePliegoSelect(node);
+
+  // al elegir un papel, el pliego se ajusta solo según lo que tenga
+  // guardado ese papel en el maestro de Materias primas (editable después)
+  node.querySelector('.f-papel').addEventListener('change', () => {
+    const opt = node.querySelector('.f-papel').selectedOptions[0];
+    const pliego = opt && opt.dataset.pliego;
+    if(pliego){
+      ensureOptionExists(node.querySelector('.f-pliego'), pliego);
+      node.querySelector('.f-pliego').value = pliego;
+    }
+    recalcPieza(node);
+  });
 
   if(prefill) fillPiezaCard(node, prefill);
   recalcPieza(node);
@@ -47,8 +94,8 @@ function fillPiezaCard(node, p){
   node.querySelector('.f-cantidad').value = p.cantidad ?? '';
   node.querySelector('.f-tam-ancho').value = p.tamano_ancho ?? '';
   node.querySelector('.f-tam-alto').value = p.tamano_alto ?? '';
-  node.querySelector('.f-papel').value = p.papel || '';
-  if(p.pliego_ancho && p.pliego_alto) node.querySelector('.f-pliego').value = p.pliego_ancho + 'x' + p.pliego_alto;
+  ensureOptionExists(node.querySelector('.f-papel'), p.papel || '');
+  if(p.pliego_ancho && p.pliego_alto) ensureOptionExists(node.querySelector('.f-pliego'), p.pliego_ancho + 'x' + p.pliego_alto);
   node.querySelector('.f-tintas-frente').value = p.tintas_frente ?? 4;
   node.querySelector('.f-tintas-atras').value = p.tintas_atras ?? 0;
   node.querySelector('.f-ctp').value = p.ctp || 'Convencional';
