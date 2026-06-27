@@ -98,6 +98,10 @@
     <section class="tab-panel" id="panel-ordenes">
       <div class="card">
         <div class="card-head"><h3>Nueva orden de producción</h3><span class="card-hint">define el encabezado y agrega cada pieza</span></div>
+        <div class="form-foot" style="margin-top:0;margin-bottom:14px">
+          <span></span>
+          <button type="button" class="btn-secondary" id="opp-reset">Nueva orden (limpiar formulario)</button>
+        </div>
         <div class="form-row">
           <div class="field"><label>Orden N°</label><input type="number" id="opp-orden" required></div>
           <div class="field"><label>Fecha</label><input type="date" id="opp-fecha" required></div>
@@ -115,6 +119,11 @@
           <div class="preview" id="opp-preview">0 piezas agregadas</div>
           <button type="button" class="btn-primary" id="opp-save">Guardar orden completa</button>
         </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Estado de órdenes en proceso</h3><span class="card-hint">qué procesos faltan por cada pieza</span></div>
+        <div id="opp-estado-list"></div>
       </div>
 
       <div class="card">
@@ -180,6 +189,17 @@
           <div class="field"><label>Otros acabados</label><input type="text" class="f-otros" placeholder="ej. Argollado, Encaratulado"></div>
         </div>
 
+        <div class="opp-calc-divider">Procesos que requiere esta pieza</div>
+        <div class="form-row opp-checks opp-procesos-grid">
+          <label><input type="checkbox" class="f-proc" value="Diseño" checked> Diseño</label>
+          <label><input type="checkbox" class="f-proc" value="Litografia" checked> Litografía</label>
+          <label><input type="checkbox" class="f-proc" value="Guillotina" checked> Guillotina</label>
+          <label><input type="checkbox" class="f-proc" value="Troquelado"> Troquelado</label>
+          <label><input type="checkbox" class="f-proc" value="Plastificado"> Plastificado</label>
+          <label><input type="checkbox" class="f-proc" value="Engomadora"> Engomadora</label>
+          <label><input type="checkbox" class="f-proc" value="Terminado" checked> Terminado</label>
+        </div>
+
         <div class="opp-calc-divider">Cálculo de imposición</div>
 
         <div class="form-row">
@@ -201,44 +221,59 @@
     <section class="tab-panel" id="panel-registrar">
       <div class="grid-2">
         <div class="card">
-          <div class="card-head"><h3>Nuevo registro de producción</h3><span class="card-hint">se guarda para todo el equipo</span></div>
-          <form id="form-registro">
+          <div class="card-head"><h3>Captura de tiempos</h3><span class="card-hint" id="reg-hint">elige tu nombre para comenzar</span></div>
+
+          <div id="reg-setup">
             <div class="form-row">
-              <div class="field"><label>Fecha</label><input type="date" id="f-fecha" required></div>
-              <div class="field"><label>Operario</label><select id="f-operario" required></select></div>
+              <div class="field"><label>Operario</label><select id="r-operario"></select></div>
+              <div class="field"><label>Orden (OPP)</label><input type="text" id="r-orden" placeholder="ej. 5944"></div>
             </div>
             <div class="form-row">
-              <div class="field"><label>Área</label><select id="f-area" required></select></div>
-              <div class="field"><label>Actividad</label><select id="f-actividad" required></select></div>
+              <div class="field"><label>Pieza</label><select id="r-pieza"><option value="">— Sin OPP / general —</option></select></div>
+              <div class="field"><label>Área</label><select id="r-area"></select></div>
             </div>
             <div class="form-row">
-              <div class="field"><label>Hora inicio</label><input type="time" id="f-horaini" required></div>
-              <div class="field"><label>Hora fin</label><input type="time" id="f-horafin" required></div>
+              <div class="field"><label>Actividad</label><select id="r-actividad"></select></div>
+              <div class="field"><label>Máquina</label><select id="r-maquina"><option value="">Trabajo manual (sin máquina)</option></select></div>
             </div>
-            <div class="form-row">
-              <div class="field"><label>Orden (OPP)</label><input type="text" id="f-orden" placeholder="ej. 5944"></div>
-              <div class="field"><label>Cliente</label><input type="text" id="f-cliente" placeholder="ej. Magic Medios"></div>
-            </div>
-            <div class="form-row">
-              <div class="field"><label>Trabajo</label><input type="text" id="f-trabajo" placeholder="descripción corta"></div>
-              <div class="field"><label>Cantidad producida</label><input type="number" id="f-cantidad" min="0"></div>
-            </div>
-            <div class="form-row">
-              <div class="field"><label>Materia prima</label><input type="text" id="f-materia" placeholder="opcional"></div>
-              <div class="field"><label>Consumo</label><input type="text" id="f-consumo" placeholder="ej. 2kg, 5 pliegos"></div>
-            </div>
-            <div class="field full"><label>Comentario</label><textarea id="f-comentario" rows="2" placeholder="opcional"></textarea></div>
             <div class="form-foot">
-              <div class="preview" id="f-preview">Tiempo: — · Costo estimado: —</div>
-              <button type="submit" class="btn-primary">Guardar registro</button>
+              <span></span>
+              <button type="button" class="btn-primary btn-clock" id="r-start">▶ Iniciar actividad</button>
             </div>
-          </form>
+          </div>
+
+          <div id="reg-running" style="display:none">
+            <div class="reg-running-card">
+              <div class="reg-running-row"><span>Operario</span><b id="rr-operario"></b></div>
+              <div class="reg-running-row"><span>Orden / Pieza</span><b id="rr-orden"></b></div>
+              <div class="reg-running-row"><span>Actividad</span><b id="rr-actividad"></b></div>
+              <div class="reg-running-row"><span>Máquina</span><b id="rr-maquina"></b></div>
+              <div class="reg-running-row"><span>Hora inicio</span><b id="rr-inicio"></b></div>
+              <div class="reg-timer" id="rr-timer">00:00:00</div>
+            </div>
+            <div class="form-row">
+              <div class="field"><label>Cantidad producida</label><input type="number" id="r-cantidad" min="0"></div>
+              <div class="field"><label>¿Reproceso?</label>
+                <select id="r-reproceso"><option value="No">No</option><option value="Si">Sí</option></select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field"><label>Materia prima</label><input type="text" id="r-materia" placeholder="opcional"></div>
+              <div class="field"><label>Consumo</label><input type="text" id="r-consumo" placeholder="ej. 2kg, 5 pliegos"></div>
+            </div>
+            <div class="field full"><label>Comentario</label><textarea id="r-comentario" rows="2" placeholder="opcional"></textarea></div>
+            <div class="form-foot">
+              <span></span>
+              <button type="button" class="btn-primary btn-clock" id="r-finish">⏹ Finalizar actividad</button>
+            </div>
+          </div>
         </div>
+
         <div class="card">
           <div class="card-head"><h3>Últimos registros guardados</h3><span class="card-hint">de toda la planta</span></div>
           <div class="table-wrap">
             <table id="tbl-reg-recent">
-              <thead><tr><th>Fecha</th><th>Operario</th><th>Actividad</th><th>Orden</th></tr></thead>
+              <thead><tr><th>Fecha</th><th>Operario</th><th>Actividad</th><th>Orden</th><th>Estado</th></tr></thead>
               <tbody></tbody>
             </table>
           </div>

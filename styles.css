@@ -74,6 +74,26 @@ select, input, textarea{ font-family:inherit; font-size:13px; padding:7px 9px; b
 .opp-calc-divider{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--accent); border-top:1px dashed var(--line); padding-top:10px; margin:12px 0 10px; }
 .opp-pliegos-result{ font-size:13px; font-weight:600; margin-top:6px; }
 .calc-readonly{ background:var(--card); color:var(--ink-soft); }
+.opp-procesos-grid{ flex-wrap:wrap; row-gap:8px; }
+
+.estado-orden{ border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:10px; }
+.estado-orden-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+.estado-orden-head b{ font-size:13px; }
+.estado-pieza-row{ display:flex; align-items:center; gap:10px; padding:5px 0; font-size:12.5px; border-top:1px solid var(--line); }
+.estado-pieza-row:first-child{ border-top:none; }
+.estado-pieza-nombre{ min-width:140px; font-weight:600; }
+.estado-chip{ display:inline-flex; align-items:center; gap:4px; padding:2px 9px; border-radius:99px; font-size:11px; font-weight:600; }
+.estado-chip.done{ background:var(--bg-success,rgba(59,109,17,.12)); color:var(--good); }
+.estado-chip.pending{ background:var(--bg-warning,rgba(163,45,45,.08)); color:var(--ink-faint); }
+.estado-bar-wrap{ flex:1; height:6px; background:var(--line); border-radius:3px; overflow:hidden; max-width:120px; }
+.estado-bar-fill{ height:100%; background:var(--good); }
+
+.btn-clock{ font-size:14px; padding:11px 22px; }
+.reg-running-card{ background:var(--card); border:1px solid var(--accent); border-radius:10px; padding:14px; margin-bottom:14px; }
+.reg-running-row{ display:flex; justify-content:space-between; font-size:12.5px; padding:3px 0; }
+.reg-running-row span{ color:var(--ink-soft); }
+.reg-timer{ text-align:center; font-size:28px; font-weight:700; letter-spacing:.04em; color:var(--accent); margin-top:8px; font-variant-numeric:tabular-nums; }
+.estado-chip-warn{ background:rgba(186,117,23,.12); color:#854F0B; }
 
 .toast{ position:fixed; bottom:18px; right:18px; background:var(--ink); color:var(--paper); padding:10px 16px; border-radius:8px; font-size:13px; opacity:0; transform:translateY(8px); transition:opacity .25s, transform .25s; pointer-events:none; z-index:50; }
 .toast.show{ opacity:1; transform:translateY(0); }

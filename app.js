@@ -21,8 +21,9 @@
   // normaliza filas de supabase (snake_case) al formato usado por el dashboard (camelCase)
   function normProd(r){
     return {
-      fecha: r.fecha, operario: r.operario, horaIni: r.hora_ini, horaFin: r.hora_fin,
-      actividad: r.actividad, area: r.area, cantidad: r.cantidad, orden: r.orden,
+      id: r.id, fecha: r.fecha, operario: r.operario, horaIni: r.hora_ini, horaFin: r.hora_fin,
+      actividad: r.actividad, area: r.area, maquina: r.maquina, cantidad: r.cantidad, orden: r.orden,
+      suborden: r.suborden, op: r.op,
       cliente: r.cliente, trabajo: r.trabajo, materiaPrima: r.materia_prima,
       consumoMP: r.consumo_mp, comentario: r.comentario, tiempoHr: r.tiempo_hr,
       valorActividad: r.valor_actividad, despachado: r.despachado, inventario: r.inventario,
@@ -204,100 +205,198 @@
     document.querySelector('#tbl-op-log tbody').innerHTML = recent.map(r=>`<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td>${r.orden??'—'}</td><td class="num">${fmtNum(r.cantidad,0)}</td><td class="num">${fmtNum(r.tiempoHr,2)}</td><td class="num">${fmtCOP(r.valorActividad)}</td></tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin registros</td></tr>';
   }
 
-  // ---------- REGISTRAR ----------
-  function populateForm(){
-    const opSel = document.getElementById('f-operario');
-    opSel.innerHTML = DB.personal.filter(p=>p.activo).map(p=>`<option value="${p.nombre}" data-rate="${p.valor_hora||0}">${p.nombre} — ${p.cargo}</option>`).join('');
+  // ---------- REGISTRAR (reloj checador) ----------
+  let currentSession = null; // { id, horaIniDate, rate }
+  let timerInterval = null;
+
+  function populateReg(){
+    const opSel = document.getElementById('r-operario');
+    opSel.innerHTML = '<option value="">Selecciona tu nombre…</option>' +
+      DB.personal.filter(p=>p.activo).map(p=>`<option value="${p.nombre}" data-rate="${p.valor_hora||0}">${p.nombre} — ${p.cargo}</option>`).join('');
 
     const areas = Array.from(new Set([
       ...DB.maquinas.map(m=>m.area),
       ...DB.actividades.map(a=>a.area)
     ])).filter(Boolean).sort();
-    const areaSel = document.getElementById('f-area');
+    const areaSel = document.getElementById('r-area');
     areaSel.innerHTML = areas.map(a=>`<option value="${a}">${a}</option>`).join('');
-    areaSel.addEventListener('change', populateActividadSelect);
-    populateActividadSelect();
+    areaSel.addEventListener('change', () => { populateActividadReg(); populateMaquinaReg(); });
+    populateActividadReg();
+    populateMaquinaReg();
 
-    document.getElementById('f-fecha').value = new Date().toISOString().slice(0,10);
-    ['f-horaini','f-horafin','f-operario'].forEach(id=>document.getElementById(id).addEventListener('input', updatePreview));
+    document.getElementById('r-orden').addEventListener('input', populatePiezaReg);
+    opSel.addEventListener('change', checkOpenSession);
+    document.getElementById('r-start').addEventListener('click', startActivity);
+    document.getElementById('r-finish').addEventListener('click', finishActivity);
   }
-  function populateActividadSelect(){
-    const area = document.getElementById('f-area').value;
-    const actSel = document.getElementById('f-actividad');
+  function populateActividadReg(){
+    const area = document.getElementById('r-area').value;
+    const actSel = document.getElementById('r-actividad');
     const acts = DB.actividades.filter(a=>a.area===area);
     actSel.innerHTML = acts.map(a=>`<option value="${a.etiqueta}">${a.etiqueta}</option>`).join('') || '<option value="">Sin actividades para esta área</option>';
   }
-  function updatePreview(){
-    const ini = document.getElementById('f-horaini').value;
-    const fin = document.getElementById('f-horafin').value;
-    const opSel = document.getElementById('f-operario');
-    const rate = parseFloat(opSel.selectedOptions[0]?.dataset.rate || 0);
-    let txt = 'Tiempo: — · Costo estimado: —';
-    if(ini && fin){
-      const [h1,m1]=ini.split(':').map(Number), [h2,m2]=fin.split(':').map(Number);
-      let mins=(h2*60+m2)-(h1*60+m1); if(mins<0) mins+=24*60;
-      const hrs = mins/60;
-      txt = `Tiempo: ${hrs.toFixed(2)} h · Costo estimado: ${fmtCOP(hrs*rate)}`;
-    }
-    document.getElementById('f-preview').textContent = txt;
+  function populateMaquinaReg(){
+    const area = document.getElementById('r-area').value;
+    const maqSel = document.getElementById('r-maquina');
+    const maqs = DB.maquinas.filter(m=>m.area===area);
+    maqSel.innerHTML = '<option value="">Trabajo manual (sin máquina)</option>' +
+      maqs.map(m=>`<option value="${m.nombre}">${m.nombre}</option>`).join('');
+  }
+  function populatePiezaReg(){
+    const orden = parseInt(document.getElementById('r-orden').value, 10);
+    const sel = document.getElementById('r-pieza');
+    const piezas = (DB.opp_piezas || []).filter(p => p.orden === orden);
+    sel.innerHTML = '<option value="">— Sin OPP / general —</option>' +
+      piezas.map(p => `<option value="${p.op}" data-suborden="${p.suborden}">${p.suborden}. ${p.pieza || 'Pieza'}</option>`).join('');
   }
 
-  async function handleSubmit(ev){
-    ev.preventDefault();
-    const btn = ev.target.querySelector('button[type=submit]');
-    btn.disabled = true; btn.textContent = 'Guardando…';
+  async function checkOpenSession(){
+    const nombre = document.getElementById('r-operario').value;
+    if(!nombre){ showSetupState(); return; }
+    const { data, error } = await sb.from('produccion').select('*')
+      .eq('operario', nombre).is('hora_fin', null)
+      .order('id', { ascending: false }).limit(1);
+    if(error){ console.error(error); return; }
+    if(data && data.length){
+      resumeSession(data[0]);
+    } else {
+      showSetupState();
+    }
+  }
+
+  function showSetupState(){
+    clearInterval(timerInterval);
+    currentSession = null;
+    document.getElementById('reg-setup').style.display = '';
+    document.getElementById('reg-running').style.display = 'none';
+    document.getElementById('reg-hint').textContent = 'elige tu nombre para comenzar';
+  }
+
+  function resumeSession(row){
+    const opSel = document.getElementById('r-operario');
+    const rate = parseFloat(opSel.selectedOptions[0]?.dataset.rate || 0);
+    currentSession = { id: row.id, horaIniDate: new Date(row.fecha + 'T' + row.hora_ini), rate };
+    document.getElementById('reg-setup').style.display = 'none';
+    document.getElementById('reg-running').style.display = '';
+    document.getElementById('reg-hint').textContent = 'tienes una actividad en curso';
+    document.getElementById('rr-operario').textContent = row.operario || '—';
+    document.getElementById('rr-orden').textContent = (row.orden || '—') + (row.op ? ' / ' + row.op : '');
+    document.getElementById('rr-actividad').textContent = row.actividad || '—';
+    document.getElementById('rr-maquina').textContent = row.maquina || 'Trabajo manual';
+    document.getElementById('rr-inicio').textContent = row.hora_ini || '—';
+    document.getElementById('r-cantidad').value = row.cantidad || '';
+    document.getElementById('r-materia').value = row.materia_prima || '';
+    document.getElementById('r-consumo').value = row.consumo_mp || '';
+    document.getElementById('r-comentario').value = row.comentario || '';
+    document.getElementById('r-reproceso').value = row.reproceso || 'No';
+    startTimerDisplay();
+  }
+
+  function startTimerDisplay(){
+    clearInterval(timerInterval);
+    const tick = () => {
+      const ms = Date.now() - currentSession.horaIniDate.getTime();
+      const totalSec = Math.max(0, Math.floor(ms / 1000));
+      const h = String(Math.floor(totalSec/3600)).padStart(2,'0');
+      const m = String(Math.floor((totalSec%3600)/60)).padStart(2,'0');
+      const s = String(totalSec%60).padStart(2,'0');
+      document.getElementById('rr-timer').textContent = `${h}:${m}:${s}`;
+    };
+    tick();
+    timerInterval = setInterval(tick, 1000);
+  }
+
+  async function startActivity(){
+    const nombre = document.getElementById('r-operario').value;
+    if(!nombre){ toast('Selecciona tu nombre primero'); return; }
+    const btn = document.getElementById('r-start');
+    btn.disabled = true; btn.textContent = 'Iniciando…';
     try{
-      const ini = document.getElementById('f-horaini').value, fin = document.getElementById('f-horafin').value;
-      const [h1,m1]=ini.split(':').map(Number), [h2,m2]=fin.split(':').map(Number);
-      let mins=(h2*60+m2)-(h1*60+m1); if(mins<0) mins+=24*60;
-      const hrs = mins/60;
-      const opSel = document.getElementById('f-operario');
-      const rate = parseFloat(opSel.selectedOptions[0]?.dataset.rate || 0);
-      const ordenRaw = document.getElementById('f-orden').value;
+      const now = new Date();
+      const fecha = now.toISOString().slice(0,10);
+      const horaIni = now.toTimeString().slice(0,5);
+      const ordenRaw = document.getElementById('r-orden').value;
       const orden = ordenRaw ? (isNaN(Number(ordenRaw)) ? null : Number(ordenRaw)) : null;
+      const piezaOpt = document.getElementById('r-pieza').selectedOptions[0];
+      const opValue = document.getElementById('r-pieza').value || null;
+      const subordenSel = piezaOpt && piezaOpt.dataset.suborden ? parseInt(piezaOpt.dataset.suborden, 10) : null;
+      const ordenInfo = (DB.opp_ordenes || []).find(o => o.orden === orden);
 
       const row = {
-        fecha: document.getElementById('f-fecha').value,
-        operario: opSel.value,
-        hora_ini: ini, hora_fin: fin,
-        actividad: document.getElementById('f-actividad').value,
-        area: document.getElementById('f-area').value,
-        cantidad: parseFloat(document.getElementById('f-cantidad').value || 0),
-        orden: orden,
-        cliente: document.getElementById('f-cliente').value || null,
-        trabajo: document.getElementById('f-trabajo').value || null,
-        materia_prima: document.getElementById('f-materia').value || null,
-        consumo_mp: document.getElementById('f-consumo').value || null,
-        comentario: document.getElementById('f-comentario').value || null,
-        tiempo_hr: hrs,
-        valor_actividad: hrs * rate,
-        reproceso: 'No',
+        fecha, operario: nombre, hora_ini: horaIni, hora_fin: null,
+        actividad: document.getElementById('r-actividad').value,
+        area: document.getElementById('r-area').value,
+        maquina: document.getElementById('r-maquina').value || null,
+        orden, suborden: subordenSel, op: opValue,
+        cliente: ordenInfo ? ordenInfo.cliente : null,
+        trabajo: piezaOpt && piezaOpt.value ? piezaOpt.textContent.replace(/^\d+\.\s*/, '') : null,
         opp: ordenRaw || null
       };
-
       const { data, error } = await sb.from('produccion').insert([row]).select();
       if(error) throw error;
 
       DB.produccion.unshift(normProd(data[0]));
-      toast('Registro guardado para todo el equipo');
-      document.getElementById('form-registro').reset();
-      document.getElementById('f-fecha').value = new Date().toISOString().slice(0,10);
-      document.getElementById('f-preview').textContent = 'Tiempo: — · Costo estimado: —';
+      toast('Actividad iniciada · ' + horaIni);
+      resumeSession(data[0]);
+      renderRecentReg();
+    }catch(err){
+      console.error(err);
+      toast('Error al iniciar — revisa la consola');
+    }finally{
+      btn.disabled = false; btn.textContent = '▶ Iniciar actividad';
+    }
+  }
+
+  async function finishActivity(){
+    if(!currentSession) return;
+    const btn = document.getElementById('r-finish');
+    btn.disabled = true; btn.textContent = 'Finalizando…';
+    try{
+      const now = new Date();
+      const horaFin = now.toTimeString().slice(0,5);
+      const hrs = Math.max(0, (now.getTime() - currentSession.horaIniDate.getTime()) / 3600000);
+      const updates = {
+        hora_fin: horaFin,
+        cantidad: parseFloat(document.getElementById('r-cantidad').value || 0),
+        materia_prima: document.getElementById('r-materia').value || null,
+        consumo_mp: document.getElementById('r-consumo').value || null,
+        comentario: document.getElementById('r-comentario').value || null,
+        reproceso: document.getElementById('r-reproceso').value,
+        tiempo_hr: hrs,
+        valor_actividad: hrs * currentSession.rate
+      };
+      const { data, error } = await sb.from('produccion').update(updates).eq('id', currentSession.id).select();
+      if(error) throw error;
+
+      const idx = DB.produccion.findIndex(r => r.id === currentSession.id);
+      if(idx >= 0) DB.produccion[idx] = normProd(data[0]);
+      toast('Actividad finalizada · ' + fmtNum(hrs,2) + ' h registradas');
+
+      clearInterval(timerInterval);
+      currentSession = null;
+      document.getElementById('r-orden').value = '';
+      document.getElementById('r-pieza').innerHTML = '<option value="">— Sin OPP / general —</option>';
+      showSetupState();
       renderRecentReg();
       renderGerencial();
       renderProduccion();
       renderOperario();
+      renderEstadoOrdenes();
       document.getElementById('data-note').textContent = 'Conectado · ' + DB.produccion.length + ' registros';
     }catch(err){
       console.error(err);
-      toast('Error al guardar — revisa la consola');
+      toast('Error al finalizar — revisa la consola');
     }finally{
-      btn.disabled = false; btn.textContent = 'Guardar registro';
+      btn.disabled = false; btn.textContent = '⏹ Finalizar actividad';
     }
   }
+
   function renderRecentReg(){
     const recent = DB.produccion.slice(0,12);
-    document.querySelector('#tbl-reg-recent tbody').innerHTML = recent.map(r=>`<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.operario||'—'}</td><td>${r.actividad||'—'}</td><td>${r.orden??'—'}</td></tr>`).join('');
+    document.querySelector('#tbl-reg-recent tbody').innerHTML = recent.map(r=>{
+      const estado = r.horaFin ? '<span class="estado-chip done">✓ Completo</span>' : '<span class="estado-chip estado-chip-warn">⏱ En curso</span>';
+      return `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.operario||'—'}</td><td>${r.actividad||'—'}</td><td>${r.orden??'—'}</td><td>${estado}</td></tr>`;
+    }).join('');
   }
 
   // ========================================================
@@ -328,6 +427,9 @@
     node.querySelectorAll('input, select').forEach(el => {
       el.addEventListener('input', recalc);
       el.addEventListener('change', recalc);
+    });
+    node.querySelectorAll('.f-proc').forEach(cb => {
+      cb.addEventListener('change', () => { cb.dataset.touched = '1'; });
     });
 
     document.getElementById('opp-piezas-list').appendChild(node);
@@ -377,6 +479,18 @@
     const programados = parseFloat(programadosEl.value) || 0;
     const pliegos = porPliego > 0 ? Math.ceil(programados / porPliego) : 0;
     node.querySelector('.f-pliegos-result').textContent = pliegos ? fmtNum(pliegos, 0) : '—';
+
+    // auto-marcar procesos requeridos según los acabados ya seleccionados
+    const procTroquelado = node.querySelector('.f-proc[value="Troquelado"]');
+    const procPlastificado = node.querySelector('.f-proc[value="Plastificado"]');
+    const procEngomadora = node.querySelector('.f-proc[value="Engomadora"]');
+    const troquelado = node.querySelector('.f-troquelado').checked;
+    const laminado = node.querySelector('.f-laminado').value;
+    const otros = (node.querySelector('.f-otros').value || '').toLowerCase();
+    const usaEngomadora = /engom|argoll|encaratul|pegar|colbon/.test(otros) || node.querySelector('.f-talonarios').checked;
+    if(!procTroquelado.dataset.touched) procTroquelado.checked = troquelado;
+    if(!procPlastificado.dataset.touched) procPlastificado.checked = !!laminado;
+    if(!procEngomadora.dataset.touched) procEngomadora.checked = usaEngomadora;
   }
 
   function updateOppPreview(){
@@ -410,6 +524,54 @@
     document.querySelector('#tbl-opp-recent tbody').innerHTML = rows.map(o =>
       `<tr><td>${o.orden}</td><td>${o.cliente || '—'}</td><td>${o.producto || '—'}</td><td class="num">${conteo[o.orden] || 0}</td><td>${(o.fecha || '').slice(0,10)}</td></tr>`
     ).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--ink-faint)">Sin órdenes registradas</td></tr>';
+    renderEstadoOrdenes();
+  }
+
+  function areasCompletadasPorPieza(pieza){
+    const recs = (DB.produccion || []).filter(r => r.op === pieza.op || (r.orden === pieza.orden && r.suborden === pieza.suborden));
+    return new Set(recs.map(r => r.area).filter(Boolean));
+  }
+
+  function renderEstadoOrdenes(){
+    const ordenes = (DB.opp_ordenes || []).slice(0, 15);
+    const cont = document.getElementById('opp-estado-list');
+    if(!ordenes.length){
+      cont.innerHTML = '<p style="color:var(--ink-faint);font-size:13px">Aún no hay órdenes guardadas.</p>';
+      return;
+    }
+    cont.innerHTML = ordenes.map(o => {
+      const piezas = (DB.opp_piezas || []).filter(p => p.orden === o.orden);
+      if(!piezas.length) return '';
+      const filas = piezas.map(p => {
+        const requeridos = Array.isArray(p.procesos_requeridos) ? p.procesos_requeridos : [];
+        const completados = areasCompletadasPorPieza(p);
+        const hechos = requeridos.filter(a => completados.has(a)).length;
+        const pct = requeridos.length ? Math.round((hechos / requeridos.length) * 100) : 0;
+        const chips = requeridos.map(a => {
+          const done = completados.has(a);
+          return `<span class="estado-chip ${done ? 'done' : 'pending'}">${done ? '✓' : '·'} ${a}</span>`;
+        }).join('');
+        return `<div class="estado-pieza-row">
+          <span class="estado-pieza-nombre">${p.pieza || ('Pieza ' + p.suborden)}</span>
+          <div class="estado-bar-wrap"><div class="estado-bar-fill" style="width:${pct}%"></div></div>
+          ${chips}
+        </div>`;
+      }).join('');
+      return `<div class="estado-orden">
+        <div class="estado-orden-head"><b>Orden ${o.orden} — ${o.cliente || ''}</b><span class="card-hint">${o.producto || ''}</span></div>
+        ${filas}
+      </div>`;
+    }).join('') || '<p style="color:var(--ink-faint);font-size:13px">Sin piezas asociadas todavía.</p>';
+  }
+
+  function resetOppForm(nextOrden){
+    document.getElementById('opp-piezas-list').innerHTML = '';
+    oppPiezaCount = 0;
+    document.getElementById('opp-cliente').value = '';
+    document.getElementById('opp-producto').value = '';
+    document.getElementById('opp-orden').value = nextOrden != null ? nextOrden : suggestNextOrden();
+    document.getElementById('opp-fecha').value = new Date().toISOString().slice(0,10);
+    addPiezaCard();
   }
 
   function initOppForm(){
@@ -417,6 +579,7 @@
     document.getElementById('opp-fecha').value = new Date().toISOString().slice(0,10);
     document.getElementById('opp-add-pieza').addEventListener('click', () => addPiezaCard());
     document.getElementById('opp-save').addEventListener('click', saveOpp);
+    document.getElementById('opp-reset').addEventListener('click', () => resetOppForm());
     addPiezaCard(); // arranca con 1 pieza lista para llenar
   }
 
@@ -473,7 +636,8 @@
           medida_tamano_ancho: parseFloat(node.querySelector('.f-medida-ancho').value) || null,
           medida_tamano_alto: parseFloat(node.querySelector('.f-medida-alto').value) || null,
           tamanos_por_pliego: parseFloat(node.querySelector('.f-tam-por-pliego').value) || null,
-          pliegos: parseFloat(node.querySelector('.f-pliegos-result').textContent.replace(/\./g,'')) || null
+          pliegos: parseFloat(node.querySelector('.f-pliegos-result').textContent.replace(/\./g,'')) || null,
+          procesos_requeridos: Array.from(node.querySelectorAll('.f-proc:checked')).map(cb => cb.value)
         };
       });
 
@@ -481,12 +645,7 @@
       if(errPiezas) throw errPiezas;
 
       toast('Orden ' + orden + ' guardada con ' + piezasPayload.length + ' pieza(s)');
-      document.getElementById('opp-piezas-list').innerHTML = '';
-      oppPiezaCount = 0;
-      document.getElementById('opp-cliente').value = '';
-      document.getElementById('opp-producto').value = '';
-      document.getElementById('opp-orden').value = orden + 1;
-      addPiezaCard();
+      resetOppForm(orden + 1);
       await loadOpp();
     }catch(err){
       console.error(err);
@@ -503,8 +662,7 @@
       return; // ya se mostró el error en setNote
     }
     populateOperarioSelect();
-    populateForm();
-    document.getElementById('form-registro').addEventListener('submit', handleSubmit);
+    populateReg();
     renderRecentReg();
     renderGerencial();
     renderProduccion();
