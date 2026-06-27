@@ -28,6 +28,18 @@
 
   <main>
     <section class="tab-panel active" id="panel-gerencial">
+      <div class="date-range-row">
+        <div class="preset-row" id="ger-presets">
+          <button type="button" class="preset-btn" data-preset="7d">7 días</button>
+          <button type="button" class="preset-btn" data-preset="30d">30 días</button>
+          <button type="button" class="preset-btn" data-preset="mes">Este mes</button>
+          <button type="button" class="preset-btn" data-preset="trimestre">Trimestre</button>
+          <button type="button" class="preset-btn" data-preset="anio">Este año</button>
+          <button type="button" class="preset-btn active" data-preset="todo">Todo</button>
+        </div>
+        <div class="field" style="max-width:140px"><label>Desde</label><input type="date" id="ger-desde"></div>
+        <div class="field" style="max-width:140px"><label>Hasta</label><input type="date" id="ger-hasta"></div>
+      </div>
       <div class="kpi-row" id="ger-kpis"></div>
       <div class="grid-2">
         <div class="card">
@@ -51,6 +63,18 @@
     </section>
 
     <section class="tab-panel" id="panel-produccion">
+      <div class="date-range-row">
+        <div class="preset-row" id="prod-presets">
+          <button type="button" class="preset-btn" data-preset="7d">7 días</button>
+          <button type="button" class="preset-btn" data-preset="30d">30 días</button>
+          <button type="button" class="preset-btn" data-preset="mes">Este mes</button>
+          <button type="button" class="preset-btn" data-preset="trimestre">Trimestre</button>
+          <button type="button" class="preset-btn" data-preset="anio">Este año</button>
+          <button type="button" class="preset-btn active" data-preset="todo">Todo</button>
+        </div>
+        <div class="field" style="max-width:140px"><label>Desde</label><input type="date" id="prod-desde"></div>
+        <div class="field" style="max-width:140px"><label>Hasta</label><input type="date" id="prod-hasta"></div>
+      </div>
       <div class="kpi-row" id="prod-kpis"></div>
       <div class="grid-2">
         <div class="card">
@@ -99,7 +123,7 @@
     <!-- ORDENES (OPP) -->
     <section class="tab-panel" id="panel-ordenes">
       <div class="card">
-        <div class="card-head"><h3>Nueva orden de producción</h3><span class="card-hint">define el encabezado y agrega cada pieza</span></div>
+        <div class="card-head"><h3>Orden de producción</h3><span class="card-hint" id="opp-form-mode">Creando una orden nueva</span></div>
         <div class="form-foot" style="margin-top:0;margin-bottom:14px">
           <span></span>
           <button type="button" class="btn-secondary" id="opp-reset">Nueva orden (limpiar formulario)</button>
@@ -129,10 +153,23 @@
       </div>
 
       <div class="card">
-        <div class="card-head"><h3>Órdenes recientes</h3><span class="card-hint">últimas OPP guardadas</span></div>
+        <div class="card-head"><h3>Buscar y administrar órdenes</h3><span class="card-hint">edita, duplica o cancela cualquier orden</span></div>
+        <div class="form-row">
+          <div class="field"><label>Buscar por orden, cliente o producto</label><input type="text" id="opp-buscar" placeholder="ej. 5944, Magic Medios, Cuadernos…"></div>
+        </div>
         <div class="table-wrap">
           <table id="tbl-opp-recent">
-            <thead><tr><th>Orden</th><th>Cliente</th><th>Producto</th><th class="num">Piezas</th><th>Fecha</th></tr></thead>
+            <thead><tr><th>Orden</th><th>Cliente</th><th>Producto</th><th class="num">Piezas</th><th>Fecha</th><th>Estado</th><th class="num">Costo M.O.</th><th>Acciones</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Radar de órdenes históricas activas</h3><span class="card-hint">migradas del Excel, con actividad en el último mes</span></div>
+        <div class="table-wrap">
+          <table id="tbl-radar-historico">
+            <thead><tr><th>Orden</th><th>Cliente</th><th>Trabajo</th><th>Última actividad</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -274,7 +311,7 @@
 
     <!-- MAESTROS -->
     <section class="tab-panel" id="panel-maestros">
-      <p class="card-hint" style="margin-bottom:14px">Pensado para que lo usen el Gerente y el Jefe de Producción — alimenta las listas que usa toda la app.</p>
+      <p class="card-hint" style="margin-bottom:14px">Pensado para que lo usen el Gerente y el Jefe de Producción — alimenta las listas que usa toda la app. "Retirar" no borra nada, solo lo desactiva (su historial queda intacto).</p>
 
       <div class="grid-2">
         <div class="card">
@@ -286,10 +323,10 @@
           <div class="form-row">
             <div class="field"><label>Valor/hora</label><input type="number" id="m-emp-valor" min="0" placeholder="ej. 18500"></div>
           </div>
-          <div class="form-foot"><span></span><button type="button" class="btn-primary" id="m-emp-save">Agregar empleado</button></div>
+          <div class="form-foot"><span id="m-emp-mode"></span><button type="button" class="btn-primary" id="m-emp-save">Agregar empleado</button></div>
           <div class="table-wrap" style="margin-top:12px">
             <table id="tbl-m-empleados">
-              <thead><tr><th>Nombre</th><th>Cargo</th><th class="num">Valor/hora</th></tr></thead>
+              <thead><tr><th>Nombre</th><th>Cargo</th><th class="num">Valor/hora</th><th></th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
@@ -304,10 +341,58 @@
           <div class="form-row">
             <div class="field"><label>Área</label><input type="text" id="m-maq-area" placeholder="ej. Litografia"></div>
           </div>
-          <div class="form-foot"><span></span><button type="button" class="btn-primary" id="m-maq-save">Agregar máquina</button></div>
+          <div class="form-foot"><span id="m-maq-mode"></span><button type="button" class="btn-primary" id="m-maq-save">Agregar máquina</button></div>
           <div class="table-wrap" style="margin-top:12px">
             <table id="tbl-m-maquinas">
-              <thead><tr><th>Código</th><th>Nombre</th><th>Área</th></tr></thead>
+              <thead><tr><th>Código</th><th>Nombre</th><th>Área</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head"><h3>Clientes</h3><span class="card-hint">datos básicos</span></div>
+          <div class="form-row">
+            <div class="field"><label>Nombre</label><input type="text" id="m-cli-nombre" placeholder="Razón social o nombre"></div>
+            <div class="field"><label>NIT / identificación</label><input type="text" id="m-cli-nit" placeholder="opcional"></div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>Teléfono</label><input type="text" id="m-cli-tel" placeholder="opcional"></div>
+            <div class="field"><label>Correo</label><input type="text" id="m-cli-email" placeholder="opcional"></div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>Dirección</label><input type="text" id="m-cli-dir" placeholder="opcional"></div>
+            <div class="field"><label>Ciudad</label><input type="text" id="m-cli-ciudad" placeholder="opcional"></div>
+          </div>
+          <div class="form-foot"><span id="m-cli-mode"></span><button type="button" class="btn-primary" id="m-cli-save">Agregar cliente</button></div>
+          <div class="table-wrap" style="margin-top:12px;max-height:280px;overflow-y:auto">
+            <table id="tbl-m-clientes">
+              <thead><tr><th>Nombre</th><th>NIT</th><th>Teléfono</th><th>Ciudad</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>Proveedores</h3><span class="card-hint">a quién le compran</span></div>
+          <div class="form-row">
+            <div class="field"><label>Nombre</label><input type="text" id="m-prov-nombre" placeholder="Razón social o nombre"></div>
+            <div class="field"><label>NIT / identificación</label><input type="text" id="m-prov-nit" placeholder="opcional"></div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>Teléfono</label><input type="text" id="m-prov-tel" placeholder="opcional"></div>
+            <div class="field"><label>Correo</label><input type="text" id="m-prov-email" placeholder="opcional"></div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>Materiales que provee</label><input type="text" id="m-prov-materiales" placeholder="ej. Papel, tintas"></div>
+            <div class="field"><label>Ciudad</label><input type="text" id="m-prov-ciudad" placeholder="opcional"></div>
+          </div>
+          <div class="form-foot"><span id="m-prov-mode"></span><button type="button" class="btn-primary" id="m-prov-save">Agregar proveedor</button></div>
+          <div class="table-wrap" style="margin-top:12px;max-height:280px;overflow-y:auto">
+            <table id="tbl-m-proveedores">
+              <thead><tr><th>Nombre</th><th>Materiales</th><th>Teléfono</th><th>Ciudad</th><th></th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
@@ -331,10 +416,10 @@
             </div>
           </div>
         </div>
-        <div class="form-foot"><span></span><button type="button" class="btn-primary" id="m-mp-save">Agregar materia prima</button></div>
+        <div class="form-foot"><span id="m-mp-mode"></span><button type="button" class="btn-primary" id="m-mp-save">Agregar materia prima</button></div>
         <div class="table-wrap" style="margin-top:12px;max-height:320px;overflow-y:auto">
           <table id="tbl-m-materias">
-            <thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Pliego</th></tr></thead>
+            <thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Pliego</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -347,6 +432,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
 <script src="config.js"></script>
-<script src="app.js"></script>
+<script type="module" src="js/app.js"></script>
 </body>
 </html>

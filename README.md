@@ -146,15 +146,32 @@ Cuando quieras avanzar en cualquiera de estos, retoma esta conversación — la 
 
 ```
 litocolor-erp/
-├── index.html          → estructura de las 4 pestañas
-├── styles.css           → diseño visual
-├── app.js                → lógica: conecta a Supabase, calcula KPIs, dibuja gráficas
-├── build.js               → genera config.js en cada despliegue de Vercel
-├── config.example.js      → plantilla de referencia (sí se sube a GitHub)
-├── config.js               → credenciales reales — lo genera Vercel, NUNCA se sube
-├── .gitignore               → evita que config.js real se suba por accidente
+├── index.html              → panel completo (Gerencial, Producción, Operario, Órdenes, Registrar, Maestros)
+├── registro.html           → pantalla exclusiva para operarios (solo el reloj checador + órdenes vivas)
+├── styles.css                → diseño visual, compartido por las dos páginas
+├── js/                         → todo el código está dividido por responsabilidad:
+│   ├── supabase-client.js        → conexión a Supabase (una sola vez)
+│   ├── helpers.js                 → formato de números, mensajes, rangos de fecha
+│   ├── store.js                    → carga de datos y el objeto DB compartido
+│   ├── registrar.js                → el reloj checador (usado por index.html Y registro.html)
+│   ├── ordenes.js                  → crear/buscar/editar/duplicar/cancelar órdenes + seguimiento
+│   ├── maestros.js                 → alta/edición/retiro de empleados, máquinas, materias, clientes, proveedores
+│   ├── dashboard.js                → Gerencial, Producción, Operario (con filtro de fechas)
+│   ├── app.js                       → conecta todo lo anterior para index.html
+│   └── registro-main.js             → conecta lo necesario para registro.html
+├── build.js                  → genera config.js en cada despliegue de Vercel
+├── config.example.js          → plantilla de referencia (sí se sube a GitHub)
+├── config.js                    → credenciales reales — lo genera Vercel, NUNCA se sube
+├── .gitignore                     → evita que config.js real se suba por accidente
+├── assets/logo.png                 → logo de LitoColor
 ├── supabase/
-│   ├── schema.sql        → crea las tablas y la seguridad
-│   └── seed.sql          → tus 1.200 registros de producción y 458 pedidos reales
-└── README.md             → esta guía
+│   ├── schema.sql                → tablas base y seguridad
+│   ├── seed.sql                    → tu histórico real migrado
+│   ├── opp_schema.sql               → tablas de Órdenes (OPP)
+│   ├── ajustes_seguimiento.sql        → seguimiento por pieza
+│   ├── ajustes_roles_maquina.sql        → roles reales + campo de máquina
+│   ├── ajustes_v3_correcciones.sql        → corrección crítica de permisos + materias primas
+│   ├── materias_primas_seed.sql             → catálogo de 226 materias primas
+│   └── ajustes_v4_clientes_proveedores.sql    → Clientes, Proveedores, estado de órdenes, permisos de edición
+└── README.md                  → esta guía
 ```
