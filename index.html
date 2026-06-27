@@ -18,6 +18,15 @@
     <div class="login-error" id="login-error"></div>
     <button type="button" class="btn-primary" id="login-btn" style="width:100%">Entrar</button>
     <p class="card-hint" style="margin-top:10px;text-align:center">¿Eres operario? Usa la <a href="registro.html">pantalla de registro de tiempos</a>, no necesitas contraseña.</p>
+    <hr style="border:none;border-top:1px solid var(--line);margin:14px 0">
+    <button type="button" class="btn-secondary" id="show-signup" style="width:100%">¿Primera vez? Crea tu contraseña aquí</button>
+
+    <div id="signup-box" style="display:none;margin-top:12px">
+      <div class="field"><label>Tu correo (el que te dieron)</label><input type="email" id="signup-email" placeholder="correo@litocolor.com.co"></div>
+      <div class="field"><label>Crea tu contraseña</label><input type="password" id="signup-password" placeholder="mínimo 6 caracteres"></div>
+      <div class="login-error" id="signup-error"></div>
+      <button type="button" class="btn-primary" id="signup-btn" style="width:100%">Crear mi cuenta</button>
+    </div>
   </div>
 </div>
 
@@ -44,6 +53,10 @@
         <button class="tab-btn" data-tab="m-clientes" role="tab">Clientes</button>
         <button class="tab-btn" data-tab="m-proveedores" role="tab">Proveedores</button>
         <button class="tab-btn" data-tab="m-productos" role="tab">Productos</button>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Seguridad</div>
+        <button class="tab-btn" data-tab="usuarios" role="tab">Usuarios</button>
       </div>
     </nav>
     <a href="registro.html" class="sidebar-footer-link">Pantalla de operario ↗</a>
@@ -499,6 +512,19 @@
         <div class="table-wrap" style="margin-top:12px">
           <table id="tbl-m-productos">
             <thead><tr><th>Nombre</th><th>Descripción</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-usuarios">
+      <div class="card">
+        <div class="card-head"><h3>Usuarios y accesos</h3><span class="card-hint">solo Gerente y Admin ven esta pestaña</span></div>
+        <p class="card-hint" style="margin-bottom:14px">Para dar acceso a alguien nuevo: ponle su correo y elige su rol aquí, y dile que entre a esta página y use <b>"¿Primera vez? Crea tu contraseña aquí"</b> en la pantalla de login. No necesitas pedirme ningún SQL.</p>
+        <div class="table-wrap">
+          <table id="tbl-usuarios">
+            <thead><tr><th>Nombre</th><th>Cargo</th><th>Correo</th><th>Rol</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
