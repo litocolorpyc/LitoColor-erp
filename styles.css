@@ -55,6 +55,15 @@ body{ font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; colo
 .alerta-card .alerta-msg{ font-size:13px; }
 .alerta-card .alerta-msg b{ font-weight:700; }
 
+.help-toc{ display:flex; flex-wrap:wrap; gap:8px; }
+.help-toc a{ font-size:12px; font-weight:600; padding:6px 14px; border-radius:99px; background:var(--card); border:1px solid var(--line); color:var(--accent); text-decoration:none; }
+.help-toc a:hover{ background:rgba(194,74,31,0.08); }
+#panel-ayuda h4{ font-size:13px; font-weight:700; color:var(--ink); margin:16px 0 6px; }
+#panel-ayuda p{ font-size:13px; line-height:1.5; margin:0 0 12px; }
+#panel-ayuda ol, #panel-ayuda ul{ font-size:13px; line-height:1.6; margin:0 0 12px; padding-left:22px; }
+#panel-ayuda li{ margin-bottom:4px; }
+.help-tip{ border-left:3px solid var(--accent); background:rgba(194,74,31,0.06); padding:10px 14px; border-radius:0 8px 8px 0; font-size:13px; margin-bottom:14px; }
+
 @media (max-width:760px){
   .app-shell{ flex-direction:column; }
   .sidebar{ width:100%; min-height:auto; flex-direction:row; align-items:center; overflow-x:auto; }

@@ -66,6 +66,10 @@
         <div class="sidebar-group-label">Seguridad</div>
         <button class="tab-btn" data-tab="usuarios" role="tab">Usuarios</button>
       </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Soporte</div>
+        <button class="tab-btn" data-tab="ayuda" role="tab">❓ Ayuda</button>
+      </div>
     </nav>
     <a href="registro.html" class="sidebar-footer-link">Pantalla de operario ↗</a>
   </aside>
@@ -573,6 +577,119 @@
             <tbody></tbody>
           </table>
         </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-ayuda">
+      <div class="card">
+        <div class="card-head"><h3>Ayuda y Manual de Usuario</h3><span class="card-hint">salta directo a tu sección</span></div>
+        <div class="help-toc">
+          <a href="#ayuda-intro">Introducción</a>
+          <a href="#ayuda-primeros">Primeros pasos</a>
+          <a href="#ayuda-operarios">Operarios</a>
+          <a href="#ayuda-produccion">Jefe de Producción / Diseño</a>
+          <a href="#ayuda-admin">Administradora</a>
+          <a href="#ayuda-gerente">Gerente / Admin</a>
+          <a href="#ayuda-glosario">Glosario</a>
+          <a href="#ayuda-faq">Preguntas frecuentes</a>
+        </div>
+      </div>
+
+      <div class="card" id="ayuda-intro">
+        <div class="card-head"><h3>Introducción</h3></div>
+        <p>LitoColor ERP maneja, en un solo lugar, las órdenes de producción, los tiempos de cada operario y máquina, los clientes, los proveedores, y la información que el gerente necesita para decidir. Este manual está organizado por rol — busca tu sección, no hace falta leerlo completo.</p>
+        <table>
+          <thead><tr><th>Rol</th><th>Qué usa</th></tr></thead>
+          <tbody>
+            <tr><td>Operario</td><td>Solo la pantalla de Registro de tiempos</td></tr>
+            <tr><td>Jefe de Producción / Diseñador</td><td>Producción, Calendario, Alertas, Órdenes, Registrar, y sus maestros</td></tr>
+            <tr><td>Administradora</td><td>Maestros de Clientes/Proveedores/Empleados, y Alertas</td></tr>
+            <tr><td>Gerente / Admin</td><td>Todo lo anterior, más Gerencial y Usuarios</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card" id="ayuda-primeros">
+        <div class="card-head"><h3>Primeros pasos (todos)</h3></div>
+        <h4>Iniciar sesión</h4>
+        <ol>
+          <li>Entra a lito-color-erp.vercel.app</li>
+          <li>Escribe tu correo y tu contraseña, click en "Entrar".</li>
+        </ol>
+        <div class="help-tip"><b>Tip:</b> si es tu primera vez, usa "¿Primera vez? Crea tu contraseña aquí" — solo funciona si un Admin/Gerente ya te agregó en "Usuarios" con tu correo y rol.</div>
+        <h4>Cambiar tu contraseña</h4>
+        <p>Arriba a la derecha, click en tu nombre → "Cambiar contraseña" → escribe la nueva (mínimo 6 caracteres) → "Guardar".</p>
+        <h4>El menú lateral</h4>
+        <p>Solo aparecen las pestañas que tu rol tiene permiso de ver. Si falta algo, pide que revisen tu rol en "Usuarios".</p>
+      </div>
+
+      <div class="card" id="ayuda-operarios">
+        <div class="card-head"><h3>Para Operarios</h3><span class="card-hint">registro.html — sin contraseña</span></div>
+        <h4>Iniciar una actividad</h4>
+        <ol>
+          <li>Elige tu nombre en "Operario".</li>
+          <li>Elige la "Orden" (solo aparecen las activas) y luego la "Pieza" específica.</li>
+          <li>Elige Área, Actividad y Máquina (o "Trabajo manual").</li>
+          <li>Click en "▶ Iniciar actividad" — la hora la toma el sistema solo.</li>
+        </ol>
+        <div class="help-tip"><b>Importante:</b> si no eliges la Pieza, tu tiempo se guarda pero NO se refleja en el avance de la orden.</div>
+        <h4>Finalizar</h4>
+        <p>Busca la tarjeta en "Tus actividades en curso", llena la cantidad producida, y click en "⏹ Finalizar esta actividad". Puedes tener varias actividades corriendo a la vez. Si cierras la pantalla sin finalizar, no se pierde nada — al volver a elegir tu nombre, la actividad sigue ahí.</p>
+      </div>
+
+      <div class="card" id="ayuda-produccion">
+        <div class="card-head"><h3>Para Jefe de Producción y Diseño</h3></div>
+        <h4>Órdenes</h4>
+        <p><b>Crear:</b> llena Orden, Cliente/Producto (listas desplegables, con "+ Nuevo…" si no existe), y cada Pieza con su tamaño, papel, tintas y acabados. Revisa los "Procesos requeridos" — definen el avance que se ve después.</p>
+        <p><b>Buscar/Editar/Duplicar/Cancelar:</b> en "Buscar y administrar órdenes". "Duplicar" crea una orden NUEVA con los mismos datos — útil cuando un cliente repite un pedido. "Cancelar" no borra historial, solo retira.</p>
+        <p><b>Ver detalle:</b> abre el desglose completo — gráfica de horas, materiales consumidos, y tiempos por operario/máquina, pieza por pieza.</p>
+        <table>
+          <thead><tr><th>Estado</th><th>Significa</th></tr></thead>
+          <tbody>
+            <tr><td>Pendiente</td><td>Nada empezado</td></tr>
+            <tr><td>En proceso</td><td>Algo hecho, falta otro</td></tr>
+            <tr><td>Completada</td><td>Todo lo requerido está hecho</td></tr>
+            <tr><td>Cerrada / Cancelada</td><td>Histórica terminada / retirada</td></tr>
+          </tbody>
+        </table>
+        <h4>Calendario</h4>
+        <p>Línea de tiempo por máquina (6am-8pm). Barras de color = actividad real; rayado = en curso ahora.</p>
+        <h4>Alertas</h4>
+        <p>Se generan solas: órdenes sin movimiento en 3+ días, actividades abiertas 4+ horas sin finalizar, y órdenes de más de una semana sin empezar.</p>
+      </div>
+
+      <div class="card" id="ayuda-admin">
+        <div class="card-head"><h3>Para Administradora</h3></div>
+        <p>Todos los maestros (Empleados, Máquinas, Materias primas, Clientes, Proveedores, Productos) funcionan igual: llena el formulario y "Agregar"; "Editar" carga la fila para corregirla; "Retirar" desactiva sin borrar nada (y se puede "Reactivar").</p>
+      </div>
+
+      <div class="card" id="ayuda-gerente">
+        <div class="card-head"><h3>Para Gerente y Admin</h3></div>
+        <p><b>Gerencial:</b> ingresos, costo de mano de obra, margen — con comparación automática vs. el periodo anterior, filtros de fecha, y rentabilidad por orden y por tipo de producto.</p>
+        <p><b>Exportar:</b> casi toda tabla tiene "⬇ Exportar a Excel". El botón "⬇ Respaldo completo" descarga Pedidos, Producción, Órdenes, Empleados, Máquinas y Clientes en un solo archivo.</p>
+        <p><b>Usuarios:</b> para dar acceso a alguien nuevo, ponle correo y rol ahí, y dile que use "¿Primera vez? Crea tu contraseña aquí" en el login — sin pedir ningún SQL.</p>
+      </div>
+
+      <div class="card" id="ayuda-glosario">
+        <div class="card-head"><h3>Glosario</h3></div>
+        <table>
+          <tbody>
+            <tr><td><b>OPP</b></td><td>Orden de Producción</td></tr>
+            <tr><td><b>Pieza / Suborden</b></td><td>Cada componente de una orden (ej. carátula, interiores)</td></tr>
+            <tr><td><b>Pliego</b></td><td>Tamaño del papel completo antes de cortar</td></tr>
+            <tr><td><b>Tira y retira</b></td><td>Impreso en ambas caras</td></tr>
+            <tr><td><b>Área</b></td><td>Etapa del proceso (Litografía, Guillotina, Troquelado…)</td></tr>
+            <tr><td><b>Procesos requeridos</b></td><td>Áreas que una pieza debe pasar para estar terminada</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card" id="ayuda-faq">
+        <div class="card-head"><h3>Preguntas frecuentes</h3></div>
+        <p><b>No veo una pestaña que debería ver:</b> pide que revisen tu rol en "Usuarios".</p>
+        <p><b>Capturé un tiempo y no se refleja en el avance:</b> probablemente no elegiste la "Pieza" al capturar, o el "Área" usada no está en los "Procesos requeridos" de esa pieza.</p>
+        <p><b>Olvidé mi contraseña:</b> pide a un Admin o Gerente que entre a "Usuarios" — todavía no hay recuperación automática.</p>
+        <p><b>¿Los datos están seguros?</b> Sí — editar información exige sesión iniciada. Solo la captura de tiempos de operarios queda sin contraseña, a propósito.</p>
       </div>
     </section>
 
