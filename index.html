@@ -8,23 +8,39 @@
 </head>
 <body>
 
-<div id="app">
-  <header class="topbar">
-    <div class="brand">
-      <img src="assets/logo.png" alt="LitoColor" class="brand-logo">
-      <div class="brand-sub">Panel de operación</div>
-    </div>
-    <nav class="tabs" role="tablist">
-      <button class="tab-btn active" data-tab="gerencial" role="tab">Gerencial</button>
-      <button class="tab-btn" data-tab="produccion" role="tab">Producción</button>
-      <button class="tab-btn" data-tab="operario" role="tab">Operario</button>
-      <button class="tab-btn" data-tab="ordenes" role="tab">Órdenes</button>
-      <button class="tab-btn" data-tab="registrar" role="tab">Registrar</button>
-      <button class="tab-btn" data-tab="maestros" role="tab">Maestros</button>
+<div id="app" class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand"><img src="assets/logo.png" alt="LitoColor" class="brand-logo"></div>
+    <nav class="sidebar-nav" role="tablist">
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Principal</div>
+        <button class="tab-btn active" data-tab="gerencial" role="tab">Gerencial</button>
+        <button class="tab-btn" data-tab="produccion" role="tab">Producción</button>
+        <button class="tab-btn" data-tab="operario" role="tab">Operario</button>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Operación</div>
+        <button class="tab-btn" data-tab="ordenes" role="tab">Órdenes</button>
+        <button class="tab-btn" data-tab="registrar" role="tab">Registrar</button>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Maestros</div>
+        <button class="tab-btn" data-tab="m-empleados" role="tab">Empleados</button>
+        <button class="tab-btn" data-tab="m-maquinas" role="tab">Máquinas</button>
+        <button class="tab-btn" data-tab="m-materias" role="tab">Materias primas</button>
+        <button class="tab-btn" data-tab="m-clientes" role="tab">Clientes</button>
+        <button class="tab-btn" data-tab="m-proveedores" role="tab">Proveedores</button>
+        <button class="tab-btn" data-tab="m-productos" role="tab">Productos</button>
+      </div>
     </nav>
-    <div class="data-note" id="data-note">Conectando con la base de datos…</div>
-    <a href="registro.html" class="btn-secondary" style="text-decoration:none;white-space:nowrap">Pantalla de operario ↗</a>
-  </header>
+    <a href="registro.html" class="sidebar-footer-link">Pantalla de operario ↗</a>
+  </aside>
+
+  <div class="main-col">
+    <header class="topbar">
+      <div class="brand-sub">Panel de operación</div>
+      <div class="data-note" id="data-note">Conectando con la base de datos…</div>
+    </header>
 
   <main>
     <section class="tab-panel active" id="panel-gerencial">
@@ -133,9 +149,24 @@
           <div class="field"><label>Fecha</label><input type="date" id="opp-fecha" required></div>
         </div>
         <div class="form-row">
-          <div class="field"><label>Cliente</label><input type="text" id="opp-cliente" placeholder="ej. Magic Medios" required></div>
-          <div class="field"><label>Producto</label><input type="text" id="opp-producto" placeholder="ej. Cuadernos Velez"></div>
+          <div class="field">
+            <label>Cliente</label>
+            <select id="opp-cliente"><option value="">Selecciona un cliente…</option><option value="__nuevo__">+ Nuevo cliente…</option></select>
+            <div id="opp-cliente-nuevo-wrap" style="display:none;margin-top:6px;display:flex;gap:6px">
+              <input type="text" id="opp-cliente-nuevo-nombre" placeholder="Nombre del cliente nuevo">
+              <button type="button" class="btn-secondary" id="opp-cliente-nuevo-add" style="margin:0">Agregar</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Producto</label>
+            <select id="opp-producto"><option value="">Selecciona un producto…</option><option value="__nuevo__">+ Nuevo producto…</option></select>
+            <div id="opp-producto-nuevo-wrap" style="display:none;margin-top:6px;display:flex;gap:6px">
+              <input type="text" id="opp-producto-nuevo-nombre" placeholder="Nombre del producto nuevo">
+              <button type="button" class="btn-secondary" id="opp-producto-nuevo-add" style="margin:0">Agregar</button>
+            </div>
+          </div>
         </div>
+        <div id="opp-producto-ref" style="display:none;margin-bottom:14px"></div>
 
         <div id="opp-piezas-list"></div>
 
@@ -163,6 +194,11 @@
             <tbody></tbody>
           </table>
         </div>
+      </div>
+
+      <div class="card" id="opp-detalle-card" style="display:none">
+        <div class="card-head"><h3 id="opp-detalle-titulo">Detalle de la orden</h3><span class="card-hint"><button type="button" class="row-btn" id="opp-detalle-cerrar">Cerrar ✕</button></span></div>
+        <div id="opp-detalle-body"></div>
       </div>
 
       <div class="card">
@@ -275,7 +311,7 @@
           <div id="reg-setup">
             <div class="form-row">
               <div class="field"><label>Operario</label><select id="r-operario"></select></div>
-              <div class="field"><label>Orden (OPP)</label><input type="text" id="r-orden" placeholder="ej. 5944"></div>
+              <div class="field"><label>Orden (solo las que están en curso)</label><select id="r-orden"><option value="">Selecciona una orden…</option></select></div>
             </div>
             <div class="form-row">
               <div class="field"><label>Pieza</label><select id="r-pieza"><option value="">— Sin OPP / general —</option></select></div>
@@ -293,10 +329,10 @@
         </div>
 
         <div class="card">
-          <div class="card-head"><h3>Últimos registros guardados</h3><span class="card-hint">de toda la planta</span></div>
+          <div class="card-head"><h3>Tus registros recientes</h3><span class="card-hint" id="reg-recent-hint">elige tu nombre arriba</span></div>
           <div class="table-wrap">
             <table id="tbl-reg-recent">
-              <thead><tr><th>Fecha</th><th>Operario</th><th>Actividad</th><th>Orden</th><th>Estado</th></tr></thead>
+              <thead><tr><th>Fecha</th><th>Actividad</th><th>Orden</th><th>Estado</th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
@@ -309,96 +345,48 @@
       </div>
     </section>
 
-    <!-- MAESTROS -->
-    <section class="tab-panel" id="panel-maestros">
-      <p class="card-hint" style="margin-bottom:14px">Pensado para que lo usen el Gerente y el Jefe de Producción — alimenta las listas que usa toda la app. "Retirar" no borra nada, solo lo desactiva (su historial queda intacto).</p>
-
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-head"><h3>Empleados</h3><span class="card-hint">personal y valor/hora</span></div>
-          <div class="form-row">
-            <div class="field"><label>Nombre</label><input type="text" id="m-emp-nombre" placeholder="Nombre completo"></div>
-            <div class="field"><label>Cargo</label><input type="text" id="m-emp-cargo" placeholder="ej. Prensista"></div>
-          </div>
-          <div class="form-row">
-            <div class="field"><label>Valor/hora</label><input type="number" id="m-emp-valor" min="0" placeholder="ej. 18500"></div>
-          </div>
-          <div class="form-foot"><span id="m-emp-mode"></span><button type="button" class="btn-primary" id="m-emp-save">Agregar empleado</button></div>
-          <div class="table-wrap" style="margin-top:12px">
-            <table id="tbl-m-empleados">
-              <thead><tr><th>Nombre</th><th>Cargo</th><th class="num">Valor/hora</th><th></th></tr></thead>
-              <tbody></tbody>
-            </table>
-          </div>
+    <!-- MAESTROS: cada uno es su propia pantalla, elegible desde el menú -->
+    <section class="tab-panel" id="panel-m-empleados">
+      <div class="card">
+        <div class="card-head"><h3>Empleados</h3><span class="card-hint">personal y valor/hora · "Retirar" no borra nada</span></div>
+        <div class="form-row">
+          <div class="field"><label>Nombre</label><input type="text" id="m-emp-nombre" placeholder="Nombre completo"></div>
+          <div class="field"><label>Cargo</label><input type="text" id="m-emp-cargo" placeholder="ej. Prensista"></div>
         </div>
-
-        <div class="card">
-          <div class="card-head"><h3>Máquinas</h3><span class="card-hint">equipos por área</span></div>
-          <div class="form-row">
-            <div class="field"><label>Código</label><input type="text" id="m-maq-codigo" placeholder="ej. P3"></div>
-            <div class="field"><label>Nombre</label><input type="text" id="m-maq-nombre" placeholder="ej. Heidelberg GTO"></div>
-          </div>
-          <div class="form-row">
-            <div class="field"><label>Área</label><input type="text" id="m-maq-area" placeholder="ej. Litografia"></div>
-          </div>
-          <div class="form-foot"><span id="m-maq-mode"></span><button type="button" class="btn-primary" id="m-maq-save">Agregar máquina</button></div>
-          <div class="table-wrap" style="margin-top:12px">
-            <table id="tbl-m-maquinas">
-              <thead><tr><th>Código</th><th>Nombre</th><th>Área</th><th></th></tr></thead>
-              <tbody></tbody>
-            </table>
-          </div>
+        <div class="form-row">
+          <div class="field"><label>Valor/hora</label><input type="number" id="m-emp-valor" min="0" placeholder="ej. 18500"></div>
+        </div>
+        <div class="form-foot"><span id="m-emp-mode"></span><button type="button" class="btn-primary" id="m-emp-save">Agregar empleado</button></div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table id="tbl-m-empleados">
+            <thead><tr><th>Nombre</th><th>Cargo</th><th class="num">Valor/hora</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
         </div>
       </div>
+    </section>
 
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-head"><h3>Clientes</h3><span class="card-hint">datos básicos</span></div>
-          <div class="form-row">
-            <div class="field"><label>Nombre</label><input type="text" id="m-cli-nombre" placeholder="Razón social o nombre"></div>
-            <div class="field"><label>NIT / identificación</label><input type="text" id="m-cli-nit" placeholder="opcional"></div>
-          </div>
-          <div class="form-row">
-            <div class="field"><label>Teléfono</label><input type="text" id="m-cli-tel" placeholder="opcional"></div>
-            <div class="field"><label>Correo</label><input type="text" id="m-cli-email" placeholder="opcional"></div>
-          </div>
-          <div class="form-row">
-            <div class="field"><label>Dirección</label><input type="text" id="m-cli-dir" placeholder="opcional"></div>
-            <div class="field"><label>Ciudad</label><input type="text" id="m-cli-ciudad" placeholder="opcional"></div>
-          </div>
-          <div class="form-foot"><span id="m-cli-mode"></span><button type="button" class="btn-primary" id="m-cli-save">Agregar cliente</button></div>
-          <div class="table-wrap" style="margin-top:12px;max-height:280px;overflow-y:auto">
-            <table id="tbl-m-clientes">
-              <thead><tr><th>Nombre</th><th>NIT</th><th>Teléfono</th><th>Ciudad</th><th></th></tr></thead>
-              <tbody></tbody>
-            </table>
-          </div>
+    <section class="tab-panel" id="panel-m-maquinas">
+      <div class="card">
+        <div class="card-head"><h3>Máquinas</h3><span class="card-hint">equipos por área</span></div>
+        <div class="form-row">
+          <div class="field"><label>Código</label><input type="text" id="m-maq-codigo" placeholder="ej. P3"></div>
+          <div class="field"><label>Nombre</label><input type="text" id="m-maq-nombre" placeholder="ej. Heidelberg GTO"></div>
         </div>
-
-        <div class="card">
-          <div class="card-head"><h3>Proveedores</h3><span class="card-hint">a quién le compran</span></div>
-          <div class="form-row">
-            <div class="field"><label>Nombre</label><input type="text" id="m-prov-nombre" placeholder="Razón social o nombre"></div>
-            <div class="field"><label>NIT / identificación</label><input type="text" id="m-prov-nit" placeholder="opcional"></div>
-          </div>
-          <div class="form-row">
-            <div class="field"><label>Teléfono</label><input type="text" id="m-prov-tel" placeholder="opcional"></div>
-            <div class="field"><label>Correo</label><input type="text" id="m-prov-email" placeholder="opcional"></div>
-          </div>
-          <div class="form-row">
-            <div class="field"><label>Materiales que provee</label><input type="text" id="m-prov-materiales" placeholder="ej. Papel, tintas"></div>
-            <div class="field"><label>Ciudad</label><input type="text" id="m-prov-ciudad" placeholder="opcional"></div>
-          </div>
-          <div class="form-foot"><span id="m-prov-mode"></span><button type="button" class="btn-primary" id="m-prov-save">Agregar proveedor</button></div>
-          <div class="table-wrap" style="margin-top:12px;max-height:280px;overflow-y:auto">
-            <table id="tbl-m-proveedores">
-              <thead><tr><th>Nombre</th><th>Materiales</th><th>Teléfono</th><th>Ciudad</th><th></th></tr></thead>
-              <tbody></tbody>
-            </table>
-          </div>
+        <div class="form-row">
+          <div class="field"><label>Área</label><input type="text" id="m-maq-area" placeholder="ej. Litografia"></div>
+        </div>
+        <div class="form-foot"><span id="m-maq-mode"></span><button type="button" class="btn-primary" id="m-maq-save">Agregar máquina</button></div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table id="tbl-m-maquinas">
+            <thead><tr><th>Código</th><th>Nombre</th><th>Área</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
         </div>
       </div>
+    </section>
 
+    <section class="tab-panel" id="panel-m-materias">
       <div class="card">
         <div class="card-head"><h3>Materias primas</h3><span class="card-hint">papel, laminados, argollas, pegantes — ya viene precargado con 226</span></div>
         <div class="form-row">
@@ -417,7 +405,7 @@
           </div>
         </div>
         <div class="form-foot"><span id="m-mp-mode"></span><button type="button" class="btn-primary" id="m-mp-save">Agregar materia prima</button></div>
-        <div class="table-wrap" style="margin-top:12px;max-height:320px;overflow-y:auto">
+        <div class="table-wrap" style="margin-top:12px;max-height:420px;overflow-y:auto">
           <table id="tbl-m-materias">
             <thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Pliego</th><th></th></tr></thead>
             <tbody></tbody>
@@ -425,6 +413,76 @@
         </div>
       </div>
     </section>
+
+    <section class="tab-panel" id="panel-m-clientes">
+      <div class="card">
+        <div class="card-head"><h3>Clientes</h3><span class="card-hint">datos básicos</span></div>
+        <div class="form-row">
+          <div class="field"><label>Nombre</label><input type="text" id="m-cli-nombre" placeholder="Razón social o nombre"></div>
+          <div class="field"><label>NIT / identificación</label><input type="text" id="m-cli-nit" placeholder="opcional"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Teléfono</label><input type="text" id="m-cli-tel" placeholder="opcional"></div>
+          <div class="field"><label>Correo</label><input type="text" id="m-cli-email" placeholder="opcional"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Dirección</label><input type="text" id="m-cli-dir" placeholder="opcional"></div>
+          <div class="field"><label>Ciudad</label><input type="text" id="m-cli-ciudad" placeholder="opcional"></div>
+        </div>
+        <div class="form-foot"><span id="m-cli-mode"></span><button type="button" class="btn-primary" id="m-cli-save">Agregar cliente</button></div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table id="tbl-m-clientes">
+            <thead><tr><th>Nombre</th><th>NIT</th><th>Teléfono</th><th>Ciudad</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-m-proveedores">
+      <div class="card">
+        <div class="card-head"><h3>Proveedores</h3><span class="card-hint">a quién le compran</span></div>
+        <div class="form-row">
+          <div class="field"><label>Nombre</label><input type="text" id="m-prov-nombre" placeholder="Razón social o nombre"></div>
+          <div class="field"><label>NIT / identificación</label><input type="text" id="m-prov-nit" placeholder="opcional"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Teléfono</label><input type="text" id="m-prov-tel" placeholder="opcional"></div>
+          <div class="field"><label>Correo</label><input type="text" id="m-prov-email" placeholder="opcional"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Materiales que provee</label><input type="text" id="m-prov-materiales" placeholder="ej. Papel, tintas"></div>
+          <div class="field"><label>Ciudad</label><input type="text" id="m-prov-ciudad" placeholder="opcional"></div>
+        </div>
+        <div class="form-foot"><span id="m-prov-mode"></span><button type="button" class="btn-primary" id="m-prov-save">Agregar proveedor</button></div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table id="tbl-m-proveedores">
+            <thead><tr><th>Nombre</th><th>Materiales</th><th>Teléfono</th><th>Ciudad</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-m-productos">
+      <div class="card">
+        <div class="card-head"><h3>Productos</h3><span class="card-hint">descripción base, del Excel de combinaciones</span></div>
+        <div class="form-row">
+          <div class="field"><label>Nombre</label><input type="text" id="m-prod-nombre" placeholder="ej. Talonario"></div>
+          <div class="field"><label>Descripción</label><input type="text" id="m-prod-desc" placeholder="opcional"></div>
+        </div>
+        <div class="form-foot"><span id="m-prod-mode"></span><button type="button" class="btn-primary" id="m-prod-save">Agregar producto</button></div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table id="tbl-m-productos">
+            <thead><tr><th>Nombre</th><th>Descripción</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+  </div>
 
   <div class="toast" id="toast"></div>
 </div>

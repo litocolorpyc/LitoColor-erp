@@ -20,21 +20,11 @@
 
   <main>
     <div class="card">
-      <div class="card-head"><h3>Órdenes vivas en producción</h3><span class="card-hint">con procesos pendientes</span></div>
-      <div class="table-wrap">
-        <table id="tbl-ordenes-vivas">
-          <thead><tr><th>Orden</th><th>Cliente</th><th>Producto</th><th>Pieza</th><th class="num">Avance</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="card">
       <div class="card-head"><h3>Iniciar una actividad</h3><span class="card-hint" id="reg-hint">elige tu nombre</span></div>
       <div id="reg-setup">
         <div class="form-row">
           <div class="field"><label>Operario</label><select id="r-operario"></select></div>
-          <div class="field"><label>Orden (OPP)</label><input type="text" id="r-orden" placeholder="ej. 5944"></div>
+          <div class="field"><label>Orden (solo las que están en curso)</label><select id="r-orden"><option value="">Selecciona una orden…</option></select></div>
         </div>
         <div class="form-row">
           <div class="field"><label>Pieza</label><select id="r-pieza"><option value="">— Sin OPP / general —</option></select></div>
@@ -57,10 +47,10 @@
     </div>
 
     <div class="card">
-      <div class="card-head"><h3>Últimos registros guardados</h3><span class="card-hint">de toda la planta</span></div>
+      <div class="card-head"><h3>Tus registros recientes</h3><span class="card-hint" id="reg-recent-hint">elige tu nombre arriba</span></div>
       <div class="table-wrap">
         <table id="tbl-reg-recent">
-          <thead><tr><th>Fecha</th><th>Operario</th><th>Actividad</th><th>Orden</th><th>Estado</th></tr></thead>
+          <thead><tr><th>Fecha</th><th>Actividad</th><th>Orden</th><th>Estado</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
