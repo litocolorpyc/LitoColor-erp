@@ -300,6 +300,202 @@
     document.querySelector('#tbl-reg-recent tbody').innerHTML = recent.map(r=>`<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.operario||'—'}</td><td>${r.actividad||'—'}</td><td>${r.orden??'—'}</td></tr>`).join('');
   }
 
+  // ========================================================
+  // ORDENES (OPP)
+  // ========================================================
+  let oppPiezaCount = 0;
+
+  function calcPorPliego(pliegoW, pliegoH, piezaW, piezaH){
+    if(!pliegoW || !pliegoH || !piezaW || !piezaH) return 0;
+    const a = Math.floor(pliegoW / piezaW) * Math.floor(pliegoH / piezaH);
+    const b = Math.floor(pliegoW / piezaH) * Math.floor(pliegoH / piezaW);
+    return Math.max(a, b);
+  }
+
+  function addPiezaCard(prefill){
+    oppPiezaCount++;
+    const tpl = document.getElementById('opp-pieza-template');
+    const node = tpl.content.firstElementChild.cloneNode(true);
+    node.dataset.index = oppPiezaCount;
+    node.querySelector('.opp-pieza-num').textContent = oppPiezaCount;
+
+    node.querySelector('.opp-remove-pieza').addEventListener('click', () => {
+      node.remove();
+      updateOppPreview();
+    });
+
+    const recalc = () => recalcPieza(node);
+    node.querySelectorAll('input, select').forEach(el => {
+      el.addEventListener('input', recalc);
+      el.addEventListener('change', recalc);
+    });
+
+    document.getElementById('opp-piezas-list').appendChild(node);
+    recalcPieza(node);
+    updateOppPreview();
+    return node;
+  }
+
+  function recalcPieza(node){
+    const cantidad = parseFloat(node.querySelector('.f-cantidad').value) || 0;
+    const unidadesMontaje = parseFloat(node.querySelector('.f-unidades-montaje').value) || 1;
+    const tamAncho = parseFloat(node.querySelector('.f-tam-ancho').value) || 0;
+    const tamAlto = parseFloat(node.querySelector('.f-tam-alto').value) || 0;
+    const pliego = node.querySelector('.f-pliego').value.split('x').map(Number);
+    const medidaAnchoEl = node.querySelector('.f-medida-ancho');
+    const medidaAltoEl = node.querySelector('.f-medida-alto');
+
+    // sugerir medida con margen (tamaño + 5cm) solo si el campo está vacío
+    if(!medidaAnchoEl.dataset.touched && tamAncho){
+      medidaAnchoEl.value = (tamAncho + 5).toFixed(1);
+    }
+    if(!medidaAltoEl.dataset.touched && tamAlto){
+      medidaAltoEl.value = (tamAlto + 5).toFixed(1);
+    }
+    medidaAnchoEl.oninput = () => medidaAnchoEl.dataset.touched = '1';
+    medidaAltoEl.oninput = () => medidaAltoEl.dataset.touched = '1';
+
+    const medidaAncho = parseFloat(medidaAnchoEl.value) || 0;
+    const medidaAlto = parseFloat(medidaAltoEl.value) || 0;
+
+    const tamSolicitados = unidadesMontaje > 0 ? Math.ceil(cantidad / unidadesMontaje) : cantidad;
+    node.querySelector('.f-tam-solicitados').value = tamSolicitados || 0;
+
+    const porPliegoEl = node.querySelector('.f-tam-por-pliego');
+    if(!porPliegoEl.dataset.touched){
+      porPliegoEl.value = calcPorPliego(pliego[0], pliego[1], medidaAncho, medidaAlto) || '';
+    }
+    porPliegoEl.oninput = () => porPliegoEl.dataset.touched = '1';
+
+    const programadosEl = node.querySelector('.f-tam-programados');
+    if(!programadosEl.dataset.touched){
+      programadosEl.value = tamSolicitados ? Math.round(tamSolicitados * 1.10) : '';
+    }
+    programadosEl.oninput = () => programadosEl.dataset.touched = '1';
+
+    const porPliego = parseFloat(porPliegoEl.value) || 0;
+    const programados = parseFloat(programadosEl.value) || 0;
+    const pliegos = porPliego > 0 ? Math.ceil(programados / porPliego) : 0;
+    node.querySelector('.f-pliegos-result').textContent = pliegos ? fmtNum(pliegos, 0) : '—';
+  }
+
+  function updateOppPreview(){
+    const n = document.querySelectorAll('#opp-piezas-list .opp-pieza-card').length;
+    document.getElementById('opp-preview').textContent = n + (n === 1 ? ' pieza agregada' : ' piezas agregadas');
+  }
+
+  function suggestNextOrden(){
+    const all = [
+      ...(DB.pedidos || []).map(p => p.orden),
+      ...(DB.opp_ordenes || []).map(o => o.orden)
+    ].filter(n => typeof n === 'number');
+    const max = all.length ? Math.max(...all) : 5938;
+    return max + 1;
+  }
+
+  async function loadOpp(){
+    const [o1, o2] = await Promise.all([
+      sb.from('opp_ordenes').select('*').order('orden', { ascending: false }),
+      sb.from('opp_piezas').select('*')
+    ]);
+    DB.opp_ordenes = o1.data || [];
+    DB.opp_piezas = o2.data || [];
+    renderOppRecent();
+  }
+
+  function renderOppRecent(){
+    const conteo = {};
+    (DB.opp_piezas || []).forEach(p => { conteo[p.orden] = (conteo[p.orden] || 0) + 1; });
+    const rows = (DB.opp_ordenes || []).slice(0, 20);
+    document.querySelector('#tbl-opp-recent tbody').innerHTML = rows.map(o =>
+      `<tr><td>${o.orden}</td><td>${o.cliente || '—'}</td><td>${o.producto || '—'}</td><td class="num">${conteo[o.orden] || 0}</td><td>${(o.fecha || '').slice(0,10)}</td></tr>`
+    ).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--ink-faint)">Sin órdenes registradas</td></tr>';
+  }
+
+  function initOppForm(){
+    document.getElementById('opp-orden').value = suggestNextOrden();
+    document.getElementById('opp-fecha').value = new Date().toISOString().slice(0,10);
+    document.getElementById('opp-add-pieza').addEventListener('click', () => addPiezaCard());
+    document.getElementById('opp-save').addEventListener('click', saveOpp);
+    addPiezaCard(); // arranca con 1 pieza lista para llenar
+  }
+
+  async function saveOpp(){
+    const btn = document.getElementById('opp-save');
+    const orden = parseInt(document.getElementById('opp-orden').value, 10);
+    const cliente = document.getElementById('opp-cliente').value.trim();
+    const cards = document.querySelectorAll('#opp-piezas-list .opp-pieza-card');
+
+    if(!orden || !cliente){
+      toast('Falta el número de orden o el cliente');
+      return;
+    }
+    if(cards.length === 0){
+      toast('Agrega al menos una pieza');
+      return;
+    }
+
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    try{
+      const { error: errOrden } = await sb.from('opp_ordenes').insert([{
+        orden,
+        cliente,
+        producto: document.getElementById('opp-producto').value.trim() || null,
+        fecha: document.getElementById('opp-fecha').value
+      }]);
+      if(errOrden) throw errOrden;
+
+      const piezasPayload = Array.from(cards).map((node, i) => {
+        const pliego = node.querySelector('.f-pliego').value.split('x').map(Number);
+        const suborden = i + 1;
+        return {
+          orden, suborden, op: orden + '-' + suborden,
+          pieza: node.querySelector('.f-pieza').value.trim() || null,
+          cantidad: parseFloat(node.querySelector('.f-cantidad').value) || null,
+          tamano_ancho: parseFloat(node.querySelector('.f-tam-ancho').value) || null,
+          tamano_alto: parseFloat(node.querySelector('.f-tam-alto').value) || null,
+          papel: node.querySelector('.f-papel').value.trim() || null,
+          pliego_ancho: pliego[0] || null, pliego_alto: pliego[1] || null,
+          tintas_frente: parseInt(node.querySelector('.f-tintas-frente').value) || 0,
+          tintas_atras: parseInt(node.querySelector('.f-tintas-atras').value) || 0,
+          ctp: node.querySelector('.f-ctp').value,
+          tira_retira: node.querySelector('.f-tira').value,
+          laminado: node.querySelector('.f-laminado').value || null,
+          laminado_lados: parseInt(node.querySelector('.f-laminado-lados').value) || 0,
+          barniz_uv: node.querySelector('.f-barniz').checked,
+          troquelado: node.querySelector('.f-troquelado').checked,
+          troquel_detalle: node.querySelector('.f-troquel-detalle').value.trim() || null,
+          talonarios: node.querySelector('.f-talonarios').checked,
+          otros_acabados: node.querySelector('.f-otros').value.trim() || null,
+          unidades_por_montaje: parseFloat(node.querySelector('.f-unidades-montaje').value) || 1,
+          tamanos_solicitados: parseFloat(node.querySelector('.f-tam-solicitados').value) || null,
+          tamanos_programados: parseFloat(node.querySelector('.f-tam-programados').value) || null,
+          medida_tamano_ancho: parseFloat(node.querySelector('.f-medida-ancho').value) || null,
+          medida_tamano_alto: parseFloat(node.querySelector('.f-medida-alto').value) || null,
+          tamanos_por_pliego: parseFloat(node.querySelector('.f-tam-por-pliego').value) || null,
+          pliegos: parseFloat(node.querySelector('.f-pliegos-result').textContent.replace(/\./g,'')) || null
+        };
+      });
+
+      const { error: errPiezas } = await sb.from('opp_piezas').insert(piezasPayload);
+      if(errPiezas) throw errPiezas;
+
+      toast('Orden ' + orden + ' guardada con ' + piezasPayload.length + ' pieza(s)');
+      document.getElementById('opp-piezas-list').innerHTML = '';
+      oppPiezaCount = 0;
+      document.getElementById('opp-cliente').value = '';
+      document.getElementById('opp-producto').value = '';
+      document.getElementById('opp-orden').value = orden + 1;
+      addPiezaCard();
+      await loadOpp();
+    }catch(err){
+      console.error(err);
+      toast('Error al guardar la orden — revisa la consola');
+    }finally{
+      btn.disabled = false; btn.textContent = 'Guardar orden completa';
+    }
+  }
+
   (async function init(){
     try{
       await loadAll();
@@ -313,5 +509,7 @@
     renderGerencial();
     renderProduccion();
     renderOperario();
+    await loadOpp();
+    initOppForm();
   })();
 })();

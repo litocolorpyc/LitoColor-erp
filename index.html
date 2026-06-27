@@ -18,6 +18,7 @@
       <button class="tab-btn active" data-tab="gerencial" role="tab">Gerencial</button>
       <button class="tab-btn" data-tab="produccion" role="tab">Producción</button>
       <button class="tab-btn" data-tab="operario" role="tab">Operario</button>
+      <button class="tab-btn" data-tab="ordenes" role="tab">Órdenes</button>
       <button class="tab-btn" data-tab="registrar" role="tab">Registrar</button>
     </nav>
     <div class="data-note" id="data-note">Conectando con la base de datos…</div>
@@ -92,6 +93,110 @@
         </div>
       </div>
     </section>
+
+    <!-- ORDENES (OPP) -->
+    <section class="tab-panel" id="panel-ordenes">
+      <div class="card">
+        <div class="card-head"><h3>Nueva orden de producción</h3><span class="card-hint">define el encabezado y agrega cada pieza</span></div>
+        <div class="form-row">
+          <div class="field"><label>Orden N°</label><input type="number" id="opp-orden" required></div>
+          <div class="field"><label>Fecha</label><input type="date" id="opp-fecha" required></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Cliente</label><input type="text" id="opp-cliente" placeholder="ej. Magic Medios" required></div>
+          <div class="field"><label>Producto</label><input type="text" id="opp-producto" placeholder="ej. Cuadernos Velez"></div>
+        </div>
+
+        <div id="opp-piezas-list"></div>
+
+        <button type="button" class="btn-secondary" id="opp-add-pieza">+ Agregar pieza</button>
+
+        <div class="form-foot" style="margin-top:16px">
+          <div class="preview" id="opp-preview">0 piezas agregadas</div>
+          <button type="button" class="btn-primary" id="opp-save">Guardar orden completa</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Órdenes recientes</h3><span class="card-hint">últimas OPP guardadas</span></div>
+        <div class="table-wrap">
+          <table id="tbl-opp-recent">
+            <thead><tr><th>Orden</th><th>Cliente</th><th>Producto</th><th class="num">Piezas</th><th>Fecha</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <template id="opp-pieza-template">
+      <div class="opp-pieza-card">
+        <div class="opp-pieza-head">
+          <span class="opp-pieza-title">Pieza <span class="opp-pieza-num"></span></span>
+          <button type="button" class="opp-remove-pieza">Quitar</button>
+        </div>
+
+        <div class="form-row">
+          <div class="field"><label>Nombre de la pieza</label><input type="text" class="f-pieza" placeholder="ej. Caratula"></div>
+          <div class="field"><label>Cantidad solicitada</label><input type="number" class="f-cantidad" min="0"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Tamaño ancho (cm)</label><input type="number" class="f-tam-ancho" step="0.1" min="0"></div>
+          <div class="field"><label>Tamaño alto (cm)</label><input type="number" class="f-tam-alto" step="0.1" min="0"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Papel</label><input type="text" class="f-papel" placeholder="ej. Propalcote 150"></div>
+          <div class="field"><label>Pliego</label>
+            <select class="f-pliego">
+              <option value="70x100">70 x 100</option>
+              <option value="60x90">60 x 90</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Tintas frente</label><input type="number" class="f-tintas-frente" min="0" max="6" value="4"></div>
+          <div class="field"><label>Tintas atrás</label><input type="number" class="f-tintas-atras" min="0" max="6" value="0"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>CTP</label>
+            <select class="f-ctp"><option>Convencional</option><option>Digital</option></select>
+          </div>
+          <div class="field"><label>Impresión</label>
+            <select class="f-tira"><option value="Tira y retira">Tira y retira</option><option value="Solo tiro">Solo tiro</option></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Laminado</label>
+            <select class="f-laminado"><option value="">Ninguno</option><option value="Mate">Mate</option><option value="Brillante">Brillante</option></select>
+          </div>
+          <div class="field"><label>Lados laminados</label><input type="number" class="f-laminado-lados" min="0" max="2" value="0"></div>
+        </div>
+        <div class="form-row opp-checks">
+          <label><input type="checkbox" class="f-barniz"> Barniz UV</label>
+          <label><input type="checkbox" class="f-troquelado"> Troquelado</label>
+          <label><input type="checkbox" class="f-talonarios"> Talonarios</label>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Detalle troquel (si aplica)</label><input type="text" class="f-troquel-detalle" placeholder="opcional"></div>
+          <div class="field"><label>Otros acabados</label><input type="text" class="f-otros" placeholder="ej. Argollado, Encaratulado"></div>
+        </div>
+
+        <div class="opp-calc-divider">Cálculo de imposición</div>
+
+        <div class="form-row">
+          <div class="field"><label>Unidades por montaje</label><input type="number" class="f-unidades-montaje" min="1" value="1"></div>
+          <div class="field"><label>Tamaños solicitados</label><input type="text" class="f-tam-solicitados calc-readonly" readonly></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Medida tamaño ancho (con margen)</label><input type="number" class="f-medida-ancho" step="0.1" min="0"></div>
+          <div class="field"><label>Medida tamaño alto (con margen)</label><input type="number" class="f-medida-alto" step="0.1" min="0"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Tamaños por pliego (sugerido, editable)</label><input type="number" class="f-tam-por-pliego" min="0"></div>
+          <div class="field"><label>Tamaños programados (sugerido, editable)</label><input type="number" class="f-tam-programados" min="0"></div>
+        </div>
+        <div class="opp-pliegos-result">Pliegos necesarios: <span class="f-pliegos-result">—</span></div>
+      </div>
+    </template>
 
     <section class="tab-panel" id="panel-registrar">
       <div class="grid-2">

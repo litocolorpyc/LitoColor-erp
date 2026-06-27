@@ -61,6 +61,19 @@ select, input, textarea{ font-family:inherit; font-size:13px; padding:7px 9px; b
 .preview{ font-size:12px; color:var(--ink-soft); }
 .btn-primary{ font-family:inherit; background:var(--accent); color:#fff; border:none; border-radius:8px; padding:10px 20px; font-size:13px; font-weight:700; cursor:pointer; }
 .btn-primary:hover{ opacity:.92; }
+.btn-secondary{ font-family:inherit; background:transparent; color:var(--accent); border:1px solid var(--accent); border-radius:8px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer; margin-top:4px; }
+.btn-secondary:hover{ background:rgba(194,74,31,0.08); }
+
+.opp-pieza-card{ border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:14px; background:var(--paper); }
+.opp-pieza-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.opp-pieza-title{ font-size:13px; font-weight:700; }
+.opp-remove-pieza{ font-family:inherit; background:transparent; border:1px solid var(--bad); color:var(--bad); border-radius:6px; padding:4px 10px; font-size:11px; cursor:pointer; }
+.opp-remove-pieza:hover{ background:rgba(163,45,45,0.08); }
+.opp-checks{ display:flex; gap:18px; align-items:center; font-size:13px; }
+.opp-checks label{ display:flex; align-items:center; gap:6px; text-transform:none; font-weight:400; color:var(--ink); }
+.opp-calc-divider{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--accent); border-top:1px dashed var(--line); padding-top:10px; margin:12px 0 10px; }
+.opp-pliegos-result{ font-size:13px; font-weight:600; margin-top:6px; }
+.calc-readonly{ background:var(--card); color:var(--ink-soft); }
 
 .toast{ position:fixed; bottom:18px; right:18px; background:var(--ink); color:var(--paper); padding:10px 16px; border-radius:8px; font-size:13px; opacity:0; transform:translateY(8px); transition:opacity .25s, transform .25s; pointer-events:none; z-index:50; }
 .toast.show{ opacity:1; transform:translateY(0); }
