@@ -4,6 +4,8 @@ import { initRegistrar, populateReg } from './registrar.js';
 import { initOppForm, renderOppRecent, populateClienteSelect, populateProductoSelect, refreshPapelPliegoSelects } from './ordenes.js';
 import { initMaestros, renderMaestros } from './maestros.js';
 import { initUsuarios } from './usuarios.js';
+import { initCalendario, renderCalendario } from './calendario.js';
+import { initAlertas, renderAlertas } from './alertas.js';
 import { restaurarSesion, iniciarSesion, cerrarSesion, cambiarContrasena, crearCuentaPropia, getCurrentUser, aplicarPermisos } from './auth.js';
 
 // ---------- pestañas ----------
@@ -21,6 +23,8 @@ function onRegistrarChange(){
   renderProduccion();
   renderOperario();
   renderOppRecent();
+  renderCalendario();
+  renderAlertas();
 }
 
 function onMaestrosChange(){
@@ -55,6 +59,8 @@ async function arrancarApp(){
   renderOppRecent();
   initMaestros(onMaestrosChange);
   initUsuarios();
+  initCalendario();
+  initAlertas();
 
   aplicarPermisos();
 }

@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
-import { toast, fmtNum } from './helpers.js';
+import { toast, fmtNum, exportarExcel } from './helpers.js';
 
 let oppPiezaCount = 0;
 let editingOrden = null; // si no es null, Guardar actualiza esa orden en vez de crear una nueva
@@ -675,5 +675,21 @@ export function initOppForm(){
   document.getElementById('opp-buscar').addEventListener('input', filtrarOrdenes);
   document.getElementById('opp-detalle-cerrar').addEventListener('click', () => {
     document.getElementById('opp-detalle-card').style.display = 'none';
+  });
+  const btnExport = document.getElementById('export-ordenes');
+  if(btnExport) btnExport.addEventListener('click', () => {
+    const conteo = {};
+    DB.opp_piezas.forEach(p => { conteo[p.orden] = (conteo[p.orden] || 0) + 1; });
+    exportarExcel('LitoColor_ordenes.xlsx', [{
+      nombre: 'Órdenes',
+      filas: DB.opp_ordenes.map(o => {
+        const estado = estadoOrden(o);
+        return {
+          Orden: o.orden, Cliente: o.cliente, Producto: o.producto, Fecha: (o.fecha||'').slice(0,10),
+          Piezas: conteo[o.orden] || 0, Estado: estado.label,
+          'Avance %': estado.pct, 'Costo M.O.': costoAcumulado(o.orden)
+        };
+      })
+    }]);
   });
 }

@@ -62,3 +62,12 @@ export function deltaBadge(actual, anterior){
   const up = pct >= 0;
   return `<span class="delta-badge ${up?'up':'down'}">${up?'↑':'↓'} ${Math.abs(pct).toFixed(0)}%</span>`;
 }
+
+export function exportarExcel(nombreArchivo, hojas){
+  const wb = XLSX.utils.book_new();
+  hojas.forEach(h => {
+    const ws = XLSX.utils.json_to_sheet(h.filas);
+    XLSX.utils.book_append_sheet(wb, ws, h.nombre.slice(0,31));
+  });
+  XLSX.writeFile(wb, nombreArchivo);
+}

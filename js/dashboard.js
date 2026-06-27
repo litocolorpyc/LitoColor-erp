@@ -1,5 +1,5 @@
 import { DB } from './store.js';
-import { fmtCOP, fmtNum, areaColor, rangoFechas, rangoAnterior, deltaBadge } from './helpers.js';
+import { fmtCOP, fmtNum, areaColor, rangoFechas, rangoAnterior, deltaBadge, exportarExcel } from './helpers.js';
 
 let charts = {};
 function makeChart(id, config){
@@ -33,6 +33,7 @@ function codeFromLabel(label){
 
 // ---------- GERENCIAL ----------
 let rangoGer = rangoFechas('todo');
+let ultimaRentabilidad = [];
 
 function calcularGerencial(desde, hasta){
   const pedidos = DB.pedidos.filter(p => enRango(p.fecha, desde, hasta));
@@ -80,6 +81,7 @@ export function renderGerencial(){
   actual.produccion.forEach(r=>{ if(r.orden==null) return; ordCost[r.orden]=(ordCost[r.orden]||0)+(r.valorActividad||0); });
   const rows = Object.keys(ordIng).map(o=>({orden:o, cliente:ordCliente[o], trabajo:ordTrabajo[o], ing:ordIng[o], cost:ordCost[o]||0}))
     .sort((a,b)=>b.ing-a.ing).slice(0,15);
+  ultimaRentabilidad = rows;
   document.querySelector('#tbl-ger-ordenes tbody').innerHTML = rows.map(r=>{
     const m=r.ing-r.cost;
     return `<tr><td>${r.orden}</td><td>${r.cliente||'—'}</td><td>${(r.trabajo||'—').toString().trim()}</td><td class="num">${fmtCOP(r.ing)}</td><td class="num">${fmtCOP(r.cost)}</td><td class="num" style="color:${m>=0?'var(--good)':'var(--bad)'}">${fmtCOP(m)}</td></tr>`;
@@ -115,6 +117,7 @@ function wireRangePresets(presetContainerId, desdeId, hastaId, getRango, setRang
 
 // ---------- PRODUCCION ----------
 let rangoProd = rangoFechas('todo');
+let ultimaProduccionArea = [];
 
 export function renderProduccion(){
   const { desde, hasta } = rangoProd;
@@ -139,6 +142,7 @@ export function renderProduccion(){
   const areaMap = {};
   produccion.forEach(r=>{ const a=r.area||'General'; areaMap[a]=areaMap[a]||{h:0,p:0,c:0,n:0}; areaMap[a].h+=(r.tiempoHr||0); areaMap[a].p+=(r.cantidad||0); areaMap[a].c+=(r.valorActividad||0); areaMap[a].n+=1; });
   const areas = Object.keys(areaMap).sort((a,b)=>areaMap[b].h-areaMap[a].h);
+  ultimaProduccionArea = areas.map(a => ({ area:a, horas:areaMap[a].h, piezas:areaMap[a].p, costo:areaMap[a].c, registros:areaMap[a].n }));
   makeChart('chart-prod-area', { type:'bar', data:{ labels:areas,
     datasets:[{ label:'Horas', data: areas.map(a=>areaMap[a].h), backgroundColor: areas.map(a=>areaColor(a)) }]},
     options: baseBarOpts(false,true) });
@@ -188,4 +192,35 @@ export function renderOperario(){
 export function initDashboardFilters(){
   wireRangePresets('ger-presets', 'ger-desde', 'ger-hasta', () => rangoGer, r => rangoGer = r, renderGerencial);
   wireRangePresets('prod-presets', 'prod-desde', 'prod-hasta', () => rangoProd, r => rangoProd = r, renderProduccion);
+  wireExportButtons();
+}
+
+function wireExportButtons(){
+  const btnRent = document.getElementById('export-rentabilidad');
+  if(btnRent) btnRent.addEventListener('click', () => {
+    exportarExcel('LitoColor_rentabilidad_por_orden.xlsx', [{
+      nombre: 'Rentabilidad',
+      filas: ultimaRentabilidad.map(r => ({ Orden: r.orden, Cliente: r.cliente, Trabajo: r.trabajo, Ingreso: r.ing, 'Costo M.O.': r.cost, Margen: r.ing - r.cost }))
+    }]);
+  });
+
+  const btnProd = document.getElementById('export-produccion');
+  if(btnProd) btnProd.addEventListener('click', () => {
+    exportarExcel('LitoColor_produccion_por_area.xlsx', [{
+      nombre: 'Producción por área',
+      filas: ultimaProduccionArea.map(r => ({ Área: r.area, Horas: r.horas, Piezas: r.piezas, 'Costo M.O.': r.costo, Registros: r.registros }))
+    }]);
+  });
+
+  const btnRespaldo = document.getElementById('export-respaldo');
+  if(btnRespaldo) btnRespaldo.addEventListener('click', () => {
+    exportarExcel('LitoColor_respaldo_completo.xlsx', [
+      { nombre: 'Pedidos', filas: DB.pedidos.map(p => ({ OPP:p.opp, Fecha:p.fecha, Orden:p.orden, Suborden:p.suborden, Cliente:p.cliente, Producto:p.producto, Trabajo:p.trabajo, Pedido:p.pedido, Valor:p.valor, Total:p.total })) },
+      { nombre: 'Producción', filas: DB.produccion.map(r => ({ Fecha:r.fecha, Operario:r.operario, HoraIni:r.horaIni, HoraFin:r.horaFin, Actividad:r.actividad, Área:r.area, Máquina:r.maquina, Cantidad:r.cantidad, Orden:r.orden, Pieza:r.op, Cliente:r.cliente, Trabajo:r.trabajo, TiempoHr:r.tiempoHr, ValorActividad:r.valorActividad })) },
+      { nombre: 'Órdenes', filas: DB.opp_ordenes.map(o => ({ Orden:o.orden, Cliente:o.cliente, Producto:o.producto, Fecha:o.fecha, Estado:o.estado })) },
+      { nombre: 'Empleados', filas: DB.personal.map(p => ({ Nombre:p.nombre, Cargo:p.cargo, 'Valor/hora':p.valor_hora, Activo:p.activo })) },
+      { nombre: 'Máquinas', filas: DB.maquinas.map(m => ({ Código:m.codigo, Nombre:m.nombre, Área:m.area })) },
+      { nombre: 'Clientes', filas: DB.clientes.map(c => ({ Nombre:c.nombre, NIT:c.nit, Teléfono:c.telefono, Correo:c.email, Ciudad:c.ciudad })) }
+    ]);
+  });
 }
