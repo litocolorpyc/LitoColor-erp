@@ -38,6 +38,23 @@ body{ font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; colo
 .change-pwd-panel{ display:flex; gap:8px; padding:12px 24px; border-bottom:1px solid var(--line); background:var(--card); align-items:center; }
 .change-pwd-panel input{ max-width:260px; }
 
+.cal-row{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.cal-row-label{ width:140px; flex-shrink:0; font-size:12px; font-weight:600; }
+.cal-row-track{ position:relative; flex:1; height:34px; background:var(--card); border:1px solid var(--line); border-radius:6px; overflow:hidden; }
+.cal-bar{ position:absolute; top:3px; bottom:3px; border-radius:5px; color:#fff; font-size:10.5px; padding:2px 6px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; cursor:default; opacity:.92; }
+.cal-bar.en-curso{ background-image:repeating-linear-gradient(45deg, rgba(255,255,255,.18) 0 6px, transparent 6px 12px); }
+.cal-hours{ display:flex; margin-left:150px; font-size:10px; color:var(--ink-faint); justify-content:space-between; margin-bottom:4px; }
+.cal-legend{ display:flex; gap:14px; flex-wrap:wrap; margin-top:14px; font-size:11.5px; color:var(--ink-soft); }
+.cal-legend span{ display:inline-flex; align-items:center; gap:5px; }
+.cal-legend i{ width:10px; height:10px; border-radius:3px; display:inline-block; }
+
+.alerta-card{ display:flex; gap:12px; align-items:flex-start; padding:12px 14px; border-radius:10px; margin-bottom:10px; border:1px solid var(--line); }
+.alerta-card.alta{ background:rgba(163,45,45,.06); border-color:rgba(163,45,45,.3); }
+.alerta-card.media{ background:rgba(186,117,23,.08); border-color:rgba(186,117,23,.3); }
+.alerta-card .alerta-icon{ font-size:18px; line-height:1; }
+.alerta-card .alerta-msg{ font-size:13px; }
+.alerta-card .alerta-msg b{ font-weight:700; }
+
 @media (max-width:760px){
   .app-shell{ flex-direction:column; }
   .sidebar{ width:100%; min-height:auto; flex-direction:row; align-items:center; overflow-x:auto; }
