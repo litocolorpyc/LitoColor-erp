@@ -7,7 +7,7 @@ const PERMISOS = {
   gerente:          null,
   jefe_produccion:  ['produccion', 'operario', 'ordenes', 'calendario', 'alertas', 'registrar', 'm-empleados', 'm-maquinas', 'm-materias', 'm-clientes', 'm-proveedores', 'm-productos', 'ayuda'],
   disenador:        ['ordenes', 'registrar', 'm-productos', 'm-materias', 'ayuda'],
-  administradora:   ['gerencial', 'ordenes', 'alertas', 'registrar', 'm-empleados', 'm-clientes', 'm-proveedores', 'ayuda'],
+  administradora:   ['gerencial', 'ordenes', 'alertas', 'registrar', 'm-empleados', 'm-clientes', 'm-proveedores', 'm-costos', 'registrar-costo', 'ayuda'],
 };
 
 let currentUser = null; // { email, nombre, rol, cargo }

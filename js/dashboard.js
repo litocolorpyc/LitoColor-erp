@@ -39,9 +39,15 @@ let ultimaRentabilidadProducto = [];
 function calcularGerencial(desde, hasta){
   const pedidos = DB.pedidos.filter(p => enRango(p.fecha, desde, hasta));
   const produccion = DB.produccion.filter(r => enRango(r.fecha, desde, hasta));
+  const costosMov = DB.costos_movimientos.filter(m => enRango(m.fecha, desde, hasta));
   const ingresos = pedidos.reduce((s,p)=>s+(p.total||0),0);
   const costoMO = produccion.reduce((s,r)=>s+(r.valorActividad||0),0);
-  return { ingresos, costoMO, margen: ingresos - costoMO, ordenes: new Set(pedidos.map(p=>p.orden)).size, pedidos, produccion };
+  const costosFijos = costosMov.filter(m=>m.tipo==='Fijo').reduce((s,m)=>s+(m.valor||0),0);
+  const costosVariables = costosMov.filter(m=>m.tipo==='Variable').reduce((s,m)=>s+(m.valor||0),0);
+  const otrosCostos = costosFijos + costosVariables;
+  return { ingresos, costoMO, otrosCostos, costosFijos, costosVariables,
+    margen: ingresos - costoMO - otrosCostos,
+    ordenes: new Set(pedidos.map(p=>p.orden)).size, pedidos, produccion };
 }
 
 export function renderGerencial(){
@@ -50,23 +56,25 @@ export function renderGerencial(){
   const actual = calcularGerencial(desde, hasta);
   const ant = rangoAnterior(desde, hasta);
   const anterior = esTodo
-    ? { ingresos:null, costoMO:null, margen:null, ordenes:null }
+    ? { ingresos:null, costoMO:null, otrosCostos:null, margen:null, ordenes:null }
     : calcularGerencial(ant.desde, ant.hasta);
 
   document.getElementById('ger-kpis').innerHTML = `
     <div class="kpi"><div class="lbl">Ingresos facturados</div><div class="val">${fmtCOP(actual.ingresos)} ${deltaBadge(actual.ingresos, anterior.ingresos)}</div><div class="sub">según pedidos con valor</div></div>
     <div class="kpi"><div class="lbl">Costo mano de obra</div><div class="val">${fmtCOP(actual.costoMO)} ${deltaBadge(actual.costoMO, anterior.costoMO)}</div><div class="sub">según bitácora de producción</div></div>
-    <div class="kpi"><div class="lbl">Margen estimado</div><div class="val ${actual.margen>=0?'pos':'neg'}">${fmtCOP(actual.margen)} ${deltaBadge(actual.margen, anterior.margen)}</div><div class="sub">ingresos − mano de obra</div></div>
+    <div class="kpi"><div class="lbl">Otros costos (fijos + variables)</div><div class="val">${fmtCOP(actual.otrosCostos)} ${deltaBadge(actual.otrosCostos, anterior.otrosCostos)}</div><div class="sub">arriendo, nómina, materia prima, impuestos…</div></div>
+    <div class="kpi"><div class="lbl">Margen estimado</div><div class="val ${actual.margen>=0?'pos':'neg'}">${fmtCOP(actual.margen)} ${deltaBadge(actual.margen, anterior.margen)}</div><div class="sub">ingresos − mano de obra − otros costos</div></div>
     <div class="kpi"><div class="lbl">Órdenes con valor</div><div class="val">${actual.ordenes} ${deltaBadge(actual.ordenes, anterior.ordenes)}</div><div class="sub">vs. periodo anterior equivalente</div></div>`;
 
   const mesesMap = {};
   actual.pedidos.forEach(p=>{ if(!p.fecha) return; const k=p.fecha.slice(0,7); mesesMap[k]=mesesMap[k]||{ing:0,cost:0}; mesesMap[k].ing+=(p.total||0); });
   actual.produccion.forEach(r=>{ if(!r.fecha) return; const k=r.fecha.slice(0,7); mesesMap[k]=mesesMap[k]||{ing:0,cost:0}; mesesMap[k].cost+=(r.valorActividad||0); });
+  DB.costos_movimientos.forEach(m=>{ if(!m.fecha || !enRango(m.fecha, desde, hasta)) return; const k=m.fecha.slice(0,7); mesesMap[k]=mesesMap[k]||{ing:0,cost:0}; mesesMap[k].cost+=(m.valor||0); });
   const meses = Object.keys(mesesMap).sort();
   makeChart('chart-ger-mes', { type:'bar', data:{ labels: meses,
     datasets:[
-      {label:'Ingresos', data: meses.map(m=>mesesMap[m].ing), backgroundColor:'#185FA5'},
-      {label:'Costo M.O.', data: meses.map(m=>mesesMap[m].cost), backgroundColor:'#C24A1F'}
+      {label:'Ingresos', data: meses.map(m=>mesesMap[m].ing), backgroundColor:'#2E8FC0'},
+      {label:'Costos totales (M.O. + otros)', data: meses.map(m=>mesesMap[m].cost), backgroundColor:'#D8854A'}
     ]}, options: baseBarOpts(true) });
 
   const clMap = {};
@@ -111,78 +119,36 @@ export function renderGerencial(){
     <td class="num">${fmtNum(f.margenPct,0)}%</td>
   </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin datos en este rango</td></tr>';
 
-  const topProd = filasProducto.slice(0,12);
-  const ingresos = topProd.map(f=>f.ing);
-  const pcts = topProd.map(f=>f.margenPct);
-  const ns = topProd.map(f=>f.ordenes);
-  const ingAvg = ingresos.reduce((a,b)=>a+b,0) / (ingresos.length||1);
-  const pctAvg = pcts.reduce((a,b)=>a+b,0) / (pcts.length||1);
-  const nMax = Math.max(...ns, 1);
-
-  const quadrantePlugin = {
-    id: 'quadrantes',
-    beforeDraw(chart){
-      const { ctx, chartArea, scales } = chart;
-      if(!chartArea) return;
-      const xPix = scales.x.getPixelForValue(ingAvg);
-      const yPix = scales.y.getPixelForValue(pctAvg);
-      ctx.save();
-      ctx.fillStyle = 'rgba(59,109,17,0.07)';
-      ctx.fillRect(xPix, chartArea.top, chartArea.right-xPix, yPix-chartArea.top);
-      ctx.fillStyle = 'rgba(186,117,23,0.07)';
-      ctx.fillRect(xPix, yPix, chartArea.right-xPix, chartArea.bottom-yPix);
-      ctx.fillStyle = 'rgba(24,95,165,0.06)';
-      ctx.fillRect(chartArea.left, chartArea.top, xPix-chartArea.left, yPix-chartArea.top);
-      ctx.setLineDash([5,4]);
-      ctx.strokeStyle = '#9A988F';
-      ctx.beginPath(); ctx.moveTo(xPix, chartArea.top); ctx.lineTo(xPix, chartArea.bottom); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(chartArea.left, yPix); ctx.lineTo(chartArea.right, yPix); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.font = '11px sans-serif'; ctx.fillStyle = '#6B6E76';
-      ctx.textAlign = 'right'; ctx.fillText('ESTRELLAS →', chartArea.right-4, chartArea.top+12);
-      ctx.textAlign = 'left'; ctx.fillText('← JOYAS ESCONDIDAS', chartArea.left+4, chartArea.top+12);
-      ctx.textAlign = 'right'; ctx.fillText('MOTOR SIN MARGEN →', chartArea.right-4, chartArea.bottom-6);
-      ctx.textAlign = 'left'; ctx.fillText('← REPLANTEAR', chartArea.left+4, chartArea.bottom-6);
-      ctx.restore();
-    }
-  };
+  const topProd = filasProducto.slice(0,12).sort((a,b) => b.margen - a.margen);
 
   makeChart('chart-ger-productos', {
-    type: 'bubble',
-    data: { datasets: [{
-      data: topProd.map((f,i) => ({ x: f.ing, y: f.margenPct, r: 6 + (f.ordenes/nMax)*22, _f: f }))
-        .map(d => ({ x:d.x, y:d.y, r:d.r, label:d._f.producto, ordenes:d._f.ordenes, ing:d._f.ing, margen:d._f.margen })),
-      backgroundColor: 'rgba(194,74,31,0.65)',
-      borderColor: '#1A1D27', borderWidth: 1
-    }]},
+    type: 'bar',
+    data: {
+      labels: topProd.map(f => `${f.producto}  (${fmtNum(f.margenPct,0)}%)`),
+      datasets: [
+        { label: 'Margen', data: topProd.map(f=>f.margen), backgroundColor: '#2E8FC0', stack: 's' },
+        { label: 'Costo de mano de obra', data: topProd.map(f=>f.cost), backgroundColor: '#D8854A', stack: 's' }
+      ]
+    },
     options: {
+      indexAxis: 'y',
       responsive: true,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: (ctx) => {
-          const d = ctx.raw;
-          return `${d.label}: ${fmtCOP(d.ing)} ingreso · ${fmtCOP(d.margen)} margen (${fmtNum(d.y,0)}%) · ${d.ordenes} órdenes`;
-        } } }
+        tooltip: { callbacks: {
+          label: (ctx) => {
+            const f = topProd[ctx.dataIndex];
+            if(ctx.dataset.label === 'Margen') return `Margen: ${fmtCOP(f.margen)} (${fmtNum(f.margenPct,0)}%)`;
+            return `Costo de mano de obra: ${fmtCOP(f.cost)}`;
+          },
+          footer: (items) => `Ingreso total: ${fmtCOP(topProd[items[0].dataIndex].ing)}`
+        } }
       },
       scales: {
-        x: { title: { display:true, text:'Ingreso total (volumen)' }, grid:{ color:'rgba(150,150,150,.15)' } },
-        y: { title: { display:true, text:'Margen % (eficiencia)' }, grid:{ color:'rgba(150,150,150,.15)' } }
+        x: { stacked: true, grid:{ color:'rgba(150,150,150,.15)' }, ticks:{ font:{size:10} } },
+        y: { stacked: true, grid:{ display:false }, ticks:{ font:{size:10} } }
       }
-    },
-    plugins: [quadrantePlugin, {
-      id: 'etiquetasBurbuja',
-      afterDatasetsDraw(chart){
-        const { ctx } = chart;
-        const meta = chart.getDatasetMeta(0);
-        ctx.save();
-        ctx.font = 'bold 10px sans-serif'; ctx.fillStyle = '#21242E'; ctx.textAlign = 'center';
-        meta.data.forEach((point, i) => {
-          const d = chart.data.datasets[0].data[i];
-          ctx.fillText(d.label, point.x, point.y - d.r - 6);
-        });
-        ctx.restore();
-      }
-    }]
+    }
   });
 }
 
@@ -326,7 +292,11 @@ function wireExportButtons(){
       { nombre: 'Órdenes', filas: DB.opp_ordenes.map(o => ({ Orden:o.orden, Cliente:o.cliente, Producto:o.producto, Fecha:o.fecha, Estado:o.estado })) },
       { nombre: 'Empleados', filas: DB.personal.map(p => ({ Nombre:p.nombre, Cargo:p.cargo, 'Valor/hora':p.valor_hora, Activo:p.activo })) },
       { nombre: 'Máquinas', filas: DB.maquinas.map(m => ({ Código:m.codigo, Nombre:m.nombre, Área:m.area })) },
-      { nombre: 'Clientes', filas: DB.clientes.map(c => ({ Nombre:c.nombre, NIT:c.nit, Teléfono:c.telefono, Correo:c.email, Ciudad:c.ciudad })) }
+      { nombre: 'Clientes', filas: DB.clientes.map(c => ({ Nombre:c.nombre, NIT:c.nit, Teléfono:c.telefono, Correo:c.email, Ciudad:c.ciudad })) },
+      { nombre: 'Costos', filas: DB.costos_movimientos.map(m => {
+        const c = DB.costos_conceptos.find(x=>x.id===m.concepto_id);
+        return { Fecha:m.fecha, Tipo:m.tipo, Concepto:c?c.nombre:'—', Proveedor:m.proveedor, Valor:m.valor, Comentario:m.comentario };
+      }) }
     ]);
   });
 }

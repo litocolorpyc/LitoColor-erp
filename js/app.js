@@ -6,6 +6,7 @@ import { initMaestros, renderMaestros } from './maestros.js';
 import { initUsuarios } from './usuarios.js';
 import { initCalendario, renderCalendario } from './calendario.js';
 import { initAlertas, renderAlertas } from './alertas.js';
+import { initCostos } from './costos.js';
 import { restaurarSesion, iniciarSesion, cerrarSesion, cambiarContrasena, crearCuentaPropia, getCurrentUser, aplicarPermisos } from './auth.js';
 
 // ---------- pestañas ----------
@@ -61,6 +62,7 @@ async function arrancarApp(){
   initUsuarios();
   initCalendario();
   initAlertas();
+  initCostos();
 
   aplicarPermisos();
 }
