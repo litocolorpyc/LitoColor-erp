@@ -52,6 +52,7 @@
         <button class="tab-btn" data-tab="calendario" role="tab">Calendario</button>
         <button class="tab-btn" data-tab="alertas" role="tab">Alertas</button>
         <button class="tab-btn" data-tab="registrar" role="tab">Registrar</button>
+        <button class="tab-btn" data-tab="registrar-costo" role="tab">Registrar costo</button>
       </div>
       <div class="sidebar-group">
         <div class="sidebar-group-label">Maestros</div>
@@ -61,6 +62,7 @@
         <button class="tab-btn" data-tab="m-clientes" role="tab">Clientes</button>
         <button class="tab-btn" data-tab="m-proveedores" role="tab">Proveedores</button>
         <button class="tab-btn" data-tab="m-productos" role="tab">Productos</button>
+        <button class="tab-btn" data-tab="m-costos" role="tab">Conceptos de costo</button>
       </div>
       <div class="sidebar-group">
         <div class="sidebar-group-label">Seguridad</div>
@@ -131,7 +133,7 @@
       <div class="card">
         <div class="card-head"><h3>Rentabilidad por tipo de producto</h3><span class="card-hint">¿qué nos da más margen?</span></div>
         <div class="form-foot" style="margin-top:0;margin-bottom:10px"><span></span><button type="button" class="btn-secondary" id="export-rentabilidad-producto" style="margin:0">⬇ Exportar a Excel</button></div>
-        <canvas id="chart-ger-productos" height="360" style="margin-bottom:16px"></canvas></canvas>
+        <canvas id="chart-ger-productos" height="360" style="margin-bottom:16px"></canvas>
         <div class="table-wrap">
           <table id="tbl-ger-productos">
             <thead><tr><th>Producto</th><th class="num">Órdenes</th><th class="num">Ingreso</th><th class="num">Costo M.O.</th><th class="num">Margen</th><th class="num">Margen %</th></tr></thead>
@@ -690,6 +692,52 @@
         <p><b>Capturé un tiempo y no se refleja en el avance:</b> probablemente no elegiste la "Pieza" al capturar, o el "Área" usada no está en los "Procesos requeridos" de esa pieza.</p>
         <p><b>Olvidé mi contraseña:</b> pide a un Admin o Gerente que entre a "Usuarios" — todavía no hay recuperación automática.</p>
         <p><b>¿Los datos están seguros?</b> Sí — editar información exige sesión iniciada. Solo la captura de tiempos de operarios queda sin contraseña, a propósito.</p>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-m-costos">
+      <div class="card">
+        <div class="card-head"><h3>Conceptos de costo</h3><span class="card-hint">costos fijos y variables — temporal, mientras crece el módulo de Cotización</span></div>
+        <div class="form-row">
+          <div class="field"><label>Nombre</label><input type="text" id="cc-nombre" placeholder="ej. Arrendamiento local"></div>
+          <div class="field"><label>Tipo</label><select id="cc-tipo"><option>Fijo</option><option>Variable</option></select></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Categoría</label><input type="text" id="cc-categoria" placeholder="ej. Servicios públicos"></div>
+        </div>
+        <div class="form-foot"><span id="cc-mode"></span><button type="button" class="btn-primary" id="cc-save">Agregar concepto</button></div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table id="tbl-costos-conceptos">
+            <thead><tr><th>Nombre</th><th>Tipo</th><th>Categoría</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-registrar-costo">
+      <div class="card">
+        <div class="card-head"><h3>Registrar un costo</h3><span class="card-hint">facturas, arriendo, nómina, servicios, impuestos, materia prima…</span></div>
+        <div class="kpi-row" id="rc-resumen-mes"></div>
+        <div class="form-row">
+          <div class="field"><label>Fecha</label><input type="date" id="rc-fecha"></div>
+          <div class="field"><label>Concepto</label><select id="rc-concepto"></select></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Valor</label><input type="number" id="rc-valor" min="0" placeholder="ej. 2500000"></div>
+          <div class="field"><label>Proveedor / a quién se le pagó</label><input type="text" id="rc-proveedor" placeholder="opcional"></div>
+        </div>
+        <div class="field full"><label>Comentario</label><input type="text" id="rc-comentario" placeholder="opcional"></div>
+        <div class="form-foot"><span></span><button type="button" class="btn-primary" id="rc-save">Guardar costo</button></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Últimos costos registrados</h3></div>
+        <div class="table-wrap">
+          <table id="tbl-costos-recientes">
+            <thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Proveedor</th><th class="num">Valor</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
