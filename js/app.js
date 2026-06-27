@@ -3,7 +3,8 @@ import { renderGerencial, renderProduccion, renderOperario, populateOperarioSele
 import { initRegistrar, populateReg } from './registrar.js';
 import { initOppForm, renderOppRecent, populateClienteSelect, populateProductoSelect, refreshPapelPliegoSelects } from './ordenes.js';
 import { initMaestros, renderMaestros } from './maestros.js';
-import { restaurarSesion, iniciarSesion, cerrarSesion, cambiarContrasena, getCurrentUser, aplicarPermisos } from './auth.js';
+import { initUsuarios } from './usuarios.js';
+import { restaurarSesion, iniciarSesion, cerrarSesion, cambiarContrasena, crearCuentaPropia, getCurrentUser, aplicarPermisos } from './auth.js';
 
 // ---------- pestañas ----------
 document.querySelectorAll('.tab-btn').forEach(btn=>{
@@ -53,6 +54,7 @@ async function arrancarApp(){
   initOppForm();
   renderOppRecent();
   initMaestros(onMaestrosChange);
+  initUsuarios();
 
   aplicarPermisos();
 }
@@ -73,6 +75,29 @@ function wireLogin(){
   }
   btn.addEventListener('click', intentar);
   document.getElementById('login-password').addEventListener('keydown', e => { if(e.key === 'Enter') intentar(); });
+
+  document.getElementById('show-signup').addEventListener('click', () => {
+    const box = document.getElementById('signup-box');
+    box.style.display = box.style.display === 'none' ? 'block' : 'none';
+  });
+
+  const signupBtn = document.getElementById('signup-btn');
+  async function intentarSignup(){
+    const email = document.getElementById('signup-email').value.trim();
+    const password = document.getElementById('signup-password').value;
+    const errEl = document.getElementById('signup-error');
+    if(!email || !password || password.length < 6){ errEl.textContent = 'Completa el correo y una contraseña de mínimo 6 caracteres'; return; }
+    signupBtn.disabled = true; signupBtn.textContent = 'Creando…';
+    const { error } = await crearCuentaPropia(email, password);
+    signupBtn.disabled = false; signupBtn.textContent = 'Crear mi cuenta';
+    if(error){ errEl.textContent = error.message; return; }
+    errEl.textContent = '';
+    // tras crear la cuenta, entra directo con esas mismas credenciales
+    const { error: errLogin } = await iniciarSesion(email, password);
+    if(errLogin){ errEl.textContent = 'Cuenta creada — ahora inicia sesión arriba con tu correo y contraseña.'; return; }
+    arrancarApp();
+  }
+  signupBtn.addEventListener('click', intentarSignup);
 }
 
 function wireUserControls(){

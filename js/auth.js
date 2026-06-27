@@ -25,6 +25,19 @@ async function loadPersonaActual(email){
   return data;
 }
 
+export async function crearCuentaPropia(email, password){
+  // Solo deja "crear cuenta" a un correo que un Admin/Gerente ya haya
+  // agregado en el módulo de Usuarios, con un rol asignado.
+  const { data: persona, error: errPersona } = await sb.from('personal').select('*').eq('email', email).maybeSingle();
+  if(errPersona) return { error: { message: 'No se pudo verificar el correo. Intenta de nuevo.' } };
+  if(!persona || !persona.rol || persona.rol === 'operario'){
+    return { error: { message: 'Este correo no está autorizado todavía. Pide que el Admin o el Gerente te agreguen en Usuarios.' } };
+  }
+  const { data, error } = await sb.auth.signUp({ email, password });
+  if(error) return { error };
+  return { user: persona, data };
+}
+
 export async function iniciarSesion(email, password){
   const { data, error } = await sb.auth.signInWithPassword({ email, password });
   if(error) return { error };
