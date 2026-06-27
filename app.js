@@ -16,7 +16,7 @@
     el.style.color = isError ? 'var(--bad)' : '';
   }
 
-  let DB = { personal: [], maquinas: [], actividades: [], pedidos: [], produccion: [] };
+  let DB = { personal: [], maquinas: [], actividades: [], pedidos: [], produccion: [], materias_primas: [] };
 
   // normaliza filas de supabase (snake_case) al formato usado por el dashboard (camelCase)
   function normProd(r){
@@ -49,11 +49,12 @@
 
   async function loadAll(){
     setNote('Cargando datos desde Supabase…');
-    const [p1, p2, p3, p4] = await Promise.all([
+    const [p1, p2, p3, p4, p5] = await Promise.all([
       sb.from('personal').select('*'),
       sb.from('maquinas').select('*'),
       sb.from('actividades').select('*'),
-      sb.from('pedidos').select('*')
+      sb.from('pedidos').select('*'),
+      sb.from('materias_primas').select('*').order('nombre')
     ]);
     const errors = [p1.error, p2.error, p3.error, p4.error].filter(Boolean);
     if(errors.length){
@@ -65,6 +66,7 @@
     DB.maquinas = p2.data || [];
     DB.actividades = p3.data || [];
     DB.pedidos = p4.data || [];
+    DB.materias_primas = p5.data || []; // puede venir vacío si aún no corriste ese SQL — no es error fatal
     DB.produccion = (await fetchAllProduccion()).map(normProd);
     setNote('Conectado · ' + DB.produccion.length + ' registros');
   }
@@ -205,9 +207,9 @@
     document.querySelector('#tbl-op-log tbody').innerHTML = recent.map(r=>`<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td>${r.orden??'—'}</td><td class="num">${fmtNum(r.cantidad,0)}</td><td class="num">${fmtNum(r.tiempoHr,2)}</td><td class="num">${fmtCOP(r.valorActividad)}</td></tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin registros</td></tr>';
   }
 
-  // ---------- REGISTRAR (reloj checador) ----------
-  let currentSession = null; // { id, horaIniDate, rate }
-  let timerInterval = null;
+  // ---------- REGISTRAR (reloj checador, multi-actividad) ----------
+  const timerIntervals = new Map(); // id -> intervalId
+  const sessionRates = new Map();   // id -> valor/hora del operario, para calcular costo al finalizar
 
   function populateReg(){
     const opSel = document.getElementById('r-operario');
@@ -225,9 +227,8 @@
     populateMaquinaReg();
 
     document.getElementById('r-orden').addEventListener('input', populatePiezaReg);
-    opSel.addEventListener('change', checkOpenSession);
+    opSel.addEventListener('change', refreshRunningSessions);
     document.getElementById('r-start').addEventListener('click', startActivity);
-    document.getElementById('r-finish').addEventListener('click', finishActivity);
   }
   function populateActividadReg(){
     const area = document.getElementById('r-area').value;
@@ -250,60 +251,77 @@
       piezas.map(p => `<option value="${p.op}" data-suborden="${p.suborden}">${p.suborden}. ${p.pieza || 'Pieza'}</option>`).join('');
   }
 
-  async function checkOpenSession(){
+  // Trae TODAS las actividades sin terminar de hoy para el operario elegido
+  // (filtra por fecha de hoy para no confundir con registros históricos
+  // incompletos que ya existían antes de este módulo).
+  async function refreshRunningSessions(){
+    // limpiar cronómetros anteriores
+    timerIntervals.forEach(id => clearInterval(id));
+    timerIntervals.clear();
+
     const nombre = document.getElementById('r-operario').value;
-    if(!nombre){ showSetupState(); return; }
-    const { data, error } = await sb.from('produccion').select('*')
-      .eq('operario', nombre).is('hora_fin', null)
-      .order('id', { ascending: false }).limit(1);
-    if(error){ console.error(error); return; }
-    if(data && data.length){
-      resumeSession(data[0]);
-    } else {
-      showSetupState();
+    const cont = document.getElementById('reg-running-list');
+    if(!nombre){
+      cont.innerHTML = '<p style="color:var(--ink-faint);font-size:13px">Selecciona tu nombre arriba para ver tus actividades en curso.</p>';
+      document.getElementById('reg-hint').textContent = 'elige tu nombre';
+      return;
     }
+    const hoy = new Date().toISOString().slice(0,10);
+    const { data, error } = await sb.from('produccion').select('*')
+      .eq('operario', nombre).eq('fecha', hoy).is('hora_fin', null)
+      .order('id', { ascending: true });
+    if(error){ console.error(error); toast('No se pudo consultar tus actividades en curso'); return; }
+
+    const rate = parseFloat(document.getElementById('r-operario').selectedOptions[0]?.dataset.rate || 0);
+    (data || []).forEach(row => sessionRates.set(row.id, rate));
+
+    document.getElementById('reg-hint').textContent = data && data.length ? `${data.length} actividad(es) en curso` : 'sin actividades en curso ahora';
+
+    if(!data || !data.length){
+      cont.innerHTML = '<p style="color:var(--ink-faint);font-size:13px">No tienes actividades en curso. Inicia una arriba.</p>';
+      return;
+    }
+    cont.innerHTML = data.map(row => runningCardHTML(row)).join('');
+    data.forEach(row => {
+      const card = cont.querySelector(`[data-id="${row.id}"]`);
+      card.querySelector('.rc-finish').addEventListener('click', () => finishActivity(row.id, row.hora_ini, row.fecha));
+      startCardTimer(row.id, row.fecha, row.hora_ini);
+    });
   }
 
-  function showSetupState(){
-    clearInterval(timerInterval);
-    currentSession = null;
-    document.getElementById('reg-setup').style.display = '';
-    document.getElementById('reg-running').style.display = 'none';
-    document.getElementById('reg-hint').textContent = 'elige tu nombre para comenzar';
+  function runningCardHTML(row){
+    return `<div class="reg-running-card" data-id="${row.id}">
+      <div class="reg-running-row"><span>Orden / Pieza</span><b>${row.orden || '—'}${row.op ? ' / ' + row.op : ''}</b></div>
+      <div class="reg-running-row"><span>Actividad</span><b>${row.actividad || '—'}</b></div>
+      <div class="reg-running-row"><span>Máquina</span><b>${row.maquina || 'Trabajo manual'}</b></div>
+      <div class="reg-running-row"><span>Hora inicio</span><b>${row.hora_ini || '—'}</b></div>
+      <div class="reg-timer" data-timer="${row.id}">00:00:00</div>
+      <div class="form-row">
+        <div class="field"><label>Cantidad producida</label><input type="number" class="rc-cantidad" min="0" value="${row.cantidad ?? ''}"></div>
+        <div class="field"><label>¿Reproceso?</label><select class="rc-reproceso"><option value="No"${row.reproceso!=='Si'?' selected':''}>No</option><option value="Si"${row.reproceso==='Si'?' selected':''}>Sí</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>Materia prima</label><input type="text" class="rc-materia" value="${row.materia_prima || ''}"></div>
+        <div class="field"><label>Consumo</label><input type="text" class="rc-consumo" value="${row.consumo_mp || ''}"></div>
+      </div>
+      <div class="field full"><label>Comentario</label><textarea class="rc-comentario" rows="2">${row.comentario || ''}</textarea></div>
+      <button type="button" class="btn-primary btn-clock rc-finish">⏹ Finalizar esta actividad</button>
+    </div>`;
   }
 
-  function resumeSession(row){
-    const opSel = document.getElementById('r-operario');
-    const rate = parseFloat(opSel.selectedOptions[0]?.dataset.rate || 0);
-    currentSession = { id: row.id, horaIniDate: new Date(row.fecha + 'T' + row.hora_ini), rate };
-    document.getElementById('reg-setup').style.display = 'none';
-    document.getElementById('reg-running').style.display = '';
-    document.getElementById('reg-hint').textContent = 'tienes una actividad en curso';
-    document.getElementById('rr-operario').textContent = row.operario || '—';
-    document.getElementById('rr-orden').textContent = (row.orden || '—') + (row.op ? ' / ' + row.op : '');
-    document.getElementById('rr-actividad').textContent = row.actividad || '—';
-    document.getElementById('rr-maquina').textContent = row.maquina || 'Trabajo manual';
-    document.getElementById('rr-inicio').textContent = row.hora_ini || '—';
-    document.getElementById('r-cantidad').value = row.cantidad || '';
-    document.getElementById('r-materia').value = row.materia_prima || '';
-    document.getElementById('r-consumo').value = row.consumo_mp || '';
-    document.getElementById('r-comentario').value = row.comentario || '';
-    document.getElementById('r-reproceso').value = row.reproceso || 'No';
-    startTimerDisplay();
-  }
-
-  function startTimerDisplay(){
-    clearInterval(timerInterval);
+  function startCardTimer(id, fecha, horaIni){
+    const horaIniDate = new Date(fecha + 'T' + horaIni);
+    const el = document.querySelector(`[data-timer="${id}"]`);
     const tick = () => {
-      const ms = Date.now() - currentSession.horaIniDate.getTime();
+      const ms = Date.now() - horaIniDate.getTime();
       const totalSec = Math.max(0, Math.floor(ms / 1000));
       const h = String(Math.floor(totalSec/3600)).padStart(2,'0');
       const m = String(Math.floor((totalSec%3600)/60)).padStart(2,'0');
       const s = String(totalSec%60).padStart(2,'0');
-      document.getElementById('rr-timer').textContent = `${h}:${m}:${s}`;
+      if(el) el.textContent = `${h}:${m}:${s}`;
     };
     tick();
-    timerInterval = setInterval(tick, 1000);
+    timerIntervals.set(id, setInterval(tick, 1000));
   }
 
   async function startActivity(){
@@ -334,11 +352,16 @@
       };
       const { data, error } = await sb.from('produccion').insert([row]).select();
       if(error) throw error;
+      if(!data || !data.length) throw new Error('Supabase no devolvió el registro creado');
 
       DB.produccion.unshift(normProd(data[0]));
       toast('Actividad iniciada · ' + horaIni);
-      resumeSession(data[0]);
+      document.getElementById('r-orden').value = '';
+      document.getElementById('r-pieza').innerHTML = '<option value="">— Sin OPP / general —</option>';
+      await refreshRunningSessions();
       renderRecentReg();
+      renderEstadoOrdenes();
+      renderOrdenesVivas();
     }catch(err){
       console.error(err);
       toast('Error al iniciar — revisa la consola');
@@ -347,47 +370,54 @@
     }
   }
 
-  async function finishActivity(){
-    if(!currentSession) return;
-    const btn = document.getElementById('r-finish');
+  async function finishActivity(id, horaIni, fecha){
+    const card = document.querySelector(`.reg-running-card[data-id="${id}"]`);
+    const btn = card.querySelector('.rc-finish');
     btn.disabled = true; btn.textContent = 'Finalizando…';
     try{
       const now = new Date();
+      const horaIniDate = new Date(fecha + 'T' + horaIni);
       const horaFin = now.toTimeString().slice(0,5);
-      const hrs = Math.max(0, (now.getTime() - currentSession.horaIniDate.getTime()) / 3600000);
+      const hrs = Math.max(0, (now.getTime() - horaIniDate.getTime()) / 3600000);
+      const rate = sessionRates.get(id) || 0;
       const updates = {
         hora_fin: horaFin,
-        cantidad: parseFloat(document.getElementById('r-cantidad').value || 0),
-        materia_prima: document.getElementById('r-materia').value || null,
-        consumo_mp: document.getElementById('r-consumo').value || null,
-        comentario: document.getElementById('r-comentario').value || null,
-        reproceso: document.getElementById('r-reproceso').value,
+        cantidad: parseFloat(card.querySelector('.rc-cantidad').value || 0),
+        materia_prima: card.querySelector('.rc-materia').value || null,
+        consumo_mp: card.querySelector('.rc-consumo').value || null,
+        comentario: card.querySelector('.rc-comentario').value || null,
+        reproceso: card.querySelector('.rc-reproceso').value,
         tiempo_hr: hrs,
-        valor_actividad: hrs * currentSession.rate
+        valor_actividad: hrs * rate
       };
-      const { data, error } = await sb.from('produccion').update(updates).eq('id', currentSession.id).select();
+      const { data, error } = await sb.from('produccion').update(updates).eq('id', id).select();
       if(error) throw error;
+      if(!data || !data.length) throw new Error('Supabase no devolvió el registro actualizado (revisa los permisos RLS de UPDATE en produccion)');
 
-      const idx = DB.produccion.findIndex(r => r.id === currentSession.id);
+      const idx = DB.produccion.findIndex(r => r.id === id);
       if(idx >= 0) DB.produccion[idx] = normProd(data[0]);
       toast('Actividad finalizada · ' + fmtNum(hrs,2) + ' h registradas');
 
-      clearInterval(timerInterval);
-      currentSession = null;
-      document.getElementById('r-orden').value = '';
-      document.getElementById('r-pieza').innerHTML = '<option value="">— Sin OPP / general —</option>';
-      showSetupState();
+      clearInterval(timerIntervals.get(id));
+      timerIntervals.delete(id);
+      sessionRates.delete(id);
+      card.remove();
+      if(!document.querySelectorAll('.reg-running-card').length){
+        document.getElementById('reg-running-list').innerHTML = '<p style="color:var(--ink-faint);font-size:13px">No tienes actividades en curso. Inicia una arriba.</p>';
+        document.getElementById('reg-hint').textContent = 'sin actividades en curso ahora';
+      }
       renderRecentReg();
       renderGerencial();
       renderProduccion();
       renderOperario();
       renderEstadoOrdenes();
+      renderOrdenesVivas();
       document.getElementById('data-note').textContent = 'Conectado · ' + DB.produccion.length + ' registros';
     }catch(err){
       console.error(err);
       toast('Error al finalizar — revisa la consola');
     }finally{
-      btn.disabled = false; btn.textContent = '⏹ Finalizar actividad';
+      btn.disabled = false; btn.textContent = '⏹ Finalizar esta actividad';
     }
   }
 
@@ -525,6 +555,30 @@
       `<tr><td>${o.orden}</td><td>${o.cliente || '—'}</td><td>${o.producto || '—'}</td><td class="num">${conteo[o.orden] || 0}</td><td>${(o.fecha || '').slice(0,10)}</td></tr>`
     ).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--ink-faint)">Sin órdenes registradas</td></tr>';
     renderEstadoOrdenes();
+    renderOrdenesVivas();
+  }
+
+  // "Vivas" = piezas que todavía tienen al menos un proceso requerido sin completar
+  function renderOrdenesVivas(){
+    const tbody = document.querySelector('#tbl-ordenes-vivas tbody');
+    if(!tbody) return;
+    const filas = [];
+    (DB.opp_ordenes || []).forEach(o => {
+      const piezas = (DB.opp_piezas || []).filter(p => p.orden === o.orden);
+      piezas.forEach(p => {
+        const requeridos = Array.isArray(p.procesos_requeridos) ? p.procesos_requeridos : [];
+        if(!requeridos.length) return;
+        const completados = areasCompletadasPorPieza(p);
+        const pendientes = requeridos.filter(a => !completados.has(a));
+        if(pendientes.length){
+          const pct = Math.round(((requeridos.length - pendientes.length) / requeridos.length) * 100);
+          filas.push({ orden: o.orden, cliente: o.cliente, producto: o.producto, pieza: p.pieza || ('Pieza ' + p.suborden), pct });
+        }
+      });
+    });
+    filas.sort((a,b) => b.orden - a.orden);
+    tbody.innerHTML = filas.map(f => `<tr><td>${f.orden}</td><td>${f.cliente || '—'}</td><td>${f.producto || '—'}</td><td>${f.pieza}</td><td class="num">${f.pct}%</td></tr>`).join('')
+      || '<tr><td colspan="5" style="text-align:center;color:var(--ink-faint)">No hay órdenes con procesos pendientes</td></tr>';
   }
 
   function areasCompletadasPorPieza(pieza){
@@ -655,6 +709,89 @@
     }
   }
 
+  // ========================================================
+  // MAESTROS (Empleados, Máquinas, Materias primas)
+  // Pensado para Gerente y Jefe de Producción.
+  // ========================================================
+  function renderMaestros(){
+    document.querySelector('#tbl-m-empleados tbody').innerHTML = DB.personal.map(p =>
+      `<tr><td>${p.nombre}</td><td>${p.cargo || '—'}</td><td class="num">${p.valor_hora!=null ? fmtCOP(p.valor_hora) : '—'}</td></tr>`
+    ).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--ink-faint)">Sin empleados</td></tr>';
+
+    document.querySelector('#tbl-m-maquinas tbody').innerHTML = DB.maquinas.map(m =>
+      `<tr><td>${m.codigo || '—'}</td><td>${m.nombre}</td><td>${m.area || '—'}</td></tr>`
+    ).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--ink-faint)">Sin máquinas</td></tr>';
+
+    document.querySelector('#tbl-m-materias tbody').innerHTML = (DB.materias_primas || []).map(m =>
+      `<tr><td>${m.codigo}</td><td>${m.nombre}</td><td>${m.categoria || '—'}</td><td>${m.pliego_ancho ? m.pliego_ancho+'x'+m.pliego_alto : '—'}</td></tr>`
+    ).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--ink-faint)">Aún no corres el SQL de materias primas — revisa supabase/materias_primas_seed.sql</td></tr>';
+  }
+
+  function initMaestros(){
+    document.getElementById('m-emp-save').addEventListener('click', async () => {
+      const nombre = document.getElementById('m-emp-nombre').value.trim();
+      if(!nombre){ toast('Falta el nombre'); return; }
+      const row = {
+        nombre,
+        cargo: document.getElementById('m-emp-cargo').value.trim() || null,
+        valor_hora: parseFloat(document.getElementById('m-emp-valor').value) || null,
+        activo: true
+      };
+      const { data, error } = await sb.from('personal').insert([row]).select();
+      if(error){ console.error(error); toast('Error al guardar empleado'); return; }
+      DB.personal.push(data[0]);
+      toast('Empleado agregado');
+      document.getElementById('m-emp-nombre').value = '';
+      document.getElementById('m-emp-cargo').value = '';
+      document.getElementById('m-emp-valor').value = '';
+      renderMaestros();
+      populateOperarioSelect();
+      populateReg();
+    });
+
+    document.getElementById('m-maq-save').addEventListener('click', async () => {
+      const nombre = document.getElementById('m-maq-nombre').value.trim();
+      if(!nombre){ toast('Falta el nombre de la máquina'); return; }
+      const row = {
+        codigo: document.getElementById('m-maq-codigo').value.trim() || null,
+        nombre,
+        area: document.getElementById('m-maq-area').value.trim() || null
+      };
+      const { data, error } = await sb.from('maquinas').insert([row]).select();
+      if(error){ console.error(error); toast('Error al guardar máquina'); return; }
+      DB.maquinas.push(data[0]);
+      toast('Máquina agregada');
+      document.getElementById('m-maq-codigo').value = '';
+      document.getElementById('m-maq-nombre').value = '';
+      document.getElementById('m-maq-area').value = '';
+      renderMaestros();
+      populateReg();
+    });
+
+    document.getElementById('m-mp-save').addEventListener('click', async () => {
+      const codigo = document.getElementById('m-mp-codigo').value.trim();
+      const nombre = document.getElementById('m-mp-nombre').value.trim();
+      if(!codigo || !nombre){ toast('Falta el código o el nombre'); return; }
+      const row = {
+        codigo, nombre,
+        categoria: document.getElementById('m-mp-categoria').value,
+        pliego_ancho: parseFloat(document.getElementById('m-mp-ancho').value) || null,
+        pliego_alto: parseFloat(document.getElementById('m-mp-alto').value) || null
+      };
+      const { data, error } = await sb.from('materias_primas').insert([row]).select();
+      if(error){ console.error(error); toast('Error al guardar — ¿ya corriste el SQL de materias_primas?'); return; }
+      DB.materias_primas.push(data[0]);
+      toast('Materia prima agregada');
+      document.getElementById('m-mp-codigo').value = '';
+      document.getElementById('m-mp-nombre').value = '';
+      document.getElementById('m-mp-ancho').value = '';
+      document.getElementById('m-mp-alto').value = '';
+      renderMaestros();
+    });
+
+    renderMaestros();
+  }
+
   (async function init(){
     try{
       await loadAll();
@@ -669,5 +806,6 @@
     renderOperario();
     await loadOpp();
     initOppForm();
+    initMaestros();
   })();
 })();

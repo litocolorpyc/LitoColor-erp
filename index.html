@@ -20,8 +20,10 @@
       <button class="tab-btn" data-tab="operario" role="tab">Operario</button>
       <button class="tab-btn" data-tab="ordenes" role="tab">Órdenes</button>
       <button class="tab-btn" data-tab="registrar" role="tab">Registrar</button>
+      <button class="tab-btn" data-tab="maestros" role="tab">Maestros</button>
     </nav>
     <div class="data-note" id="data-note">Conectando con la base de datos…</div>
+    <a href="registro.html" class="btn-secondary" style="text-decoration:none;white-space:nowrap">Pantalla de operario ↗</a>
   </header>
 
   <main>
@@ -219,9 +221,19 @@
     </template>
 
     <section class="tab-panel" id="panel-registrar">
+      <div class="card">
+        <div class="card-head"><h3>Órdenes vivas en producción</h3><span class="card-hint">con procesos pendientes</span></div>
+        <div class="table-wrap">
+          <table id="tbl-ordenes-vivas">
+            <thead><tr><th>Orden</th><th>Cliente</th><th>Producto</th><th>Pieza</th><th class="num">Avance</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="grid-2">
         <div class="card">
-          <div class="card-head"><h3>Captura de tiempos</h3><span class="card-hint" id="reg-hint">elige tu nombre para comenzar</span></div>
+          <div class="card-head"><h3>Iniciar una actividad</h3><span class="card-hint" id="reg-hint">elige tu nombre</span></div>
 
           <div id="reg-setup">
             <div class="form-row">
@@ -241,32 +253,6 @@
               <button type="button" class="btn-primary btn-clock" id="r-start">▶ Iniciar actividad</button>
             </div>
           </div>
-
-          <div id="reg-running" style="display:none">
-            <div class="reg-running-card">
-              <div class="reg-running-row"><span>Operario</span><b id="rr-operario"></b></div>
-              <div class="reg-running-row"><span>Orden / Pieza</span><b id="rr-orden"></b></div>
-              <div class="reg-running-row"><span>Actividad</span><b id="rr-actividad"></b></div>
-              <div class="reg-running-row"><span>Máquina</span><b id="rr-maquina"></b></div>
-              <div class="reg-running-row"><span>Hora inicio</span><b id="rr-inicio"></b></div>
-              <div class="reg-timer" id="rr-timer">00:00:00</div>
-            </div>
-            <div class="form-row">
-              <div class="field"><label>Cantidad producida</label><input type="number" id="r-cantidad" min="0"></div>
-              <div class="field"><label>¿Reproceso?</label>
-                <select id="r-reproceso"><option value="No">No</option><option value="Si">Sí</option></select>
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="field"><label>Materia prima</label><input type="text" id="r-materia" placeholder="opcional"></div>
-              <div class="field"><label>Consumo</label><input type="text" id="r-consumo" placeholder="ej. 2kg, 5 pliegos"></div>
-            </div>
-            <div class="field full"><label>Comentario</label><textarea id="r-comentario" rows="2" placeholder="opcional"></textarea></div>
-            <div class="form-foot">
-              <span></span>
-              <button type="button" class="btn-primary btn-clock" id="r-finish">⏹ Finalizar actividad</button>
-            </div>
-          </div>
         </div>
 
         <div class="card">
@@ -279,8 +265,81 @@
           </div>
         </div>
       </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Tus actividades en curso</h3><span class="card-hint">puedes tener varias a la vez</span></div>
+        <div id="reg-running-list"><p style="color:var(--ink-faint);font-size:13px">Selecciona tu nombre arriba para ver tus actividades en curso.</p></div>
+      </div>
     </section>
-  </main>
+
+    <!-- MAESTROS -->
+    <section class="tab-panel" id="panel-maestros">
+      <p class="card-hint" style="margin-bottom:14px">Pensado para que lo usen el Gerente y el Jefe de Producción — alimenta las listas que usa toda la app.</p>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head"><h3>Empleados</h3><span class="card-hint">personal y valor/hora</span></div>
+          <div class="form-row">
+            <div class="field"><label>Nombre</label><input type="text" id="m-emp-nombre" placeholder="Nombre completo"></div>
+            <div class="field"><label>Cargo</label><input type="text" id="m-emp-cargo" placeholder="ej. Prensista"></div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>Valor/hora</label><input type="number" id="m-emp-valor" min="0" placeholder="ej. 18500"></div>
+          </div>
+          <div class="form-foot"><span></span><button type="button" class="btn-primary" id="m-emp-save">Agregar empleado</button></div>
+          <div class="table-wrap" style="margin-top:12px">
+            <table id="tbl-m-empleados">
+              <thead><tr><th>Nombre</th><th>Cargo</th><th class="num">Valor/hora</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>Máquinas</h3><span class="card-hint">equipos por área</span></div>
+          <div class="form-row">
+            <div class="field"><label>Código</label><input type="text" id="m-maq-codigo" placeholder="ej. P3"></div>
+            <div class="field"><label>Nombre</label><input type="text" id="m-maq-nombre" placeholder="ej. Heidelberg GTO"></div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>Área</label><input type="text" id="m-maq-area" placeholder="ej. Litografia"></div>
+          </div>
+          <div class="form-foot"><span></span><button type="button" class="btn-primary" id="m-maq-save">Agregar máquina</button></div>
+          <div class="table-wrap" style="margin-top:12px">
+            <table id="tbl-m-maquinas">
+              <thead><tr><th>Código</th><th>Nombre</th><th>Área</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Materias primas</h3><span class="card-hint">papel, laminados, argollas, pegantes — ya viene precargado con 226</span></div>
+        <div class="form-row">
+          <div class="field"><label>Código</label><input type="text" id="m-mp-codigo" placeholder="ej. Cote-150-C2-1"></div>
+          <div class="field"><label>Nombre</label><input type="text" id="m-mp-nombre" placeholder="ej. Propalcote 150 gr C2S 70x100"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Categoría</label>
+            <select id="m-mp-categoria"><option>Papel</option><option>Carton/Cartulina</option><option>Laminado</option><option>Argolla</option><option>Pegante</option><option>Papel quimico (NCR)</option><option>Otro</option></select>
+          </div>
+          <div class="field"><label>Pliego (ancho x alto cm, opcional)</label>
+            <div style="display:flex;gap:6px">
+              <input type="number" id="m-mp-ancho" placeholder="70">
+              <input type="number" id="m-mp-alto" placeholder="100">
+            </div>
+          </div>
+        </div>
+        <div class="form-foot"><span></span><button type="button" class="btn-primary" id="m-mp-save">Agregar materia prima</button></div>
+        <div class="table-wrap" style="margin-top:12px;max-height:320px;overflow-y:auto">
+          <table id="tbl-m-materias">
+            <thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Pliego</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
   <div class="toast" id="toast"></div>
 </div>

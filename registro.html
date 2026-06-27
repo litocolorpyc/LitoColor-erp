@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LitoColor · Registro de producción</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <img src="assets/logo.png" alt="LitoColor" class="brand-logo">
+      <div class="brand-sub">Pantalla de operario</div>
+    </div>
+    <nav class="tabs"></nav>
+    <a href="index.html" class="btn-secondary" style="text-decoration:none;white-space:nowrap">Panel completo ↗</a>
+    <div class="data-note" id="data-note">Conectando con la base de datos…</div>
+  </header>
+
+  <main>
+    <div class="card">
+      <div class="card-head"><h3>Órdenes vivas en producción</h3><span class="card-hint">con procesos pendientes</span></div>
+      <div class="table-wrap">
+        <table id="tbl-ordenes-vivas">
+          <thead><tr><th>Orden</th><th>Cliente</th><th>Producto</th><th>Pieza</th><th class="num">Avance</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>Iniciar una actividad</h3><span class="card-hint" id="reg-hint">elige tu nombre</span></div>
+      <div id="reg-setup">
+        <div class="form-row">
+          <div class="field"><label>Operario</label><select id="r-operario"></select></div>
+          <div class="field"><label>Orden (OPP)</label><input type="text" id="r-orden" placeholder="ej. 5944"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Pieza</label><select id="r-pieza"><option value="">— Sin OPP / general —</option></select></div>
+          <div class="field"><label>Área</label><select id="r-area"></select></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Actividad</label><select id="r-actividad"></select></div>
+          <div class="field"><label>Máquina</label><select id="r-maquina"><option value="">Trabajo manual (sin máquina)</option></select></div>
+        </div>
+        <div class="form-foot">
+          <span></span>
+          <button type="button" class="btn-primary btn-clock" id="r-start">▶ Iniciar actividad</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>Tus actividades en curso</h3><span class="card-hint">puedes tener varias a la vez</span></div>
+      <div id="reg-running-list"><p style="color:var(--ink-faint);font-size:13px">Selecciona tu nombre arriba para ver tus actividades en curso.</p></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>Últimos registros guardados</h3><span class="card-hint">de toda la planta</span></div>
+      <div class="table-wrap">
+        <table id="tbl-reg-recent">
+          <thead><tr><th>Fecha</th><th>Operario</th><th>Actividad</th><th>Orden</th><th>Estado</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="registro.js"></script>
+</body>
+</html>
