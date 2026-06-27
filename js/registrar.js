@@ -55,6 +55,9 @@ function populatePiezaReg(){
   const piezas = DB.opp_piezas.filter(p => p.orden === orden);
   sel.innerHTML = '<option value="">— Sin OPP / general —</option>' +
     piezas.map(p => `<option value="${p.op}" data-suborden="${p.suborden}">${p.suborden}. ${p.pieza || 'Pieza'}</option>`).join('');
+  const hint = document.getElementById('r-pieza-hint');
+  if(hint) hint.textContent = piezas.length ? '⚠️ elígela, o el avance de la orden no se va a actualizar' : '';
+  sel.onchange = () => { if(hint) hint.textContent = (sel.value && piezas.length) ? '' : (piezas.length ? '⚠️ elígela, o el avance de la orden no se va a actualizar' : ''); };
 }
 export function populateReg(){
   const opSel = document.getElementById('r-operario');
