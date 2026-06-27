@@ -111,12 +111,79 @@ export function renderGerencial(){
     <td class="num">${fmtNum(f.margenPct,0)}%</td>
   </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin datos en este rango</td></tr>';
 
-  const topProd = filasProducto.slice(0,10);
-  makeChart('chart-ger-productos', { type:'bar', data:{ labels: topProd.map(f=>f.producto),
-    datasets:[
-      { label:'Ingreso', data: topProd.map(f=>f.ing), backgroundColor:'#185FA5' },
-      { label:'Margen', data: topProd.map(f=>f.margen), backgroundColor:'#3B6D11' }
-    ]}, options: baseBarOpts(false, true) });
+  const topProd = filasProducto.slice(0,12);
+  const ingresos = topProd.map(f=>f.ing);
+  const pcts = topProd.map(f=>f.margenPct);
+  const ns = topProd.map(f=>f.ordenes);
+  const ingAvg = ingresos.reduce((a,b)=>a+b,0) / (ingresos.length||1);
+  const pctAvg = pcts.reduce((a,b)=>a+b,0) / (pcts.length||1);
+  const nMax = Math.max(...ns, 1);
+
+  const quadrantePlugin = {
+    id: 'quadrantes',
+    beforeDraw(chart){
+      const { ctx, chartArea, scales } = chart;
+      if(!chartArea) return;
+      const xPix = scales.x.getPixelForValue(ingAvg);
+      const yPix = scales.y.getPixelForValue(pctAvg);
+      ctx.save();
+      ctx.fillStyle = 'rgba(59,109,17,0.07)';
+      ctx.fillRect(xPix, chartArea.top, chartArea.right-xPix, yPix-chartArea.top);
+      ctx.fillStyle = 'rgba(186,117,23,0.07)';
+      ctx.fillRect(xPix, yPix, chartArea.right-xPix, chartArea.bottom-yPix);
+      ctx.fillStyle = 'rgba(24,95,165,0.06)';
+      ctx.fillRect(chartArea.left, chartArea.top, xPix-chartArea.left, yPix-chartArea.top);
+      ctx.setLineDash([5,4]);
+      ctx.strokeStyle = '#9A988F';
+      ctx.beginPath(); ctx.moveTo(xPix, chartArea.top); ctx.lineTo(xPix, chartArea.bottom); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(chartArea.left, yPix); ctx.lineTo(chartArea.right, yPix); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = '11px sans-serif'; ctx.fillStyle = '#6B6E76';
+      ctx.textAlign = 'right'; ctx.fillText('ESTRELLAS →', chartArea.right-4, chartArea.top+12);
+      ctx.textAlign = 'left'; ctx.fillText('← JOYAS ESCONDIDAS', chartArea.left+4, chartArea.top+12);
+      ctx.textAlign = 'right'; ctx.fillText('MOTOR SIN MARGEN →', chartArea.right-4, chartArea.bottom-6);
+      ctx.textAlign = 'left'; ctx.fillText('← REPLANTEAR', chartArea.left+4, chartArea.bottom-6);
+      ctx.restore();
+    }
+  };
+
+  makeChart('chart-ger-productos', {
+    type: 'bubble',
+    data: { datasets: [{
+      data: topProd.map((f,i) => ({ x: f.ing, y: f.margenPct, r: 6 + (f.ordenes/nMax)*22, _f: f }))
+        .map(d => ({ x:d.x, y:d.y, r:d.r, label:d._f.producto, ordenes:d._f.ordenes, ing:d._f.ing, margen:d._f.margen })),
+      backgroundColor: 'rgba(194,74,31,0.65)',
+      borderColor: '#1A1D27', borderWidth: 1
+    }]},
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => {
+          const d = ctx.raw;
+          return `${d.label}: ${fmtCOP(d.ing)} ingreso · ${fmtCOP(d.margen)} margen (${fmtNum(d.y,0)}%) · ${d.ordenes} órdenes`;
+        } } }
+      },
+      scales: {
+        x: { title: { display:true, text:'Ingreso total (volumen)' }, grid:{ color:'rgba(150,150,150,.15)' } },
+        y: { title: { display:true, text:'Margen % (eficiencia)' }, grid:{ color:'rgba(150,150,150,.15)' } }
+      }
+    },
+    plugins: [quadrantePlugin, {
+      id: 'etiquetasBurbuja',
+      afterDatasetsDraw(chart){
+        const { ctx } = chart;
+        const meta = chart.getDatasetMeta(0);
+        ctx.save();
+        ctx.font = 'bold 10px sans-serif'; ctx.fillStyle = '#21242E'; ctx.textAlign = 'center';
+        meta.data.forEach((point, i) => {
+          const d = chart.data.datasets[0].data[i];
+          ctx.fillText(d.label, point.x, point.y - d.r - 6);
+        });
+        ctx.restore();
+      }
+    }]
+  });
 }
 
 function wireRangePresets(presetContainerId, desdeId, hastaId, getRango, setRango, onApply){
