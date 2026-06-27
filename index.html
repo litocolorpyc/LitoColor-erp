@@ -9,7 +9,19 @@
 </head>
 <body>
 
-<div id="app" class="app-shell">
+<div id="login-overlay" class="login-overlay">
+  <div class="login-card">
+    <img src="assets/logo.png" alt="LitoColor" class="login-logo">
+    <h2>Panel de operación</h2>
+    <div class="field"><label>Correo</label><input type="email" id="login-email" placeholder="tucorreo@litocolor.com.co" autocomplete="username"></div>
+    <div class="field"><label>Contraseña</label><input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password"></div>
+    <div class="login-error" id="login-error"></div>
+    <button type="button" class="btn-primary" id="login-btn" style="width:100%">Entrar</button>
+    <p class="card-hint" style="margin-top:10px;text-align:center">¿Eres operario? Usa la <a href="registro.html">pantalla de registro de tiempos</a>, no necesitas contraseña.</p>
+  </div>
+</div>
+
+<div id="app" class="app-shell" style="display:none">
   <aside class="sidebar">
     <div class="sidebar-brand"><img src="assets/logo.png" alt="LitoColor" class="brand-logo"></div>
     <nav class="sidebar-nav" role="tablist">
@@ -40,8 +52,19 @@
   <div class="main-col">
     <header class="topbar">
       <div class="brand-sub">Panel de operación</div>
+      <div class="user-info" id="user-info">
+        <span id="user-name"></span>
+        <button type="button" class="row-btn" id="btn-change-pwd">Cambiar contraseña</button>
+        <button type="button" class="row-btn" id="btn-logout">Cerrar sesión ↩</button>
+      </div>
       <div class="data-note" id="data-note">Conectando con la base de datos…</div>
     </header>
+
+    <div id="change-pwd-panel" class="change-pwd-panel" style="display:none">
+      <input type="password" id="new-password" placeholder="Nueva contraseña (mínimo 6 caracteres)">
+      <button type="button" class="btn-primary" id="save-new-password" style="margin:0">Guardar</button>
+      <button type="button" class="btn-secondary" id="cancel-new-password" style="margin:0">Cancelar</button>
+    </div>
 
   <main>
     <section class="tab-panel active" id="panel-gerencial">
