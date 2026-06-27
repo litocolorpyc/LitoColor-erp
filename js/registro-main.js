@@ -1,6 +1,5 @@
 import { loadAll } from './store.js';
 import { initRegistrar } from './registrar.js';
-import { renderOrdenesVivas } from './ordenes.js';
 
 (async function init(){
   try{
@@ -8,6 +7,5 @@ import { renderOrdenesVivas } from './ordenes.js';
   }catch(e){
     return;
   }
-  renderOrdenesVivas();
-  initRegistrar(renderOrdenesVivas);
+  initRegistrar();
 })();

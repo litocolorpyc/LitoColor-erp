@@ -3,6 +3,7 @@
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
 import { toast, fmtNum } from './helpers.js';
+import { getOrdenesSeleccionables } from './ordenes.js';
 
 const timerIntervals = new Map();
 const sessionRates = new Map();
@@ -11,11 +12,28 @@ let onChangeCallback = null; // lo define quien inicialice este módulo
 function renderRecentReg(){
   const tbody = document.querySelector('#tbl-reg-recent tbody');
   if(!tbody) return;
-  const recent = DB.produccion.slice(0,12);
+  const nombre = document.getElementById('r-operario').value;
+  const hint = document.getElementById('reg-recent-hint');
+  if(!nombre){
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--ink-faint)">Elige tu nombre arriba para ver tu historial</td></tr>';
+    if(hint) hint.textContent = 'elige tu nombre arriba';
+    return;
+  }
+  if(hint) hint.textContent = 'de ' + nombre;
+  const recent = DB.produccion.filter(r => r.operario === nombre).slice(0,12);
   tbody.innerHTML = recent.map(r=>{
     const estado = r.horaFin ? '<span class="estado-chip done">✓ Completo</span>' : '<span class="estado-chip estado-chip-warn">⏱ En curso</span>';
-    return `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.operario||'—'}</td><td>${r.actividad||'—'}</td><td>${r.orden??'—'}</td><td>${estado}</td></tr>`;
-  }).join('');
+    return `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td>${r.orden??'—'}</td><td>${estado}</td></tr>`;
+  }).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--ink-faint)">Sin registros todavía</td></tr>';
+}
+
+function populateOrdenSelect(){
+  const sel = document.getElementById('r-orden');
+  const valorPrevio = sel.value;
+  const activas = getOrdenesSeleccionables();
+  sel.innerHTML = '<option value="">Selecciona una orden…</option>' +
+    activas.map(o => `<option value="${o.orden}">${o.orden} — ${o.cliente || ''}${o.producto ? ' · ' + o.producto : ''}</option>`).join('');
+  if(activas.some(o => String(o.orden) === valorPrevio)) sel.value = valorPrevio;
 }
 
 function populateActividadReg(){
@@ -38,7 +56,6 @@ function populatePiezaReg(){
   sel.innerHTML = '<option value="">— Sin OPP / general —</option>' +
     piezas.map(p => `<option value="${p.op}" data-suborden="${p.suborden}">${p.suborden}. ${p.pieza || 'Pieza'}</option>`).join('');
 }
-
 export function populateReg(){
   const opSel = document.getElementById('r-operario');
   opSel.innerHTML = '<option value="">Selecciona tu nombre…</option>' +
@@ -54,6 +71,7 @@ export function populateReg(){
   if(areas.includes(areaPrevia)) areaSel.value = areaPrevia;
   populateActividadReg();
   populateMaquinaReg();
+  populateOrdenSelect();
 }
 
 function runningCardHTML(row){
@@ -226,8 +244,8 @@ export function initRegistrar(onChange){
   onChangeCallback = onChange || null;
   populateReg();
   document.getElementById('r-area').addEventListener('change', () => { populateActividadReg(); populateMaquinaReg(); });
-  document.getElementById('r-orden').addEventListener('input', populatePiezaReg);
-  document.getElementById('r-operario').addEventListener('change', refreshRunningSessions);
+  document.getElementById('r-orden').addEventListener('change', populatePiezaReg);
+  document.getElementById('r-operario').addEventListener('change', () => { refreshRunningSessions(); renderRecentReg(); });
   document.getElementById('r-start').addEventListener('click', startActivity);
   renderRecentReg();
 }

@@ -132,6 +132,74 @@ function suggestNextOrden(){
   return max + 1;
 }
 
+// ---------- selectores de Cliente / Producto con creación rápida ----------
+function ensureOptionExists(select, value){
+  if(!value) return;
+  const existe = Array.from(select.options).some(o => o.value === value);
+  if(!existe){
+    const opt = document.createElement('option');
+    opt.value = value; opt.textContent = value + ' (no está en el maestro)';
+    select.insertBefore(opt, select.lastElementChild); // antes de "+ Nuevo…"
+  }
+  select.value = value;
+}
+
+export function populateClienteSelect(){
+  const sel = document.getElementById('opp-cliente');
+  const valorPrevio = sel.value;
+  sel.innerHTML = '<option value="">Selecciona un cliente…</option>' +
+    DB.clientes.filter(c=>c.activo!==false).map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('') +
+    '<option value="__nuevo__">+ Nuevo cliente…</option>';
+  if(valorPrevio) ensureOptionExists(sel, valorPrevio === '__nuevo__' ? '' : valorPrevio);
+}
+
+export function populateProductoSelect(){
+  const sel = document.getElementById('opp-producto');
+  const valorPrevio = sel.value;
+  sel.innerHTML = '<option value="">Selecciona un producto…</option>' +
+    DB.productos.filter(p=>p.activo!==false).map(p => `<option value="${p.nombre}">${p.nombre}</option>`).join('') +
+    '<option value="__nuevo__">+ Nuevo producto…</option>';
+  if(valorPrevio) ensureOptionExists(sel, valorPrevio === '__nuevo__' ? '' : valorPrevio);
+}
+
+function renderProductoRef(){
+  const nombre = document.getElementById('opp-producto').value;
+  const cont = document.getElementById('opp-producto-ref');
+  const combos = DB.productos_combinaciones.filter(c => c.producto === nombre);
+  if(!nombre || nombre === '__nuevo__' || !combos.length){ cont.style.display = 'none'; return; }
+  const tamanos = [...new Set(combos.map(c=>c.tamano).filter(Boolean))];
+  const papeles = [...new Set(combos.map(c=>c.papel).filter(Boolean))];
+  const acabados = [...new Set(combos.map(c=>c.acabados).filter(Boolean))];
+  cont.innerHTML = `<div class="producto-ref-box">
+    <div class="producto-ref-title">Combinaciones de referencia para "${nombre}" (${combos.length})</div>
+    <div class="producto-ref-row"><b>Tamaños:</b> ${tamanos.join(', ')}</div>
+    <div class="producto-ref-row"><b>Papeles:</b> ${papeles.join(', ')}</div>
+    <div class="producto-ref-row"><b>Acabados posibles:</b> ${acabados.slice(0,12).join(', ')}${acabados.length>12?'…':''}</div>
+  </div>`;
+  cont.style.display = '';
+}
+
+function wireNuevoInline(selectId, wrapId, inputId, btnId, table, onCreated){
+  const sel = document.getElementById(selectId);
+  const wrap = document.getElementById(wrapId);
+  sel.addEventListener('change', () => {
+    wrap.style.display = sel.value === '__nuevo__' ? 'flex' : 'none';
+    if(sel.value === '__nuevo__') document.getElementById(inputId).focus();
+  });
+  document.getElementById(btnId).addEventListener('click', async () => {
+    const nombre = document.getElementById(inputId).value.trim();
+    if(!nombre){ toast('Escribe un nombre'); return; }
+    const { data, error } = await sb.from(table).insert([{ nombre }]).select();
+    if(error){ console.error(error); toast('Error al crear — revisa la consola'); return; }
+    onCreated(data[0]);
+    document.getElementById(inputId).value = '';
+    wrap.style.display = 'none';
+    sel.value = nombre;
+    if(table === 'productos') renderProductoRef();
+    toast('Creado: ' + nombre);
+  });
+}
+
 // ---------- estado / avance de una orden ----------
 export function areasCompletadasPorPieza(pieza){
   const recs = DB.produccion.filter(r => r.op === pieza.op || (r.orden === pieza.orden && r.suborden === pieza.suborden));
@@ -140,6 +208,7 @@ export function areasCompletadasPorPieza(pieza){
 
 export function estadoOrden(o){
   if(o.estado === 'Cancelada') return { label: 'Cancelada', pct: null };
+  if(o.estado === 'Cerrada') return { label: 'Cerrada', pct: 100 };
   const piezas = DB.opp_piezas.filter(p => p.orden === o.orden);
   if(!piezas.length) return { label: 'Pendiente', pct: 0 };
   let totalReq = 0, totalDone = 0, algunoEmpezado = false;
@@ -159,9 +228,16 @@ export function estadoOrden(o){
 }
 
 function estadoBadgeHTML(estado){
-  const cls = { 'Completada':'done', 'En proceso':'estado-chip-warn', 'Pendiente':'pending', 'Cancelada':'pending' }[estado.label] || 'pending';
+  const cls = { 'Completada':'done', 'Cerrada':'done', 'En proceso':'estado-chip-warn', 'Pendiente':'pending', 'Cancelada':'pending' }[estado.label] || 'pending';
   const pct = estado.pct != null ? ` (${estado.pct}%)` : '';
   return `<span class="estado-chip ${cls}">${estado.label}${pct}</span>`;
+}
+
+// Para el selector del operario: solo órdenes que siguen abiertas para trabajar.
+export function getOrdenesSeleccionables(){
+  return DB.opp_ordenes
+    .filter(o => o.estado !== 'Cerrada' && o.estado !== 'Cancelada')
+    .sort((a,b) => b.orden - a.orden);
 }
 
 // ---------- costo acumulado de una orden ----------
@@ -188,6 +264,7 @@ function renderOppLista(rows){
       <td class="num">${conteo[o.orden] || 0}</td><td>${(o.fecha || '').slice(0,10)}</td>
       <td>${estadoBadgeHTML(estado)}</td><td class="num">${fmtCOPlocal(costo)}</td>
       <td><div class="row-actions">
+        <button type="button" class="row-btn" data-detalle="${o.orden}">Ver detalle</button>
         <button type="button" class="row-btn" data-edit="${o.orden}">Editar</button>
         <button type="button" class="row-btn" data-dup="${o.orden}">Duplicar</button>
         ${o.estado!=='Cancelada' ? `<button type="button" class="row-btn row-btn-danger" data-cancel="${o.orden}">Cancelar</button>` : ''}
@@ -195,6 +272,7 @@ function renderOppLista(rows){
     </tr>`;
   }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--ink-faint)">Sin órdenes registradas</td></tr>';
 
+  document.querySelectorAll('#tbl-opp-recent [data-detalle]').forEach(b => b.addEventListener('click', () => mostrarDetalleOrden(parseInt(b.dataset.detalle,10))));
   document.querySelectorAll('#tbl-opp-recent [data-edit]').forEach(b => b.addEventListener('click', () => loadOrdenParaEditar(parseInt(b.dataset.edit,10))));
   document.querySelectorAll('#tbl-opp-recent [data-dup]').forEach(b => b.addEventListener('click', () => duplicarOrden(parseInt(b.dataset.dup,10))));
   document.querySelectorAll('#tbl-opp-recent [data-cancel]').forEach(b => b.addEventListener('click', () => cancelarOrden(parseInt(b.dataset.cancel,10))));
@@ -283,6 +361,84 @@ export function renderRadarHistorico(){
   ).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--ink-faint)">Sin actividad histórica en el último mes</td></tr>';
 }
 
+let chartDetalle = null;
+
+function ingresoDeOrden(orden){
+  return DB.pedidos.filter(p => p.orden === orden).reduce((s,p)=>s+(p.total||0),0);
+}
+
+export function mostrarDetalleOrden(orden){
+  const o = DB.opp_ordenes.find(x => x.orden === orden);
+  if(!o) return;
+  const piezas = DB.opp_piezas.filter(p => p.orden === orden).sort((a,b)=>a.suborden-b.suborden);
+  const registros = DB.produccion.filter(r => r.orden === orden);
+  const estado = estadoOrden(o);
+  const ingreso = ingresoDeOrden(orden);
+  const costo = registros.reduce((s,r)=>s+(r.valorActividad||0),0);
+
+  document.getElementById('opp-detalle-titulo').textContent = `Orden ${orden} — ${o.cliente || ''}`;
+
+  // ---- horas por área de TODA la orden, para el gráfico ----
+  const areaMap = {};
+  registros.forEach(r => { const a = r.area || 'General'; areaMap[a] = (areaMap[a]||0) + (r.tiempoHr||0); });
+  const areas = Object.keys(areaMap);
+
+  const piezasHTML = piezas.map(p => {
+    const recsPieza = registros.filter(r => r.op === p.op || (r.suborden === p.suborden));
+    const requeridos = Array.isArray(p.procesos_requeridos) ? p.procesos_requeridos : [];
+    const completados = areasCompletadasPorPieza(p);
+    const chips = requeridos.map(a => `<span class="estado-chip ${completados.has(a)?'done':'pending'}">${completados.has(a)?'✓':'·'} ${a}</span>`).join('') || '<span class="card-hint">sin procesos definidos</span>';
+
+    const materiales = [...new Set(recsPieza.map(r => [r.materiaPrima, r.consumoMP].filter(Boolean).join(' — ')).filter(Boolean))];
+
+    const porOperarioMaquina = {};
+    recsPieza.forEach(r => {
+      const k = (r.operario||'—') + ' · ' + (r.maquina || 'Manual');
+      porOperarioMaquina[k] = porOperarioMaquina[k] || { horas:0, cantidad:0 };
+      porOperarioMaquina[k].horas += (r.tiempoHr||0);
+      porOperarioMaquina[k].cantidad += (r.cantidad||0);
+    });
+    const filasOM = Object.entries(porOperarioMaquina).map(([k,v]) =>
+      `<tr><td>${k}</td><td class="num">${fmtNum(v.horas,2)}</td><td class="num">${fmtNum(v.cantidad,0)}</td></tr>`
+    ).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--ink-faint)">Sin registros de producción aún</td></tr>';
+
+    return `<div class="detalle-pieza-card">
+      <div class="detalle-pieza-head">
+        <b>${p.pieza || ('Pieza ' + p.suborden)}</b>
+        <span class="card-hint">${p.cantidad ? fmtNum(p.cantidad,0)+' uds' : ''} ${p.papel ? '· '+p.papel : ''} ${p.tintas_frente!=null ? '· Tintas '+p.tintas_frente+'x'+(p.tintas_atras||0) : ''}</span>
+      </div>
+      <div class="detalle-pieza-chips">${chips}</div>
+      ${materiales.length ? `<div class="detalle-pieza-materiales"><b>Materiales consumidos:</b> ${materiales.join(' · ')}</div>` : ''}
+      <table class="detalle-mini-table">
+        <thead><tr><th>Operario · Máquina</th><th class="num">Horas</th><th class="num">Cantidad</th></tr></thead>
+        <tbody>${filasOM}</tbody>
+      </table>
+    </div>`;
+  }).join('') || '<p class="card-hint">Esta orden no tiene piezas registradas (probablemente migrada del histórico sin detalle de OPP).</p>';
+
+  document.getElementById('opp-detalle-body').innerHTML = `
+    <div class="kpi-row" style="margin-bottom:16px">
+      <div class="kpi"><div class="lbl">Estado</div><div class="val" style="font-size:16px">${o.cliente||'—'}</div><div class="sub">${o.producto||''} · ${(o.fecha||'').slice(0,10)}</div></div>
+      <div class="kpi"><div class="lbl">Ingreso</div><div class="val">${fmtCOPlocal(ingreso)}</div><div class="sub">según pedidos</div></div>
+      <div class="kpi"><div class="lbl">Costo mano de obra</div><div class="val">${fmtCOPlocal(costo)}</div><div class="sub">${registros.length} registros de producción</div></div>
+      <div class="kpi"><div class="lbl">Margen</div><div class="val ${ingreso-costo>=0?'pos':'neg'}">${fmtCOPlocal(ingreso-costo)}</div><div class="sub">${estadoBadgeHTML(estado)}</div></div>
+    </div>
+    ${areas.length ? '<canvas id="chart-detalle-area" height="90" style="margin-bottom:16px"></canvas>' : ''}
+    <div class="detalle-piezas-grid">${piezasHTML}</div>
+  `;
+
+  if(areas.length){
+    const el = document.getElementById('chart-detalle-area');
+    if(chartDetalle) chartDetalle.destroy();
+    chartDetalle = new Chart(el, { type:'bar', data:{ labels: areas,
+      datasets:[{ label:'Horas en esta orden', data: areas.map(a=>areaMap[a]), backgroundColor:'#185FA5' }]},
+      options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}}, scales:{x:{grid:{display:false}},y:{grid:{display:false}}} } });
+  }
+
+  document.getElementById('opp-detalle-card').style.display = '';
+  document.getElementById('opp-detalle-card').scrollIntoView({ behavior:'smooth' });
+}
+
 // ---------- crear / editar / duplicar / cancelar ----------
 function resetOppForm(nextOrden){
   editingOrden = null;
@@ -291,6 +447,9 @@ function resetOppForm(nextOrden){
   oppPiezaCount = 0;
   document.getElementById('opp-cliente').value = '';
   document.getElementById('opp-producto').value = '';
+  document.getElementById('opp-cliente-nuevo-wrap').style.display = 'none';
+  document.getElementById('opp-producto-nuevo-wrap').style.display = 'none';
+  document.getElementById('opp-producto-ref').style.display = 'none';
   document.getElementById('opp-orden').value = nextOrden != null ? nextOrden : suggestNextOrden();
   document.getElementById('opp-orden').disabled = false;
   document.getElementById('opp-fecha').value = new Date().toISOString().slice(0,10);
@@ -304,9 +463,10 @@ function loadOrdenParaEditar(orden){
   document.getElementById('opp-form-mode').textContent = `Editando la orden ${orden} — al guardar se sobrescribe`;
   document.getElementById('opp-orden').value = orden;
   document.getElementById('opp-orden').disabled = true;
-  document.getElementById('opp-cliente').value = o.cliente || '';
-  document.getElementById('opp-producto').value = o.producto || '';
+  ensureOptionExists(document.getElementById('opp-cliente'), o.cliente || '');
+  ensureOptionExists(document.getElementById('opp-producto'), o.producto || '');
   document.getElementById('opp-fecha').value = (o.fecha || '').slice(0,10) || new Date().toISOString().slice(0,10);
+  renderProductoRef();
 
   document.getElementById('opp-piezas-list').innerHTML = '';
   oppPiezaCount = 0;
@@ -325,9 +485,10 @@ function duplicarOrden(orden){
   document.getElementById('opp-form-mode').textContent = `Duplicando la orden ${orden} → se guardará como una orden nueva`;
   document.getElementById('opp-orden').value = nuevoNumero;
   document.getElementById('opp-orden').disabled = false;
-  document.getElementById('opp-cliente').value = o.cliente || '';
-  document.getElementById('opp-producto').value = o.producto || '';
+  ensureOptionExists(document.getElementById('opp-cliente'), o.cliente || '');
+  ensureOptionExists(document.getElementById('opp-producto'), o.producto || '');
   document.getElementById('opp-fecha').value = new Date().toISOString().slice(0,10);
+  renderProductoRef();
 
   document.getElementById('opp-piezas-list').innerHTML = '';
   oppPiezaCount = 0;
@@ -355,6 +516,8 @@ async function saveOpp(){
   const cards = document.querySelectorAll('#opp-piezas-list .opp-pieza-card');
 
   if(!orden || !cliente){ toast('Falta el número de orden o el cliente'); return; }
+  if(cliente === '__nuevo__'){ toast('Completa la creación del cliente nuevo (botón "Agregar")'); return; }
+  if(document.getElementById('opp-producto').value === '__nuevo__'){ toast('Completa la creación del producto nuevo (botón "Agregar")'); return; }
   if(cards.length === 0){ toast('Agrega al menos una pieza'); return; }
 
   btn.disabled = true; btn.textContent = 'Guardando…';
@@ -440,9 +603,17 @@ function filtrarOrdenes(){
 }
 
 export function initOppForm(){
+  populateClienteSelect();
+  populateProductoSelect();
+  wireNuevoInline('opp-cliente', 'opp-cliente-nuevo-wrap', 'opp-cliente-nuevo-nombre', 'opp-cliente-nuevo-add', 'clientes', c => DB.clientes.push(c));
+  wireNuevoInline('opp-producto', 'opp-producto-nuevo-wrap', 'opp-producto-nuevo-nombre', 'opp-producto-nuevo-add', 'productos', p => DB.productos.push(p));
+  document.getElementById('opp-producto').addEventListener('change', renderProductoRef);
   resetOppForm();
   document.getElementById('opp-add-pieza').addEventListener('click', () => addPiezaCard());
   document.getElementById('opp-save').addEventListener('click', saveOpp);
   document.getElementById('opp-reset').addEventListener('click', () => resetOppForm());
   document.getElementById('opp-buscar').addEventListener('input', filtrarOrdenes);
+  document.getElementById('opp-detalle-cerrar').addEventListener('click', () => {
+    document.getElementById('opp-detalle-card').style.display = 'none';
+  });
 }

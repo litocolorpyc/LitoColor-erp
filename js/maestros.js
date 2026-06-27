@@ -122,9 +122,10 @@ export function renderMaestros(){
   materiasCtl.render();
   clientesCtl.render();
   proveedoresCtl.render();
+  productosCtl.render();
 }
 
-let empleadosCtl, maquinasCtl, materiasCtl, clientesCtl, proveedoresCtl;
+let empleadosCtl, maquinasCtl, materiasCtl, clientesCtl, proveedoresCtl, productosCtl;
 
 export function initMaestros(onChange){
   empleadosCtl = wireCatalog({
@@ -192,6 +193,17 @@ export function initMaestros(onChange){
       { id:'m-prov-ciudad', col:'ciudad' }
     ],
     renderCols: r => [r.nombre, r.materiales||'—', r.telefono||'—', r.ciudad||'—'],
+    onChange
+  });
+
+  productosCtl = wireCatalog({
+    table: 'productos', key: 'id', data: DB.productos, tableSel: '#tbl-m-productos',
+    saveBtnId: 'm-prod-save', modeId: 'm-prod-mode', addLabel: 'Agregar producto',
+    fields: [
+      { id:'m-prod-nombre', col:'nombre', required:true },
+      { id:'m-prod-desc', col:'descripcion' }
+    ],
+    renderCols: r => [r.nombre, r.descripcion||'—'],
     onChange
   });
 }
