@@ -4,6 +4,9 @@
 -- Pégalo en Supabase > SQL Editor > New query > Run
 -- ============================================================
 
+-- 0) Por si el script v4 no se corrió antes (esta línea es segura repetirla)
+alter table opp_ordenes add column if not exists estado text default 'Activa';
+
 -- 1) Maestro de Productos (descripción base)
 create table if not exists productos (
   id serial primary key,
