@@ -725,7 +725,10 @@
         </div>
         <div class="form-row">
           <div class="field"><label>Valor</label><input type="number" id="rc-valor" min="0" placeholder="ej. 2500000"></div>
-          <div class="field"><label>Proveedor / a quién se le pagó</label><input type="text" id="rc-proveedor" placeholder="opcional"></div>
+          <div class="field"><label>Proveedor / a quién se le pagó</label>
+            <input type="text" id="rc-proveedor" list="rc-proveedor-list" placeholder="escribe para buscar o crear uno nuevo" autocomplete="off">
+            <datalist id="rc-proveedor-list"></datalist>
+          </div>
         </div>
         <div class="field full"><label>Comentario</label><input type="text" id="rc-comentario" placeholder="opcional"></div>
         <div class="form-foot"><span></span><button type="button" class="btn-primary" id="rc-save">Guardar costo</button></div>
