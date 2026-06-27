@@ -46,7 +46,7 @@ function calcularGerencial(desde, hasta){
 
 export function renderGerencial(){
   const { desde, hasta } = rangoGer;
-  const esTodo = desde === '2000-01-01';
+  const esTodo = desde === '2024-01-01';
   const actual = calcularGerencial(desde, hasta);
   const ant = rangoAnterior(desde, hasta);
   const anterior = esTodo
@@ -152,7 +152,7 @@ let ultimaProduccionArea = [];
 
 export function renderProduccion(){
   const { desde, hasta } = rangoProd;
-  const esTodo = desde === '2000-01-01';
+  const esTodo = desde === '2024-01-01';
   const codeMap = buildCodeMap();
   const produccion = DB.produccion.filter(r => enRango(r.fecha, desde, hasta));
   const ant = rangoAnterior(desde, hasta);

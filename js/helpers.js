@@ -37,7 +37,7 @@ export function rangoFechas(preset){
   else if(preset === 'mes') d.setDate(1);
   else if(preset === 'trimestre') d.setMonth(d.getMonth()-3);
   else if(preset === 'anio') d.setMonth(0, 1);
-  else if(preset === 'todo') return { desde: '2000-01-01', hasta: fin };
+  else if(preset === 'todo') return { desde: '2024-01-01', hasta: fin };
   const desde = d.toISOString().slice(0,10);
   return { desde, hasta: fin };
 }
