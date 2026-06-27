@@ -80,6 +80,12 @@ async function guardarConcepto(){
   }
 }
 
+export function poblarDatalistProveedores(){
+  const dl = document.getElementById('rc-proveedor-list');
+  if(!dl) return;
+  dl.innerHTML = DB.proveedores.filter(p=>p.activo!==false).map(p => `<option value="${p.nombre}">`).join('');
+}
+
 // ---------- Registrar un movimiento de costo ----------
 function poblarSelectConcepto(){
   const sel = document.getElementById('rc-concepto');
@@ -124,7 +130,7 @@ async function guardarMovimiento(){
   const fecha = document.getElementById('rc-fecha').value;
   const conceptoId = parseInt(document.getElementById('rc-concepto').value, 10);
   const valor = parseFloat(document.getElementById('rc-valor').value);
-  const proveedor = document.getElementById('rc-proveedor').value.trim() || null;
+  const proveedorTexto = document.getElementById('rc-proveedor').value.trim();
   const comentario = document.getElementById('rc-comentario').value.trim() || null;
   if(!fecha || !conceptoId || !valor){ toast('Falta fecha, concepto o valor'); return; }
 
@@ -132,6 +138,21 @@ async function guardarMovimiento(){
   const btn = document.getElementById('rc-save');
   btn.disabled = true; btn.textContent = 'Guardando…';
   try{
+    let proveedor = null;
+    if(proveedorTexto){
+      const existente = DB.proveedores.find(p => p.nombre.toLowerCase() === proveedorTexto.toLowerCase());
+      if(existente){
+        proveedor = existente.nombre;
+      } else {
+        const { data: nuevoProv, error: errProv } = await sb.from('proveedores').insert([{ nombre: proveedorTexto, activo: true }]).select();
+        if(errProv) throw errProv;
+        DB.proveedores.push(nuevoProv[0]);
+        poblarDatalistProveedores();
+        proveedor = nuevoProv[0].nombre;
+        toast('Proveedor nuevo creado: ' + proveedor);
+      }
+    }
+
     const row = { concepto_id: conceptoId, tipo: concepto.tipo, fecha, valor, proveedor, comentario };
     const { data, error } = await sb.from('costos_movimientos').insert([row]).select();
     if(error) throw error;
@@ -156,6 +177,7 @@ export function initCostos(){
 
   document.getElementById('rc-fecha').value = new Date().toISOString().slice(0,10);
   poblarSelectConcepto();
+  poblarDatalistProveedores();
   document.getElementById('rc-save').addEventListener('click', guardarMovimiento);
   renderMovimientosRecientes();
   renderResumenCostosMes();
