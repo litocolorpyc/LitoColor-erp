@@ -195,3 +195,14 @@ select, input, textarea{ font-family:inherit; font-size:13px; padding:7px 9px; b
 
 .toast{ position:fixed; bottom:18px; right:18px; background:var(--ink); color:var(--paper); padding:10px 16px; border-radius:8px; font-size:13px; opacity:0; transform:translateY(8px); transition:opacity .25s, transform .25s; pointer-events:none; z-index:50; }
 .toast.show{ opacity:1; transform:translateY(0); }
+
+.orden-link{ font-weight:700; color:#1B4F8C; text-decoration:none; cursor:pointer; }
+.orden-link:hover{ text-decoration:underline; }
+@media (prefers-color-scheme: dark){ .orden-link{ color:#7CA9E0; } }
+
+.suborden-link{ font-weight:600; color:#1B4F8C; text-decoration:none; cursor:pointer; }
+.suborden-link:hover{ text-decoration:underline; }
+@media (prefers-color-scheme: dark){ .suborden-link{ color:#7CA9E0; } }
+
+.ger-detalle-volver{ font-weight:600; color:var(--accent); text-decoration:none; cursor:pointer; font-size:12.5px; }
+.ger-detalle-volver:hover{ text-decoration:underline; }
