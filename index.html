@@ -130,11 +130,6 @@
         </div>
       </div>
 
-      <div class="card" id="ger-detalle-card" style="display:none">
-        <div class="card-head"><h3 id="ger-detalle-titulo">Detalle</h3><span class="card-hint"><button type="button" class="row-btn" id="ger-detalle-cerrar">Cerrar ✕</button></span></div>
-        <div id="ger-detalle-cuerpo"></div>
-      </div>
-
       <div class="card">
         <div class="card-head"><h3>Rentabilidad por tipo de producto</h3><span class="card-hint">* otros costos prorrateados por ingreso, no incluyen mano de obra</span></div>
         <div class="form-foot" style="margin-top:0;margin-bottom:10px"><span></span><button type="button" class="btn-secondary" id="export-rentabilidad-producto" style="margin:0">⬇ Exportar a Excel</button></div>
@@ -763,6 +758,13 @@
     </section>
 
   </main>
+
+  <div id="ger-detalle-overlay" class="ger-detalle-overlay" style="display:none">
+    <div class="ger-detalle-modal">
+      <div class="card-head"><h3 id="ger-detalle-titulo">Detalle</h3><span class="card-hint"><button type="button" class="row-btn" id="ger-detalle-cerrar">Cerrar ✕</button></span></div>
+      <div id="ger-detalle-cuerpo"></div>
+    </div>
+  </div>
   </div>
 
   <div class="toast" id="toast"></div>

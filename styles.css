@@ -206,3 +206,6 @@ select, input, textarea{ font-family:inherit; font-size:13px; padding:7px 9px; b
 
 .ger-detalle-volver{ font-weight:600; color:var(--accent); text-decoration:none; cursor:pointer; font-size:12.5px; }
 .ger-detalle-volver:hover{ text-decoration:underline; }
+
+.ger-detalle-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:60; display:flex; align-items:flex-start; justify-content:center; padding:40px 16px; overflow-y:auto; }
+.ger-detalle-modal{ background:var(--card); border-radius:12px; border:1px solid var(--line); padding:18px 20px; width:100%; max-width:920px; max-height:calc(100vh - 80px); overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,.25); }
