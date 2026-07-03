@@ -117,7 +117,7 @@ export function renderGerencial(){
   ultimaRentabilidad = rows;
   document.querySelector('#tbl-ger-ordenes tbody').innerHTML = rows.map(r=>{
     const m=r.ing-r.cost-r.otros;
-    return `<tr><td>${r.orden}</td><td>${r.cliente||'—'}</td><td>${(r.trabajo||'—').toString().trim()}</td><td class="num">${fmtCOP(r.ing)}</td><td class="num">${fmtCOP(r.cost)}</td><td class="num">${fmtCOP(r.otros)}</td><td class="num" style="color:${m>=0?'var(--good)':'var(--bad)'}">${fmtCOP(m)}</td></tr>`;
+    return `<tr><td><a href="#" class="orden-link" data-orden="${r.orden}">${r.orden}</a></td><td>${r.cliente||'—'}</td><td>${(r.trabajo||'—').toString().trim()}</td><td class="num">${fmtCOP(r.ing)}</td><td class="num">${fmtCOP(r.cost)}</td><td class="num">${fmtCOP(r.otros)}</td><td class="num" style="color:${m>=0?'var(--good)':'var(--bad)'}">${fmtCOP(m)}</td></tr>`;
   }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint)">Sin datos en este rango</td></tr>';
 
   // ---- rentabilidad por tipo de producto ----
@@ -287,6 +287,122 @@ export function initDashboardFilters(){
   wireRangePresets('ger-presets', 'ger-desde', 'ger-hasta', () => rangoGer, r => rangoGer = r, renderGerencial);
   wireRangePresets('prod-presets', 'prod-desde', 'prod-hasta', () => rangoProd, r => rangoProd = r, renderProduccion);
   wireExportButtons();
+  wireDetalleOrdenGer();
+}
+
+function fmtHr(h){ return h==null || isNaN(h) ? '—' : fmtNum(h,2) + ' hr'; }
+
+// ---------- Detalle de Orden / Suborden, click desde "Rentabilidad por orden" ----------
+function renderDetalleOrdenGer(orden){
+  const pedidosOrden = DB.pedidos.filter(p => p.orden === orden).sort((a,b) => (a.suborden||0)-(b.suborden||0));
+  const produccionOrden = DB.produccion.filter(r => r.orden === orden);
+
+  const costoPorOpp = {};
+  produccionOrden.forEach(r => {
+    const k = r.opp || '—';
+    costoPorOpp[k] = costoPorOpp[k] || { costo:0, horas:0, registros:0 };
+    costoPorOpp[k].costo += (r.valorActividad || 0);
+    costoPorOpp[k].horas += (r.tiempoHr || 0);
+    costoPorOpp[k].registros += 1;
+  });
+
+  // agrupa pedidos por suborden/opp (puede haber más de una línea por suborden)
+  const subMap = {};
+  pedidosOrden.forEach(p => {
+    const k = p.opp || ('suborden-' + p.suborden);
+    subMap[k] = subMap[k] || { opp: p.opp, suborden: p.suborden, producto: p.producto, trabajo: p.trabajo, cliente: p.cliente, ingreso: 0, pedido: 0 };
+    subMap[k].ingreso += (p.total || 0);
+    subMap[k].pedido += (p.pedido || 0);
+  });
+
+  const filas = Object.values(subMap).sort((a,b) => (a.suborden||0)-(b.suborden||0));
+  const cliente = filas[0] && filas[0].cliente;
+  const ingresoTotal = filas.reduce((s,f)=>s+f.ingreso, 0);
+  const costoTotal = produccionOrden.reduce((s,r)=>s+(r.valorActividad||0), 0);
+
+  document.getElementById('ger-detalle-titulo').textContent = `Orden ${orden}${cliente ? ' — ' + cliente : ''}`;
+  document.getElementById('ger-detalle-cuerpo').innerHTML = `
+    <div class="kpi-row" style="margin-bottom:14px">
+      <div class="kpi"><div class="lbl">Ingreso total</div><div class="val">${fmtCOP(ingresoTotal)}</div></div>
+      <div class="kpi"><div class="lbl">Costo mano de obra</div><div class="val">${fmtCOP(costoTotal)}</div></div>
+      <div class="kpi"><div class="lbl">Subórdenes / piezas</div><div class="val">${filas.length}</div></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>OPP</th><th>Producto / Trabajo</th><th class="num">Cant. pedida</th><th class="num">Ingreso</th><th class="num">Costo M.O.</th><th class="num">Margen</th></tr></thead>
+        <tbody>
+          ${filas.map(f => {
+            const cost = (costoPorOpp[f.opp] && costoPorOpp[f.opp].costo) || 0;
+            const margen = f.ingreso - cost;
+            return `<tr><td><a href="#" class="suborden-link" data-orden="${orden}" data-opp="${f.opp || ''}">${f.opp || ('#' + f.suborden)}</a></td>
+              <td>${(f.trabajo || f.producto || '—').toString().trim()}</td>
+              <td class="num">${fmtNum(f.pedido,0)}</td>
+              <td class="num">${fmtCOP(f.ingreso)}</td>
+              <td class="num">${fmtCOP(cost)}</td>
+              <td class="num" style="color:${margen>=0?'var(--good)':'var(--bad)'}">${fmtCOP(margen)}</td></tr>`;
+          }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin subórdenes en Pedidos para esta orden</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+
+  document.getElementById('ger-detalle-card').style.display = '';
+  document.getElementById('ger-detalle-card').scrollIntoView({ behavior:'smooth' });
+}
+
+function renderDetalleSubordenGer(orden, opp){
+  const pedidoLineas = DB.pedidos.filter(p => p.opp === opp);
+  const prodLineas = DB.produccion.filter(r => r.opp === opp).sort((a,b) => (a.fecha||'').localeCompare(b.fecha||''));
+  const costoTotal = prodLineas.reduce((s,r)=>s+(r.valorActividad||0), 0);
+  const horasTotal = prodLineas.reduce((s,r)=>s+(r.tiempoHr||0), 0);
+  const ingresoTotal = pedidoLineas.reduce((s,p)=>s+(p.total||0), 0);
+
+  document.getElementById('ger-detalle-titulo').textContent = `Suborden ${opp}`;
+  document.getElementById('ger-detalle-cuerpo').innerHTML = `
+    <a href="#" class="ger-detalle-volver" data-orden="${orden}">← Volver a la orden ${orden}</a>
+    <div class="kpi-row" style="margin:14px 0">
+      <div class="kpi"><div class="lbl">Ingreso</div><div class="val">${fmtCOP(ingresoTotal)}</div></div>
+      <div class="kpi"><div class="lbl">Costo mano de obra</div><div class="val">${fmtCOP(costoTotal)}</div></div>
+      <div class="kpi"><div class="lbl">Horas registradas</div><div class="val">${fmtHr(horasTotal)}</div></div>
+    </div>
+    <div class="card-hint" style="margin-bottom:6px">Pedido</div>
+    <div class="table-wrap" style="margin-bottom:16px">
+      <table>
+        <thead><tr><th>Fecha</th><th>Cliente</th><th>Producto</th><th>Trabajo</th><th class="num">Cant.</th><th class="num">Valor unit.</th><th class="num">Total</th></tr></thead>
+        <tbody>${pedidoLineas.map(p => `<tr><td>${(p.fecha||'').slice(0,10)}</td><td>${p.cliente||'—'}</td><td>${p.producto||'—'}</td><td>${(p.trabajo||'—').toString().trim()}</td><td class="num">${fmtNum(p.pedido,0)}</td><td class="num">${fmtCOP(p.valor)}</td><td class="num">${fmtCOP(p.total)}</td></tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint)">Sin línea de pedido</td></tr>'}</tbody>
+      </table>
+    </div>
+    <div class="card-hint" style="margin-bottom:6px">Registros de producción (bitácora)</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Fecha</th><th>Operario</th><th>Actividad</th><th class="num">Cantidad</th><th class="num">Tiempo</th><th class="num">Valor</th></tr></thead>
+        <tbody>${prodLineas.map(r => `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.operario||'—'}</td><td>${r.actividad||'—'}</td><td class="num">${fmtNum(r.cantidad,0)}</td><td class="num">${fmtHr(r.tiempoHr)}</td><td class="num">${fmtCOP(r.valorActividad)}</td></tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin registros de producción para esta suborden</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+function wireDetalleOrdenGer(){
+  document.addEventListener('click', (e) => {
+    const linkOrden = e.target.closest('.orden-link');
+    if(linkOrden){
+      e.preventDefault();
+      renderDetalleOrdenGer(parseInt(linkOrden.dataset.orden, 10));
+      return;
+    }
+    const linkSuborden = e.target.closest('.suborden-link');
+    if(linkSuborden){
+      e.preventDefault();
+      if(linkSuborden.dataset.opp) renderDetalleSubordenGer(parseInt(linkSuborden.dataset.orden, 10), linkSuborden.dataset.opp);
+      return;
+    }
+    const volver = e.target.closest('.ger-detalle-volver');
+    if(volver){
+      e.preventDefault();
+      renderDetalleOrdenGer(parseInt(volver.dataset.orden, 10));
+      return;
+    }
+  });
+  const cerrar = document.getElementById('ger-detalle-cerrar');
+  if(cerrar) cerrar.addEventListener('click', () => { document.getElementById('ger-detalle-card').style.display = 'none'; });
 }
 
 function wireExportButtons(){
