@@ -217,9 +217,10 @@ export function renderProduccion(){
   const { desde, hasta } = rangoProd;
   const esTodo = desde === '2024-01-01';
   const codeMap = buildCodeMap();
-  const produccion = DB.produccion.filter(r => enRango(r.fecha, desde, hasta));
+  const activas = ordenesActivasSet();
+  const produccion = DB.produccion.filter(r => enRango(r.fecha, desde, hasta) && activas.has(r.orden));
   const ant = rangoAnterior(desde, hasta);
-  const produccionAnt = esTodo ? [] : DB.produccion.filter(r => enRango(r.fecha, ant.desde, ant.hasta));
+  const produccionAnt = esTodo ? [] : DB.produccion.filter(r => enRango(r.fecha, ant.desde, ant.hasta) && activas.has(r.orden));
   const horasAntBase = esTodo ? null : produccionAnt.reduce((s,r)=>s+(r.tiempoHr||0),0);
   const piezasAntBase = esTodo ? null : produccionAnt.reduce((s,r)=>s+(r.cantidad||0),0);
 
@@ -229,7 +230,7 @@ export function renderProduccion(){
   const eficiencia = horasTot>0 ? (directaHrs/horasTot*100) : 0;
 
   document.getElementById('prod-kpis').innerHTML = `
-    <div class="kpi"><div class="lbl">Horas registradas</div><div class="val">${fmtNum(horasTot)} ${deltaBadge(horasTot, horasAntBase)}</div><div class="sub">${produccion.length} registros</div></div>
+    <div class="kpi"><div class="lbl">Horas registradas</div><div class="val">${fmtNum(horasTot)} ${deltaBadge(horasTot, horasAntBase)}</div><div class="sub">${produccion.length} registros · solo órdenes activas</div></div>
     <div class="kpi"><div class="lbl">Piezas producidas</div><div class="val">${fmtNum(piezasTot,0)} ${deltaBadge(piezasTot, piezasAntBase)}</div><div class="sub">suma de cantidad producida</div></div>
     <div class="kpi"><div class="lbl">% tiempo directo</div><div class="val">${fmtNum(eficiencia,0)}%</div><div class="sub">horas directas / horas totales</div></div>`;
 
@@ -264,7 +265,8 @@ export function populateOperarioSelect(){
 }
 export function renderOperario(){
   const sel = document.getElementById('op-select').value;
-  const recs = DB.produccion.filter(r=> sel==='__ALL__' ? true : (r.operario||'').trim().startsWith(sel.split(' ')[0]) || r.operario===sel );
+  const activas = ordenesActivasSet();
+  const recs = DB.produccion.filter(r => activas.has(r.orden) && (sel==='__ALL__' ? true : (r.operario||'').trim().startsWith(sel.split(' ')[0]) || r.operario===sel));
   const horas = recs.reduce((s,r)=>s+(r.tiempoHr||0),0);
   const valor = recs.reduce((s,r)=>s+(r.valorActividad||0),0);
   document.getElementById('op-chart-hint').textContent = sel==='__ALL__' ? 'de toda la planta' : 'de '+sel;
