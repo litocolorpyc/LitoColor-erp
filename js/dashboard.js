@@ -282,7 +282,7 @@ export function renderOperario(){
     options: baseBarOpts(false,true) });
 
   const recent = recs.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')).slice(0,15);
-  document.querySelector('#tbl-op-log tbody').innerHTML = recent.map(r=>`<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td>${r.orden??'—'}</td><td class="num">${fmtNum(r.cantidad,0)}</td><td class="num">${fmtNum(r.tiempoHr,2)}</td><td class="num">${fmtCOP(r.valorActividad)}</td></tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin registros</td></tr>';
+  document.querySelector('#tbl-op-log tbody').innerHTML = recent.map(r=>`<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td>${r.orden!=null ? `<a href="#" class="orden-link" data-orden="${r.orden}">${r.orden}</a>` : '—'}</td><td class="num">${fmtNum(r.cantidad,0)}</td><td class="num">${fmtNum(r.tiempoHr,2)}</td><td class="num">${fmtCOP(r.valorActividad)}</td></tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin registros</td></tr>';
 }
 
 export function initDashboardFilters(){
@@ -347,8 +347,7 @@ function renderDetalleOrdenGer(orden){
       </table>
     </div>`;
 
-  document.getElementById('ger-detalle-card').style.display = '';
-  document.getElementById('ger-detalle-card').scrollIntoView({ behavior:'smooth' });
+  document.getElementById('ger-detalle-overlay').style.display = 'flex';
 }
 
 function renderDetalleSubordenGer(orden, opp){
@@ -404,7 +403,9 @@ function wireDetalleOrdenGer(){
     }
   });
   const cerrar = document.getElementById('ger-detalle-cerrar');
-  if(cerrar) cerrar.addEventListener('click', () => { document.getElementById('ger-detalle-card').style.display = 'none'; });
+  if(cerrar) cerrar.addEventListener('click', () => { document.getElementById('ger-detalle-overlay').style.display = 'none'; });
+  const overlay = document.getElementById('ger-detalle-overlay');
+  if(overlay) overlay.addEventListener('click', (e) => { if(e.target === overlay) overlay.style.display = 'none'; });
 }
 
 function wireExportButtons(){
