@@ -20,6 +20,20 @@ function enRango(fecha, desde, hasta){
   return f >= desde && f <= hasta;
 }
 
+// El Gerencial, por ahora, solo debe mostrar lo relacionado a órdenes
+// activas (las que están en el módulo de Órdenes/OPP) -- así lo pidió
+// Julián, para no confundir con todo el histórico mientras se define
+// qué información se le entrega y cómo. Cuando una orden se marca
+// como terminada/cancelada (deja de estar en opp_ordenes o cambia de
+// estado), sale sola de este panel.
+function ordenesActivasSet(){
+  return new Set(
+    DB.opp_ordenes
+      .filter(o => o.estado !== 'Cancelada' && o.estado !== 'Cerrada')
+      .map(o => o.orden)
+  );
+}
+
 function buildCodeMap(){
   const m = {};
   DB.actividades.forEach(a => { m[String(a.codigo)] = a; });
@@ -37,8 +51,9 @@ let ultimaRentabilidad = [];
 let ultimaRentabilidadProducto = [];
 
 function calcularGerencial(desde, hasta){
-  const pedidos = DB.pedidos.filter(p => enRango(p.fecha, desde, hasta));
-  const produccion = DB.produccion.filter(r => enRango(r.fecha, desde, hasta));
+  const activas = ordenesActivasSet();
+  const pedidos = DB.pedidos.filter(p => enRango(p.fecha, desde, hasta) && activas.has(p.orden));
+  const produccion = DB.produccion.filter(r => enRango(r.fecha, desde, hasta) && activas.has(r.orden));
   const costosMov = DB.costos_movimientos.filter(m => enRango(m.fecha, desde, hasta));
   const ingresos = pedidos.reduce((s,p)=>s+(p.total||0),0);
   const costoMO = produccion.reduce((s,r)=>s+(r.valorActividad||0),0);
@@ -60,11 +75,11 @@ export function renderGerencial(){
     : calcularGerencial(ant.desde, ant.hasta);
 
   document.getElementById('ger-kpis').innerHTML = `
-    <div class="kpi"><div class="lbl">Ingresos facturados</div><div class="val">${fmtCOP(actual.ingresos)} ${deltaBadge(actual.ingresos, anterior.ingresos)}</div><div class="sub">según pedidos con valor</div></div>
-    <div class="kpi"><div class="lbl">Costo mano de obra</div><div class="val">${fmtCOP(actual.costoMO)} ${deltaBadge(actual.costoMO, anterior.costoMO)}</div><div class="sub">según bitácora de producción</div></div>
-    <div class="kpi"><div class="lbl">Otros costos (fijos + variables)</div><div class="val">${fmtCOP(actual.otrosCostos)} ${deltaBadge(actual.otrosCostos, anterior.otrosCostos)}</div><div class="sub">arriendo, nómina, materia prima, impuestos…</div></div>
-    <div class="kpi"><div class="lbl">Margen estimado</div><div class="val ${actual.margen>=0?'pos':'neg'}">${fmtCOP(actual.margen)} ${deltaBadge(actual.margen, anterior.margen)}</div><div class="sub">ingresos − mano de obra − otros costos</div></div>
-    <div class="kpi"><div class="lbl">Órdenes con valor</div><div class="val">${actual.ordenes} ${deltaBadge(actual.ordenes, anterior.ordenes)}</div><div class="sub">vs. periodo anterior equivalente</div></div>`;
+    <div class="kpi"><div class="lbl">Ingresos facturados</div><div class="val">${fmtCOP(actual.ingresos)} ${deltaBadge(actual.ingresos, anterior.ingresos)}</div><div class="sub">solo órdenes activas</div></div>
+    <div class="kpi"><div class="lbl">Costo mano de obra</div><div class="val">${fmtCOP(actual.costoMO)} ${deltaBadge(actual.costoMO, anterior.costoMO)}</div><div class="sub">solo órdenes activas</div></div>
+    <div class="kpi"><div class="lbl">Otros costos (fijos + variables)</div><div class="val">${fmtCOP(actual.otrosCostos)} ${deltaBadge(actual.otrosCostos, anterior.otrosCostos)}</div><div class="sub">total de la empresa en el periodo, no solo de estas órdenes</div></div>
+    <div class="kpi"><div class="lbl">Margen estimado</div><div class="val ${actual.margen>=0?'pos':'neg'}">${fmtCOP(actual.margen)} ${deltaBadge(actual.margen, anterior.margen)}</div><div class="sub">ingresos activas − M.O. activas − otros costos totales</div></div>
+    <div class="kpi"><div class="lbl">Órdenes con valor</div><div class="val">${actual.ordenes} ${deltaBadge(actual.ordenes, anterior.ordenes)}</div><div class="sub">activas, vs. periodo anterior equivalente</div></div>`;
 
   const mesesMap = {};
   actual.pedidos.forEach(p=>{ if(!p.fecha) return; const k=p.fecha.slice(0,7); mesesMap[k]=mesesMap[k]||{ing:0,cost:0}; mesesMap[k].ing+=(p.total||0); });
