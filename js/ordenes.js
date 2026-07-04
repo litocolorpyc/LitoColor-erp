@@ -361,12 +361,12 @@ export function renderOrdenesVivas(){
       const pendientes = requeridos.filter(a => !completados.has(a));
       if(pendientes.length){
         const pct = Math.round(((requeridos.length - pendientes.length) / requeridos.length) * 100);
-        filas.push({ orden: o.orden, cliente: o.cliente, producto: o.producto, pieza: p.pieza || ('Pieza ' + p.suborden), pct });
+        filas.push({ orden: o.orden, op: p.op || (o.orden + '-' + p.suborden), cliente: o.cliente, producto: o.producto, pieza: p.pieza || ('Pieza ' + p.suborden), pct });
       }
     });
   });
   filas.sort((a,b) => b.orden - a.orden);
-  tbody.innerHTML = filas.map(f => `<tr><td>${f.orden}</td><td>${f.cliente || '—'}</td><td>${f.producto || '—'}</td><td>${f.pieza}</td><td class="num">${f.pct}%</td></tr>`).join('')
+  tbody.innerHTML = filas.map(f => `<tr><td>${f.op}</td><td>${f.cliente || '—'}</td><td>${f.producto || '—'}</td><td>${f.pieza}</td><td class="num">${f.pct}%</td></tr>`).join('')
     || '<tr><td colspan="5" style="text-align:center;color:var(--ink-faint)">No hay órdenes con procesos pendientes</td></tr>';
 }
 
@@ -391,7 +391,7 @@ export function renderEstadoOrdenes(){
         return `<span class="estado-chip ${done ? 'done' : 'pending'}">${done ? '✓' : '·'} ${a}</span>`;
       }).join('');
       return `<div class="estado-pieza-row">
-        <span class="estado-pieza-nombre">${p.pieza || ('Pieza ' + p.suborden)}</span>
+        <span class="estado-pieza-nombre"><b>${p.op || (o.orden + '-' + p.suborden)}</b> · ${p.pieza || ('Pieza ' + p.suborden)}</span>
         <div class="estado-bar-wrap"><div class="estado-bar-fill" style="width:${pct}%"></div></div>
         ${chips}
       </div>`;
@@ -472,7 +472,7 @@ export function mostrarDetalleOrden(orden){
 
     return `<div class="detalle-pieza-card">
       <div class="detalle-pieza-head">
-        <b>${p.pieza || ('Pieza ' + p.suborden)}</b>
+        <b>${p.op || (orden + '-' + p.suborden)} · ${p.pieza || ('Pieza ' + p.suborden)}</b>
         <span class="card-hint">${p.cantidad ? fmtNum(p.cantidad,0)+' uds' : ''} ${p.papel ? '· '+p.papel : ''} ${p.tintas_frente!=null ? '· Tintas '+p.tintas_frente+'x'+(p.tintas_atras||0) : ''}</span>
       </div>
       <div class="detalle-pieza-chips">${chips}</div>

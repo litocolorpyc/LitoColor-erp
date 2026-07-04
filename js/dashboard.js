@@ -282,7 +282,13 @@ export function renderOperario(){
     options: baseBarOpts(false,true) });
 
   const recent = recs.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')).slice(0,15);
-  document.querySelector('#tbl-op-log tbody').innerHTML = recent.map(r=>`<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td>${r.orden!=null ? `<a href="#" class="orden-link" data-orden="${r.orden}">${r.orden}</a>` : '—'}</td><td class="num">${fmtNum(r.cantidad,0)}</td><td class="num">${fmtNum(r.tiempoHr,2)}</td><td class="num">${fmtCOP(r.valorActividad)}</td></tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin registros</td></tr>';
+  document.querySelector('#tbl-op-log tbody').innerHTML = recent.map(r=>{
+    const opp = r.opp && /^\d+-\d+$/.test(r.opp) ? r.opp : null;
+    const celdaOrden = r.orden==null ? '—'
+      : opp ? `<a href="#" class="suborden-link" data-orden="${r.orden}" data-opp="${opp}">${opp}</a>`
+      : `<a href="#" class="orden-link" data-orden="${r.orden}">${r.orden}</a>`;
+    return `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td>${celdaOrden}</td><td class="num">${fmtNum(r.cantidad,0)}</td><td class="num">${fmtNum(r.tiempoHr,2)}</td><td class="num">${fmtCOP(r.valorActividad)}</td></tr>`;
+  }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin registros</td></tr>';
 }
 
 export function initDashboardFilters(){

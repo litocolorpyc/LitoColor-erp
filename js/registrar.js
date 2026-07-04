@@ -23,7 +23,8 @@ function renderRecentReg(){
   const recent = DB.produccion.filter(r => r.operario === nombre).slice(0,12);
   tbody.innerHTML = recent.map(r=>{
     const estado = r.horaFin ? '<span class="estado-chip done">✓ Completo</span>' : '<span class="estado-chip estado-chip-warn">⏱ En curso</span>';
-    return `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td>${r.orden??'—'}</td><td>${estado}</td></tr>`;
+    const opp = r.opp && /^\d+-\d+$/.test(r.opp) ? r.opp : (r.orden ?? '—');
+    return `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td>${opp}</td><td>${estado}</td></tr>`;
   }).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--ink-faint)">Sin registros todavía</td></tr>';
 }
 
@@ -79,7 +80,7 @@ export function populateReg(){
 
 function runningCardHTML(row){
   return `<div class="reg-running-card" data-id="${row.id}">
-    <div class="reg-running-row"><span>Orden / Pieza</span><b>${row.orden || '—'}${row.op ? ' / ' + row.op : ''}</b></div>
+    <div class="reg-running-row"><span>Orden / Pieza</span><b>${row.op || row.orden || '—'}</b></div>
     <div class="reg-running-row"><span>Actividad</span><b>${row.actividad || '—'}</b></div>
     <div class="reg-running-row"><span>Máquina</span><b>${row.maquina || 'Trabajo manual'}</b></div>
     <div class="reg-running-row"><span>Hora inicio</span><b>${row.hora_ini || '—'}</b></div>

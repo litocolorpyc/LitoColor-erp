@@ -33,10 +33,11 @@ function calcularAlertas(){
   DB.produccion.filter(r => !r.horaFin).forEach(r => {
     const horas = horasDesde(r.fecha, r.horaIni);
     if(horas !== null && horas >= 4){
+      const opp = r.opp && /^\d+-\d+$/.test(r.opp) ? r.opp : (r.orden ?? 'general');
       alertas.push({
         severidad: horas >= 8 ? 'alta' : 'media',
         icono: '⏱️',
-        mensaje: `<b>${r.operario || 'Un operario'}</b> tiene una actividad abierta hace <b>${horas.toFixed(1)} h</b> sin finalizar (orden ${r.orden ?? 'general'}, ${r.actividad || r.area || ''}). Puede que haya olvidado darle "Finalizar".`
+        mensaje: `<b>${r.operario || 'Un operario'}</b> tiene una actividad abierta hace <b>${horas.toFixed(1)} h</b> sin finalizar (orden ${opp}, ${r.actividad || r.area || ''}). Puede que haya olvidado darle "Finalizar".`
       });
     }
   });
