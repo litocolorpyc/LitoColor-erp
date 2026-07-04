@@ -55,12 +55,15 @@ function calcularGerencial(desde, hasta){
   const pedidos = DB.pedidos.filter(p => enRango(p.fecha, desde, hasta) && activas.has(p.orden));
   const produccion = DB.produccion.filter(r => enRango(r.fecha, desde, hasta) && activas.has(r.orden));
   const costosMov = DB.costos_movimientos.filter(m => enRango(m.fecha, desde, hasta));
+  const costosMovGenerales = costosMov.filter(m => m.orden == null);
+  const costosMovDirectos = costosMov.filter(m => m.orden != null);
   const ingresos = pedidos.reduce((s,p)=>s+(p.total||0),0);
   const costoMO = produccion.reduce((s,r)=>s+(r.valorActividad||0),0);
   const costosFijos = costosMov.filter(m=>m.tipo==='Fijo').reduce((s,m)=>s+(m.valor||0),0);
   const costosVariables = costosMov.filter(m=>m.tipo==='Variable').reduce((s,m)=>s+(m.valor||0),0);
   const otrosCostos = costosFijos + costosVariables;
-  return { ingresos, costoMO, otrosCostos, costosFijos, costosVariables,
+  const otrosGenerales = costosMovGenerales.reduce((s,m)=>s+(m.valor||0),0);
+  return { ingresos, costoMO, otrosCostos, otrosGenerales, costosFijos, costosVariables, costosMovDirectos,
     margen: ingresos - costoMO - otrosCostos,
     ordenes: new Set(pedidos.map(p=>p.orden)).size, pedidos, produccion };
 }
@@ -103,15 +106,19 @@ export function renderGerencial(){
   actual.pedidos.forEach(p=>{ ordIng[p.orden]=(ordIng[p.orden]||0)+(p.total||0); ordCliente[p.orden]=p.cliente; ordTrabajo[p.orden]=ordTrabajo[p.orden]||p.trabajo; });
   const ordCost = {};
   actual.produccion.forEach(r=>{ if(r.orden==null) return; ordCost[r.orden]=(ordCost[r.orden]||0)+(r.valorActividad||0); });
+  const ordCostoDirecto = {};
+  actual.costosMovDirectos.forEach(m=>{ ordCostoDirecto[m.orden]=(ordCostoDirecto[m.orden]||0)+(m.valor||0); });
 
-  // tasa de prorrateo: otros costos (fijos+variables, SIN mano de obra) como
-  // % del ingreso del periodo — se reparte a cada orden/producto según lo
-  // que facturó. La mano de obra nunca entra aquí, ya está exacta por orden.
-  const tasaOtros = actual.ingresos > 0 ? (actual.otrosCostos / actual.ingresos) : 0;
+  // tasa de prorrateo: solo los costos generales (SIN orden) se reparten
+  // según el ingreso de cada orden. Los costos ya ligados a una orden
+  // puntual (ej. una tercerización) se le suman completos y exactos,
+  // sin prorratear -- no tiene sentido repartir entre todas un gasto que
+  // ya sabemos a cuál pertenece.
+  const tasaOtros = actual.ingresos > 0 ? (actual.otrosGenerales / actual.ingresos) : 0;
 
   const rows = Object.keys(ordIng).map(o=>({
       orden:o, cliente:ordCliente[o], trabajo:ordTrabajo[o], ing:ordIng[o], cost:ordCost[o]||0,
-      otros: ordIng[o]*tasaOtros
+      otros: ordIng[o]*tasaOtros + (ordCostoDirecto[o]||0)
     }))
     .sort((a,b)=>b.ing-a.ing).slice(0,15);
   ultimaRentabilidad = rows;
@@ -127,14 +134,15 @@ export function renderGerencial(){
   const prodMap = {};
   Object.keys(ordIng).forEach(o => {
     const prod = ordProducto[o] || 'Sin producto';
-    prodMap[prod] = prodMap[prod] || { ing:0, cost:0, ordenes:new Set() };
+    prodMap[prod] = prodMap[prod] || { ing:0, cost:0, directo:0, ordenes:new Set() };
     prodMap[prod].ing += ordIng[o];
     prodMap[prod].cost += (ordCost[o] || 0);
+    prodMap[prod].directo += (ordCostoDirecto[o] || 0);
     prodMap[prod].ordenes.add(o);
   });
   const filasProducto = Object.entries(prodMap)
     .map(([prod, v]) => {
-      const otros = v.ing * tasaOtros;
+      const otros = v.ing * tasaOtros + v.directo;
       const margen = v.ing - v.cost - otros;
       return { producto: prod, ordenes: v.ordenes.size, ing: v.ing, cost: v.cost, otros, margen, margenPct: v.ing>0 ? (margen/v.ing*100) : 0 };
     })
@@ -304,6 +312,7 @@ function fmtHr(h){ return h==null || isNaN(h) ? '—' : fmtNum(h,2) + ' hr'; }
 function renderDetalleOrdenGer(orden){
   const pedidosOrden = DB.pedidos.filter(p => p.orden === orden).sort((a,b) => (a.suborden||0)-(b.suborden||0));
   const produccionOrden = DB.produccion.filter(r => r.orden === orden);
+  const tercerosOrden = DB.costos_movimientos.filter(m => m.orden === orden);
 
   const costoPorOpp = {};
   produccionOrden.forEach(r => {
@@ -312,6 +321,11 @@ function renderDetalleOrdenGer(orden){
     costoPorOpp[k].costo += (r.valorActividad || 0);
     costoPorOpp[k].horas += (r.tiempoHr || 0);
     costoPorOpp[k].registros += 1;
+  });
+  const tercerosPorOpp = {};
+  tercerosOrden.forEach(m => {
+    const k = m.opp || '—';
+    tercerosPorOpp[k] = (tercerosPorOpp[k] || 0) + (m.valor || 0);
   });
 
   // agrupa pedidos por suborden/opp (puede haber más de una línea por suborden)
@@ -327,31 +341,46 @@ function renderDetalleOrdenGer(orden){
   const cliente = filas[0] && filas[0].cliente;
   const ingresoTotal = filas.reduce((s,f)=>s+f.ingreso, 0);
   const costoTotal = produccionOrden.reduce((s,r)=>s+(r.valorActividad||0), 0);
+  const tercerosTotal = tercerosOrden.reduce((s,m)=>s+(m.valor||0), 0);
 
   document.getElementById('ger-detalle-titulo').textContent = `Orden ${orden}${cliente ? ' — ' + cliente : ''}`;
   document.getElementById('ger-detalle-cuerpo').innerHTML = `
     <div class="kpi-row" style="margin-bottom:14px">
       <div class="kpi"><div class="lbl">Ingreso total</div><div class="val">${fmtCOP(ingresoTotal)}</div></div>
       <div class="kpi"><div class="lbl">Costo mano de obra</div><div class="val">${fmtCOP(costoTotal)}</div></div>
+      <div class="kpi"><div class="lbl">Tercerizado</div><div class="val">${fmtCOP(tercerosTotal)}</div></div>
       <div class="kpi"><div class="lbl">Subórdenes / piezas</div><div class="val">${filas.length}</div></div>
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>OPP</th><th>Producto / Trabajo</th><th class="num">Cant. pedida</th><th class="num">Ingreso</th><th class="num">Costo M.O.</th><th class="num">Margen</th></tr></thead>
+        <thead><tr><th>OPP</th><th>Producto / Trabajo</th><th class="num">Cant. pedida</th><th class="num">Ingreso</th><th class="num">Costo M.O.</th><th class="num">Tercerizado</th><th class="num">Margen</th></tr></thead>
         <tbody>
           ${filas.map(f => {
             const cost = (costoPorOpp[f.opp] && costoPorOpp[f.opp].costo) || 0;
-            const margen = f.ingreso - cost;
+            const tercero = tercerosPorOpp[f.opp] || 0;
+            const margen = f.ingreso - cost - tercero;
             return `<tr><td><a href="#" class="suborden-link" data-orden="${orden}" data-opp="${f.opp || ''}">${f.opp || ('#' + f.suborden)}</a></td>
               <td>${(f.trabajo || f.producto || '—').toString().trim()}</td>
               <td class="num">${fmtNum(f.pedido,0)}</td>
               <td class="num">${fmtCOP(f.ingreso)}</td>
               <td class="num">${fmtCOP(cost)}</td>
+              <td class="num">${fmtCOP(tercero)}</td>
               <td class="num" style="color:${margen>=0?'var(--good)':'var(--bad)'}">${fmtCOP(margen)}</td></tr>`;
-          }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin subórdenes en Pedidos para esta orden</td></tr>'}
+          }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint)">Sin subórdenes en Pedidos para esta orden</td></tr>'}
         </tbody>
       </table>
-    </div>`;
+    </div>
+    ${tercerosOrden.length ? `
+    <div class="card-hint" style="margin:14px 0 6px">Costos de tercerización de esta orden</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>OPP</th><th>Fecha</th><th>Concepto</th><th>Proveedor</th><th class="num">Valor</th></tr></thead>
+        <tbody>${tercerosOrden.map(m => {
+          const conc = DB.costos_conceptos.find(c=>c.id===m.concepto_id);
+          return `<tr><td>${m.opp||'—'}</td><td>${(m.fecha||'').slice(0,10)}</td><td>${conc?conc.nombre:'—'}</td><td>${m.proveedor||'—'}</td><td class="num">${fmtCOP(m.valor)}</td></tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>` : ''}`;
 
   document.getElementById('ger-detalle-overlay').style.display = 'flex';
 }
@@ -359,9 +388,11 @@ function renderDetalleOrdenGer(orden){
 function renderDetalleSubordenGer(orden, opp){
   const pedidoLineas = DB.pedidos.filter(p => p.opp === opp);
   const prodLineas = DB.produccion.filter(r => r.opp === opp).sort((a,b) => (a.fecha||'').localeCompare(b.fecha||''));
+  const tercerosLineas = DB.costos_movimientos.filter(m => m.opp === opp);
   const costoTotal = prodLineas.reduce((s,r)=>s+(r.valorActividad||0), 0);
   const horasTotal = prodLineas.reduce((s,r)=>s+(r.tiempoHr||0), 0);
   const ingresoTotal = pedidoLineas.reduce((s,p)=>s+(p.total||0), 0);
+  const tercerosTotal = tercerosLineas.reduce((s,m)=>s+(m.valor||0), 0);
 
   document.getElementById('ger-detalle-titulo').textContent = `Suborden ${opp}`;
   document.getElementById('ger-detalle-cuerpo').innerHTML = `
@@ -369,6 +400,7 @@ function renderDetalleSubordenGer(orden, opp){
     <div class="kpi-row" style="margin:14px 0">
       <div class="kpi"><div class="lbl">Ingreso</div><div class="val">${fmtCOP(ingresoTotal)}</div></div>
       <div class="kpi"><div class="lbl">Costo mano de obra</div><div class="val">${fmtCOP(costoTotal)}</div></div>
+      <div class="kpi"><div class="lbl">Tercerizado</div><div class="val">${fmtCOP(tercerosTotal)}</div></div>
       <div class="kpi"><div class="lbl">Horas registradas</div><div class="val">${fmtHr(horasTotal)}</div></div>
     </div>
     <div class="card-hint" style="margin-bottom:6px">Pedido</div>
@@ -379,12 +411,23 @@ function renderDetalleSubordenGer(orden, opp){
       </table>
     </div>
     <div class="card-hint" style="margin-bottom:6px">Registros de producción (bitácora)</div>
-    <div class="table-wrap">
+    <div class="table-wrap" style="margin-bottom:16px">
       <table>
         <thead><tr><th>Fecha</th><th>Operario</th><th>Actividad</th><th class="num">Cantidad</th><th class="num">Tiempo</th><th class="num">Valor</th></tr></thead>
         <tbody>${prodLineas.map(r => `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.operario||'—'}</td><td>${r.actividad||'—'}</td><td class="num">${fmtNum(r.cantidad,0)}</td><td class="num">${fmtHr(r.tiempoHr)}</td><td class="num">${fmtCOP(r.valorActividad)}</td></tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin registros de producción para esta suborden</td></tr>'}</tbody>
       </table>
-    </div>`;
+    </div>
+    ${tercerosLineas.length ? `
+    <div class="card-hint" style="margin-bottom:6px">Tercerización de esta pieza</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Fecha</th><th>Concepto</th><th>Proveedor</th><th>Comentario</th><th class="num">Valor</th></tr></thead>
+        <tbody>${tercerosLineas.map(m => {
+          const conc = DB.costos_conceptos.find(c=>c.id===m.concepto_id);
+          return `<tr><td>${(m.fecha||'').slice(0,10)}</td><td>${conc?conc.nombre:'—'}</td><td>${m.proveedor||'—'}</td><td>${m.comentario||'—'}</td><td class="num">${fmtCOP(m.valor)}</td></tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>` : ''}`;
 }
 
 function wireDetalleOrdenGer(){

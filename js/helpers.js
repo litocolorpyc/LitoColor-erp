@@ -19,6 +19,28 @@ export function setNote(msg, isError){
   el.style.color = isError ? 'var(--bad)' : '';
 }
 
+// Ayuda: un botón flotante visible en cualquier pantalla, más el botón
+// "❓ Ayuda" del menú -- los dos abren el mismo modal con el manual.
+export function initAyudaGlobal(){
+  const overlay = document.getElementById('ayuda-overlay');
+  if(!overlay) return;
+  const abrir = () => { overlay.style.display = 'flex'; overlay.scrollTop = 0; };
+  const cerrar = () => { overlay.style.display = 'none'; };
+  document.getElementById('ayuda-fab')?.addEventListener('click', abrir);
+  document.getElementById('ayuda-nav-btn')?.addEventListener('click', abrir);
+  document.getElementById('ayuda-cerrar')?.addEventListener('click', cerrar);
+  overlay.addEventListener('click', (e) => { if(e.target === overlay) cerrar(); });
+  document.addEventListener('keydown', (e) => { if(e.key === 'Escape') cerrar(); });
+  // los links de la tabla de contenido hacen scroll suave dentro del modal
+  overlay.querySelectorAll('.help-toc a').forEach(a => {
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      const el = document.querySelector(a.getAttribute('href'));
+      if(el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+}
+
 export const AREA_COLORS = {
   'Litografia': '#185FA5', 'Diseño':'#3C3489', 'Impresión Digital':'#3C3489',
   'Guillotina':'#854F0B', 'Troquelado':'#BA7517', 'Plastificado':'#0F6E56',

@@ -87,6 +87,35 @@ export function poblarDatalistProveedores(){
 }
 
 // ---------- Registrar un movimiento de costo ----------
+function poblarSelectOrdenTercero(){
+  const sel = document.getElementById('rc-orden');
+  if(!sel) return;
+  const activas = [...DB.opp_ordenes].filter(o => o.estado !== 'Cancelada' && o.estado !== 'Cerrada').sort((a,b)=>b.orden-a.orden);
+  sel.innerHTML = '<option value="">Selecciona una orden…</option>' +
+    activas.map(o => `<option value="${o.orden}">${o.orden} — ${o.cliente||''}</option>`).join('');
+}
+
+function poblarSelectOppTercero(orden){
+  const sel = document.getElementById('rc-opp');
+  if(!sel) return;
+  const piezas = orden ? DB.opp_piezas.filter(p => p.orden === orden) : [];
+  sel.innerHTML = '<option value="">— Toda la orden —</option>' +
+    piezas.map(p => `<option value="${p.op}">${p.op} — ${p.pieza||''}</option>`).join('');
+}
+
+function wireTerceroToggle(){
+  const chk = document.getElementById('rc-es-tercero');
+  const row = document.getElementById('rc-tercero-row');
+  if(!chk || !row) return;
+  chk.addEventListener('change', () => {
+    row.style.display = chk.checked ? '' : 'none';
+    if(!chk.checked){ document.getElementById('rc-orden').value = ''; document.getElementById('rc-opp').value = ''; }
+  });
+  document.getElementById('rc-orden').addEventListener('change', (e) => {
+    poblarSelectOppTercero(parseInt(e.target.value, 10) || null);
+  });
+}
+
 function poblarSelectConcepto(){
   const sel = document.getElementById('rc-concepto');
   if(!sel) return;
@@ -103,13 +132,22 @@ function renderMovimientosRecientes(){
   if(!tbody) return;
   const conceptoNombre = id => { const c = DB.costos_conceptos.find(x=>x.id===id); return c ? c.nombre : '—'; };
   const recientes = [...DB.costos_movimientos].sort((a,b)=> b.fecha.localeCompare(a.fecha) || b.id - a.id).slice(0,20);
-  tbody.innerHTML = recientes.map(m => `<tr>
+  tbody.innerHTML = recientes.map(m => {
+    let celdaOrden = '—';
+    if(m.orden != null){
+      celdaOrden = m.opp
+        ? `<a href="#" class="suborden-link" data-orden="${m.orden}" data-opp="${m.opp}">${m.opp}</a>`
+        : `<a href="#" class="orden-link" data-orden="${m.orden}">${m.orden}</a>`;
+    }
+    return `<tr>
     <td>${(m.fecha||'').slice(0,10)}</td>
     <td><span class="badge" style="background:${m.tipo==='Fijo'?'#2E8FC022':'#D8854A22'};color:${m.tipo==='Fijo'?'#2E8FC0':'#D8854A'}">${m.tipo}</span></td>
     <td>${conceptoNombre(m.concepto_id)}</td>
     <td>${m.proveedor || '—'}</td>
+    <td>${celdaOrden}</td>
     <td class="num">${fmtCOP(m.valor)}</td>
-  </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--ink-faint)">Sin movimientos todavía</td></tr>';
+  </tr>`;
+  }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin movimientos todavía</td></tr>';
 }
 
 function renderResumenCostosMes(){
@@ -153,7 +191,11 @@ async function guardarMovimiento(){
       }
     }
 
-    const row = { concepto_id: conceptoId, tipo: concepto.tipo, fecha, valor, proveedor, comentario };
+    const orden = document.getElementById('rc-es-tercero').checked && document.getElementById('rc-orden').value
+      ? parseInt(document.getElementById('rc-orden').value, 10) : null;
+    const opp = document.getElementById('rc-es-tercero').checked ? (document.getElementById('rc-opp').value || null) : null;
+
+    const row = { concepto_id: conceptoId, tipo: concepto.tipo, fecha, valor, proveedor, comentario, orden, opp };
     const { data, error } = await sb.from('costos_movimientos').insert([row]).select();
     if(error) throw error;
     DB.costos_movimientos.unshift(data[0]);
@@ -161,6 +203,10 @@ async function guardarMovimiento(){
     document.getElementById('rc-valor').value = '';
     document.getElementById('rc-proveedor').value = '';
     document.getElementById('rc-comentario').value = '';
+    document.getElementById('rc-es-tercero').checked = false;
+    document.getElementById('rc-tercero-row').style.display = 'none';
+    document.getElementById('rc-orden').value = '';
+    poblarSelectOppTercero(null);
     renderMovimientosRecientes();
     renderResumenCostosMes();
   }catch(err){
@@ -178,6 +224,9 @@ export function initCostos(){
   document.getElementById('rc-fecha').value = new Date().toISOString().slice(0,10);
   poblarSelectConcepto();
   poblarDatalistProveedores();
+  poblarSelectOrdenTercero();
+  poblarSelectOppTercero(null);
+  wireTerceroToggle();
   document.getElementById('rc-save').addEventListener('click', guardarMovimiento);
   renderMovimientosRecientes();
   renderResumenCostosMes();
