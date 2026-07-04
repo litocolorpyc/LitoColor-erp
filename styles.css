@@ -209,3 +209,10 @@ select, input, textarea{ font-family:inherit; font-size:13px; padding:7px 9px; b
 
 .ger-detalle-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:60; display:flex; align-items:flex-start; justify-content:center; padding:40px 16px; overflow-y:auto; }
 .ger-detalle-modal{ background:var(--card); border-radius:12px; border:1px solid var(--line); padding:18px 20px; width:100%; max-width:920px; max-height:calc(100vh - 80px); overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,.25); }
+
+#ayuda-fab{ position:fixed; left:18px; bottom:18px; width:46px; height:46px; border-radius:50%; background:var(--accent); color:#fff; border:none; font-size:19px; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.25); z-index:55; }
+#ayuda-fab:hover{ transform:scale(1.06); }
+.ayuda-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:65; display:flex; align-items:flex-start; justify-content:center; padding:40px 16px; overflow-y:auto; }
+.ayuda-modal{ background:var(--card); border-radius:12px; border:1px solid var(--line); padding:20px 24px; width:100%; max-width:820px; max-height:calc(100vh - 80px); overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,.25); }
+.ayuda-modal h4{ margin-top:22px; margin-bottom:8px; }
+.ayuda-modal > div{ margin-bottom:6px; }
