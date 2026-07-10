@@ -59,6 +59,7 @@
         <button class="tab-btn" data-tab="m-empleados" role="tab">Empleados</button>
         <button class="tab-btn" data-tab="m-maquinas" role="tab">Máquinas</button>
         <button class="tab-btn" data-tab="m-materias" role="tab">Materias primas</button>
+        <button class="tab-btn" data-tab="m-insumos" role="tab">Materiales por área</button>
         <button class="tab-btn" data-tab="m-clientes" role="tab">Clientes</button>
         <button class="tab-btn" data-tab="m-proveedores" role="tab">Proveedores</button>
         <button class="tab-btn" data-tab="m-productos" role="tab">Productos</button>
@@ -70,7 +71,7 @@
       </div>
       <div class="sidebar-group">
         <div class="sidebar-group-label">Soporte</div>
-        <button class="tab-btn" id="ayuda-nav-btn" role="tab">❓ Ayuda</button>
+        <button class="tab-btn" data-tab="ayuda" role="tab">❓ Ayuda</button>
       </div>
     </nav>
     <a href="registro.html" class="sidebar-footer-link">Pantalla de operario ↗</a>
@@ -120,7 +121,7 @@
         </div>
       </div>
       <div class="card">
-        <div class="card-head"><h3>Rentabilidad por orden</h3><span class="card-hint">* costos generales prorrateados por ingreso + tercerizaciones exactas de cada orden, no incluye mano de obra</span></div>
+        <div class="card-head"><h3>Rentabilidad por orden</h3><span class="card-hint">* otros costos prorrateados por ingreso, no incluyen mano de obra</span></div>
         <div class="form-foot" style="margin-top:0;margin-bottom:10px"><span></span><button type="button" class="btn-secondary" id="export-rentabilidad" style="margin:0">⬇ Exportar a Excel</button></div>
         <div class="table-wrap">
           <table id="tbl-ger-ordenes">
@@ -131,7 +132,7 @@
       </div>
 
       <div class="card">
-        <div class="card-head"><h3>Rentabilidad por tipo de producto</h3><span class="card-hint">* costos generales prorrateados por ingreso + tercerizaciones exactas de cada orden, no incluye mano de obra</span></div>
+        <div class="card-head"><h3>Rentabilidad por tipo de producto</h3><span class="card-hint">* otros costos prorrateados por ingreso, no incluyen mano de obra</span></div>
         <div class="form-foot" style="margin-top:0;margin-bottom:10px"><span></span><button type="button" class="btn-secondary" id="export-rentabilidad-producto" style="margin:0">⬇ Exportar a Excel</button></div>
         <canvas id="chart-ger-productos" height="360" style="margin-bottom:16px"></canvas>
         <div class="table-wrap">
@@ -205,18 +206,37 @@
     <!-- ORDENES (OPP) -->
     <section class="tab-panel" id="panel-ordenes">
       <div class="card">
+        <div class="card-head"><h3>Consultar orden</h3><span class="card-hint">tamaño, material, corte, tintas, tiempos y consumo — todo en un solo lugar</span></div>
+        <div class="form-row" style="align-items:flex-end">
+          <div class="field"><label>N° de orden</label><input type="number" id="opp-consultar-orden" placeholder="ej. 5944"></div>
+          <button type="button" class="btn-primary" id="opp-consultar-btn" style="margin:0">Ver detalle completo</button>
+        </div>
+      </div>
+
+      <div class="card">
         <div class="card-head"><h3>Orden de producción</h3><span class="card-hint" id="opp-form-mode">Creando una orden nueva</span></div>
         <div class="form-foot" style="margin-top:0;margin-bottom:14px">
-          <span class="card-hint">¿Ya tienes la orden en Excel? Impórtala y solo revisa antes de guardar</span>
-          <span style="display:flex;gap:8px">
-            <input type="file" id="opp-import-file" accept=".xlsx,.xls" style="display:none">
-            <button type="button" class="btn-secondary" id="opp-import-btn">⬆ Importar desde Excel</button>
-            <button type="button" class="btn-secondary" id="opp-reset">Nueva orden (limpiar formulario)</button>
-          </span>
+          <span></span>
+          <button type="button" class="btn-secondary" id="opp-reset">Nueva orden (limpiar formulario)</button>
         </div>
         <div class="form-row">
           <div class="field"><label>Orden N°</label><input type="number" id="opp-orden" required></div>
           <div class="field"><label>Fecha</label><input type="date" id="opp-fecha" required></div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Tipo de trabajo</label>
+            <select id="opp-tipo-trabajo">
+              <option value="Litografia">Litografía</option>
+              <option value="Impresión Digital">Impresión Digital</option>
+              <option value="Gran Formato">Gran Formato</option>
+              <option value="Servicio de Impresión Externo">Servicio de Impresión Externo</option>
+              <option value="Trabajo Externo">Trabajo Externo</option>
+            </select>
+          </div>
+          <div class="field" id="opp-tipo-trabajo-hint-wrap" style="justify-content:flex-end">
+            <span class="card-hint" id="opp-tipo-trabajo-hint" style="align-self:flex-end;padding-bottom:8px"></span>
+          </div>
         </div>
         <div class="form-row">
           <div class="field">
@@ -239,7 +259,6 @@
         <div id="opp-producto-ref" style="display:none;margin-bottom:14px"></div>
 
         <div id="opp-piezas-list"></div>
-        <datalist id="lista-colores"></datalist>
 
         <button type="button" class="btn-secondary" id="opp-add-pieza">+ Agregar pieza</button>
 
@@ -262,14 +281,14 @@
         </div>
         <div class="table-wrap">
           <table id="tbl-opp-recent">
-            <thead><tr><th>Orden</th><th>Cliente</th><th>Producto</th><th class="num">Piezas</th><th>Fecha</th><th>Estado</th><th class="num">Costo M.O.</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>Orden</th><th>Cliente</th><th>Tipo</th><th>Producto</th><th class="num">Piezas</th><th>Fecha</th><th>Estado</th><th class="num">Costo M.O.</th><th>Acciones</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
       </div>
 
       <div class="card" id="opp-detalle-card" style="display:none">
-        <div class="card-head"><h3 id="opp-detalle-titulo">Detalle de la orden</h3><span class="card-hint"><button type="button" class="row-btn" id="opp-detalle-cerrar">Cerrar ✕</button></span></div>
+        <div class="card-head"><h3 id="opp-detalle-titulo">Detalle de la orden</h3><span class="card-hint"><button type="button" class="row-btn" id="opp-detalle-imprimir">🖨 Imprimir</button> <button type="button" class="row-btn" id="opp-detalle-cerrar">Cerrar ✕</button></span></div>
         <div id="opp-detalle-body"></div>
       </div>
 
@@ -292,84 +311,95 @@
         </div>
 
         <div class="form-row">
-          <div class="field"><label>Nombre de la pieza</label><input type="text" class="f-pieza" placeholder="ej. Caratula"></div>
+          <div class="field"><label>Nombre de la pieza / trabajo</label><input type="text" class="f-pieza" placeholder="ej. Caratula"></div>
           <div class="field"><label>Cantidad solicitada</label><input type="number" class="f-cantidad" min="0"></div>
         </div>
-        <div class="form-row">
-          <div class="field"><label>Tamaño ancho (cm)</label><input type="number" class="f-tam-ancho" step="0.1" min="0"></div>
-          <div class="field"><label>Tamaño alto (cm)</label><input type="number" class="f-tam-alto" step="0.1" min="0"></div>
-        </div>
-        <div class="form-row">
-          <div class="field"><label>Papel <span class="card-hint">(desde Maestros &gt; Materias primas)</span></label>
-            <select class="f-papel"><option value="">Selecciona un papel…</option></select>
+
+        <div class="litografia-only">
+          <div class="form-row">
+            <div class="field"><label>Tamaño ancho (cm)</label><input type="number" class="f-tam-ancho" step="0.1" min="0"></div>
+            <div class="field"><label>Tamaño alto (cm)</label><input type="number" class="f-tam-alto" step="0.1" min="0"></div>
           </div>
-          <div class="field"><label>Pliego <span class="card-hint">(según el papel, editable)</span></label>
-            <select class="f-pliego"></select>
+          <div class="form-row">
+            <div class="field"><label>Papel <span class="card-hint">(desde Maestros &gt; Materias primas)</span></label>
+              <select class="f-papel"><option value="">Selecciona un papel…</option></select>
+            </div>
+            <div class="field"><label>Pliego <span class="card-hint">(70x100 es el más usado)</span></label>
+              <select class="f-pliego"></select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>Tintas frente</label><input type="number" class="f-tintas-frente" min="0" max="6" value="4"></div>
+            <div class="field"><label>Tintas atrás</label><input type="number" class="f-tintas-atras" min="0" max="6" value="0"></div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>CTP</label>
+              <select class="f-ctp"><option>Convencional</option><option>Digital</option></select>
+            </div>
+            <div class="field"><label>Impresión</label>
+              <select class="f-tira"><option value="Tira y retira">Tira y retira</option><option value="Solo tiro">Solo tiro</option></select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>Laminado</label>
+              <select class="f-laminado"><option value="">Ninguno</option><option value="Mate">Mate</option><option value="Brillante">Brillante</option></select>
+            </div>
+            <div class="field"><label>Lados laminados</label><input type="number" class="f-laminado-lados" min="0" max="2" value="0"></div>
+          </div>
+          <div class="form-row opp-checks">
+            <label><input type="checkbox" class="f-barniz"> Barniz UV</label>
+            <label><input type="checkbox" class="f-troquelado"> Troquelado</label>
+            <label><input type="checkbox" class="f-talonarios"> Talonarios</label>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>Detalle troquel (si aplica)</label><input type="text" class="f-troquel-detalle" placeholder="opcional"></div>
+            <div class="field"><label>Otros acabados</label><input type="text" class="f-otros" placeholder="ej. Argollado, Encaratulado"></div>
           </div>
         </div>
-        <div class="form-row">
-          <div class="field"><label>Tintas frente</label><input type="number" class="f-tintas-frente" min="0" max="8" value="4"></div>
-          <div class="field"><label>Tintas atrás</label><input type="number" class="f-tintas-atras" min="0" max="8" value="0"></div>
-        </div>
-        <div class="form-row">
-          <div class="field"><label>Colores frente <span class="card-hint">(ej. CMYK, o Pantone 286C + Negro)</span></label>
-            <input type="text" class="f-colores-frente" list="lista-colores" placeholder="ej. CMYK (Proceso)">
+
+        <div class="otros-tipos-only">
+          <div class="form-row">
+            <div class="field"><label>Proveedor / quién lo realiza</label><input type="text" class="f-proveedor" placeholder="ej. Taller XYZ, propio con plotter, etc."></div>
+            <div class="field"><label>Costo del servicio</label><input type="number" class="f-costo-externo" min="0" placeholder="si se subcontrata"></div>
           </div>
-          <div class="field"><label>Colores atrás</label>
-            <input type="text" class="f-colores-atras" list="lista-colores" placeholder="opcional">
+          <div class="form-row">
+            <div class="field"><label>Fecha de entrega estimada</label><input type="date" class="f-fecha-entrega"></div>
+            <div class="field"><label>Otros acabados / notas del trabajo</label><input type="text" class="f-otros-simple" placeholder="ej. Laminado adicional en Litografía"></div>
           </div>
-        </div>
-        <div class="form-row">
-          <div class="field"><label>CTP</label>
-            <select class="f-ctp"><option>Convencional</option><option>Digital</option></select>
-          </div>
-          <div class="field"><label>Impresión</label>
-            <select class="f-tira"><option value="Tira y retira">Tira y retira</option><option value="Solo tiro">Solo tiro</option></select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="field"><label>Laminado</label>
-            <select class="f-laminado"><option value="">Ninguno</option><option value="Mate">Mate</option><option value="Brillante">Brillante</option></select>
-          </div>
-          <div class="field"><label>Lados laminados</label><input type="number" class="f-laminado-lados" min="0" max="2" value="0"></div>
-        </div>
-        <div class="form-row opp-checks">
-          <label><input type="checkbox" class="f-barniz"> Barniz UV</label>
-          <label><input type="checkbox" class="f-troquelado"> Troquelado</label>
-          <label><input type="checkbox" class="f-talonarios"> Talonarios</label>
-        </div>
-        <div class="form-row">
-          <div class="field"><label>Detalle troquel (si aplica)</label><input type="text" class="f-troquel-detalle" placeholder="opcional"></div>
-          <div class="field"><label>Otros acabados</label><input type="text" class="f-otros" placeholder="ej. Argollado, Encaratulado"></div>
         </div>
 
         <div class="opp-calc-divider">Procesos que requiere esta pieza</div>
         <div class="form-row opp-checks opp-procesos-grid">
           <label><input type="checkbox" class="f-proc" value="Diseño" checked> Diseño</label>
-          <label><input type="checkbox" class="f-proc" value="Litografia" checked> Litografía</label>
+          <label class="litografia-only-check"><input type="checkbox" class="f-proc" value="Litografia" checked> Litografía</label>
           <label><input type="checkbox" class="f-proc" value="Impresión Digital"> Impresión Digital</label>
-          <label><input type="checkbox" class="f-proc" value="Guillotina" checked> Guillotina</label>
-          <label><input type="checkbox" class="f-proc" value="Troquelado"> Troquelado</label>
-          <label><input type="checkbox" class="f-proc" value="Plastificado"> Plastificado</label>
-          <label><input type="checkbox" class="f-proc" value="Engomadora"> Engomadora</label>
+          <label><input type="checkbox" class="f-proc" value="Gran Formato"> Gran Formato</label>
+          <label><input type="checkbox" class="f-proc" value="Servicio de Impresión Externo"> Servicio de Impresión Externo</label>
+          <label><input type="checkbox" class="f-proc" value="Trabajo Externo"> Trabajo Externo</label>
+          <label class="litografia-only-check"><input type="checkbox" class="f-proc" value="Guillotina" checked> Guillotina</label>
+          <label class="litografia-only-check"><input type="checkbox" class="f-proc" value="Troquelado"> Troquelado</label>
+          <label class="litografia-only-check"><input type="checkbox" class="f-proc" value="Plastificado"> Plastificado</label>
+          <label class="litografia-only-check"><input type="checkbox" class="f-proc" value="Engomadora"> Engomadora</label>
           <label><input type="checkbox" class="f-proc" value="Terminado" checked> Terminado</label>
         </div>
 
-        <div class="opp-calc-divider">Cálculo de imposición</div>
+        <div class="litografia-only">
+          <div class="opp-calc-divider">Cálculo de imposición</div>
 
-        <div class="form-row">
-          <div class="field"><label>Unidades por montaje</label><input type="number" class="f-unidades-montaje" min="1" value="1"></div>
-          <div class="field"><label>Tamaños solicitados</label><input type="text" class="f-tam-solicitados calc-readonly" readonly></div>
+          <div class="form-row">
+            <div class="field"><label>Unidades por montaje</label><input type="number" class="f-unidades-montaje" min="1" value="1"></div>
+            <div class="field"><label>Tamaños solicitados</label><input type="text" class="f-tam-solicitados calc-readonly" readonly></div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>Medida tamaño ancho (con margen)</label><input type="number" class="f-medida-ancho" step="0.1" min="0"></div>
+            <div class="field"><label>Medida tamaño alto (con margen)</label><input type="number" class="f-medida-alto" step="0.1" min="0"></div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>Tamaños por pliego (sugerido, editable)</label><input type="number" class="f-tam-por-pliego" min="0"></div>
+            <div class="field"><label>Tamaños programados (sugerido, editable)</label><input type="number" class="f-tam-programados" min="0"></div>
+          </div>
+          <div class="opp-pliegos-result">Pliegos necesarios: <span class="f-pliegos-result">—</span></div>
         </div>
-        <div class="form-row">
-          <div class="field"><label>Medida tamaño ancho (con margen)</label><input type="number" class="f-medida-ancho" step="0.1" min="0"></div>
-          <div class="field"><label>Medida tamaño alto (con margen)</label><input type="number" class="f-medida-alto" step="0.1" min="0"></div>
-        </div>
-        <div class="form-row">
-          <div class="field"><label>Tamaños por pliego (sugerido, editable)</label><input type="number" class="f-tam-por-pliego" min="0"></div>
-          <div class="field"><label>Tamaños programados (sugerido, editable)</label><input type="number" class="f-tam-programados" min="0"></div>
-        </div>
-        <div class="opp-pliegos-result">Pliegos necesarios: <span class="f-pliegos-result">—</span></div>
       </div>
     </template>
 
@@ -413,6 +443,16 @@
             <div class="form-row">
               <div class="field"><label>Operario</label><select id="r-operario"></select></div>
               <div class="field"><label>Orden (solo las que están en curso)</label><select id="r-orden"><option value="">Selecciona una orden…</option></select></div>
+            </div>
+            <div class="form-row">
+              <div class="field full" style="display:flex;align-items:center">
+                <label style="display:flex;align-items:center;gap:6px;font-weight:500;cursor:pointer">
+                  <input type="checkbox" id="r-sin-orden"> Trabajo sin orden asignada (ej. Impresión Digital suelta, Servicio de Trabajo Externo)
+                </label>
+              </div>
+            </div>
+            <div class="form-row" id="r-concepto-wrap" style="display:none">
+              <div class="field full"><label>Cliente / concepto del trabajo</label><input type="text" id="r-concepto" placeholder="ej. Impresión digital tarjetas — Cliente XYZ"></div>
             </div>
             <div class="form-row">
               <div class="field"><label>Pieza <span class="card-hint" id="r-pieza-hint"></span></label><select id="r-pieza"><option value="">— Sin OPP / general —</option></select></div>
@@ -515,6 +555,39 @@
       </div>
     </section>
 
+    <section class="tab-panel" id="panel-m-insumos">
+      <div class="card">
+        <div class="card-head"><h3>Materiales por área</h3><span class="card-hint">lo que consume cada área al producir — planchas, tinta, colbón, grapas, rollos de laminado, etc. (no es el papel de la orden, eso va en "Materias primas")</span></div>
+        <div class="form-row">
+          <div class="field"><label>Nombre del insumo</label><input type="text" id="m-ins-nombre" placeholder="ej. Colbón, Plancha CTP, Rollo laminado mate"></div>
+          <div class="field"><label>Área que lo consume</label><input type="text" id="m-ins-area" list="m-ins-area-list" placeholder="ej. Terminado, Litografia, Plastificado"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Unidad (opcional)</label><input type="text" id="m-ins-unidad" placeholder="ej. kg, rollo, caja, unidad"></div>
+        </div>
+        <datalist id="m-ins-area-list">
+          <option value="Diseño"></option>
+          <option value="Litografia"></option>
+          <option value="Impresión Digital"></option>
+          <option value="Gran Formato"></option>
+          <option value="Guillotina"></option>
+          <option value="Troquelado"></option>
+          <option value="Plastificado"></option>
+          <option value="Engomadora"></option>
+          <option value="Terminado"></option>
+          <option value="Servicio de Impresión Externo"></option>
+          <option value="Trabajo Externo"></option>
+        </datalist>
+        <div class="form-foot"><span id="m-ins-mode"></span><button type="button" class="btn-primary" id="m-ins-save">Agregar insumo</button></div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table id="tbl-m-insumos">
+            <thead><tr><th>Nombre</th><th>Área</th><th>Unidad</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <section class="tab-panel" id="panel-m-clientes">
       <div class="card">
         <div class="card-head"><h3>Clientes</h3><span class="card-hint">datos básicos</span></div>
@@ -595,6 +668,119 @@
       </div>
     </section>
 
+    <section class="tab-panel" id="panel-ayuda">
+      <div class="card">
+        <div class="card-head"><h3>Ayuda y Manual de Usuario</h3><span class="card-hint">salta directo a tu sección</span></div>
+        <div class="help-toc">
+          <a href="#ayuda-intro">Introducción</a>
+          <a href="#ayuda-primeros">Primeros pasos</a>
+          <a href="#ayuda-operarios">Operarios</a>
+          <a href="#ayuda-produccion">Jefe de Producción / Diseño</a>
+          <a href="#ayuda-admin">Administradora</a>
+          <a href="#ayuda-gerente">Gerente / Admin</a>
+          <a href="#ayuda-glosario">Glosario</a>
+          <a href="#ayuda-faq">Preguntas frecuentes</a>
+        </div>
+      </div>
+
+      <div class="card" id="ayuda-intro">
+        <div class="card-head"><h3>Introducción</h3></div>
+        <p>LitoColor ERP maneja, en un solo lugar, las órdenes de producción, los tiempos de cada operario y máquina, los clientes, los proveedores, y la información que el gerente necesita para decidir. Este manual está organizado por rol — busca tu sección, no hace falta leerlo completo.</p>
+        <table>
+          <thead><tr><th>Rol</th><th>Qué usa</th></tr></thead>
+          <tbody>
+            <tr><td>Operario</td><td>Solo la pantalla de Registro de tiempos</td></tr>
+            <tr><td>Jefe de Producción / Diseñador</td><td>Producción, Calendario, Alertas, Órdenes, Registrar, y sus maestros</td></tr>
+            <tr><td>Administradora</td><td>Maestros de Clientes/Proveedores/Empleados, y Alertas</td></tr>
+            <tr><td>Gerente / Admin</td><td>Todo lo anterior, más Gerencial y Usuarios</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card" id="ayuda-primeros">
+        <div class="card-head"><h3>Primeros pasos (todos)</h3></div>
+        <h4>Iniciar sesión</h4>
+        <ol>
+          <li>Entra a lito-color-erp.vercel.app</li>
+          <li>Escribe tu correo y tu contraseña, click en "Entrar".</li>
+        </ol>
+        <div class="help-tip"><b>Tip:</b> si es tu primera vez, usa "¿Primera vez? Crea tu contraseña aquí" — solo funciona si un Admin/Gerente ya te agregó en "Usuarios" con tu correo y rol.</div>
+        <h4>Cambiar tu contraseña</h4>
+        <p>Arriba a la derecha, click en tu nombre → "Cambiar contraseña" → escribe la nueva (mínimo 6 caracteres) → "Guardar".</p>
+        <h4>El menú lateral</h4>
+        <p>Solo aparecen las pestañas que tu rol tiene permiso de ver. Si falta algo, pide que revisen tu rol en "Usuarios".</p>
+      </div>
+
+      <div class="card" id="ayuda-operarios">
+        <div class="card-head"><h3>Para Operarios</h3><span class="card-hint">registro.html — sin contraseña</span></div>
+        <h4>Iniciar una actividad</h4>
+        <ol>
+          <li>Elige tu nombre en "Operario".</li>
+          <li>Elige la "Orden" (solo aparecen las activas) y luego la "Pieza" específica.</li>
+          <li>Elige Área, Actividad y Máquina (o "Trabajo manual").</li>
+          <li>Click en "▶ Iniciar actividad" — la hora la toma el sistema solo.</li>
+        </ol>
+        <div class="help-tip"><b>Importante:</b> si no eliges la Pieza, tu tiempo se guarda pero NO se refleja en el avance de la orden.</div>
+        <h4>Finalizar</h4>
+        <p>Busca la tarjeta en "Tus actividades en curso", llena la cantidad producida, y click en "⏹ Finalizar esta actividad". Puedes tener varias actividades corriendo a la vez. Si cierras la pantalla sin finalizar, no se pierde nada — al volver a elegir tu nombre, la actividad sigue ahí.</p>
+      </div>
+
+      <div class="card" id="ayuda-produccion">
+        <div class="card-head"><h3>Para Jefe de Producción y Diseño</h3></div>
+        <h4>Órdenes</h4>
+        <p><b>Crear:</b> llena Orden, Cliente/Producto (listas desplegables, con "+ Nuevo…" si no existe), y cada Pieza con su tamaño, papel, tintas y acabados. Revisa los "Procesos requeridos" — definen el avance que se ve después.</p>
+        <p><b>Buscar/Editar/Duplicar/Cancelar:</b> en "Buscar y administrar órdenes". "Duplicar" crea una orden NUEVA con los mismos datos — útil cuando un cliente repite un pedido. "Cancelar" no borra historial, solo retira.</p>
+        <p><b>Ver detalle:</b> abre el desglose completo — gráfica de horas, materiales consumidos, y tiempos por operario/máquina, pieza por pieza.</p>
+        <table>
+          <thead><tr><th>Estado</th><th>Significa</th></tr></thead>
+          <tbody>
+            <tr><td>Pendiente</td><td>Nada empezado</td></tr>
+            <tr><td>En proceso</td><td>Algo hecho, falta otro</td></tr>
+            <tr><td>Completada</td><td>Todo lo requerido está hecho</td></tr>
+            <tr><td>Cerrada / Cancelada</td><td>Histórica terminada / retirada</td></tr>
+          </tbody>
+        </table>
+        <h4>Calendario</h4>
+        <p>Línea de tiempo por máquina (6am-8pm). Barras de color = actividad real; rayado = en curso ahora.</p>
+        <h4>Alertas</h4>
+        <p>Se generan solas: órdenes sin movimiento en 3+ días, actividades abiertas 4+ horas sin finalizar, y órdenes de más de una semana sin empezar.</p>
+      </div>
+
+      <div class="card" id="ayuda-admin">
+        <div class="card-head"><h3>Para Administradora</h3></div>
+        <p>Todos los maestros (Empleados, Máquinas, Materias primas, Clientes, Proveedores, Productos) funcionan igual: llena el formulario y "Agregar"; "Editar" carga la fila para corregirla; "Retirar" desactiva sin borrar nada (y se puede "Reactivar").</p>
+      </div>
+
+      <div class="card" id="ayuda-gerente">
+        <div class="card-head"><h3>Para Gerente y Admin</h3></div>
+        <p><b>Gerencial:</b> ingresos, costo de mano de obra, margen — con comparación automática vs. el periodo anterior, filtros de fecha, y rentabilidad por orden y por tipo de producto.</p>
+        <p><b>Exportar:</b> casi toda tabla tiene "⬇ Exportar a Excel". El botón "⬇ Respaldo completo" descarga Pedidos, Producción, Órdenes, Empleados, Máquinas y Clientes en un solo archivo.</p>
+        <p><b>Usuarios:</b> para dar acceso a alguien nuevo, ponle correo y rol ahí, y dile que use "¿Primera vez? Crea tu contraseña aquí" en el login — sin pedir ningún SQL.</p>
+      </div>
+
+      <div class="card" id="ayuda-glosario">
+        <div class="card-head"><h3>Glosario</h3></div>
+        <table>
+          <tbody>
+            <tr><td><b>OPP</b></td><td>Orden de Producción</td></tr>
+            <tr><td><b>Pieza / Suborden</b></td><td>Cada componente de una orden (ej. carátula, interiores)</td></tr>
+            <tr><td><b>Pliego</b></td><td>Tamaño del papel completo antes de cortar</td></tr>
+            <tr><td><b>Tira y retira</b></td><td>Impreso en ambas caras</td></tr>
+            <tr><td><b>Área</b></td><td>Etapa del proceso (Litografía, Guillotina, Troquelado…)</td></tr>
+            <tr><td><b>Procesos requeridos</b></td><td>Áreas que una pieza debe pasar para estar terminada</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card" id="ayuda-faq">
+        <div class="card-head"><h3>Preguntas frecuentes</h3></div>
+        <p><b>No veo una pestaña que debería ver:</b> pide que revisen tu rol en "Usuarios".</p>
+        <p><b>Capturé un tiempo y no se refleja en el avance:</b> probablemente no elegiste la "Pieza" al capturar, o el "Área" usada no está en los "Procesos requeridos" de esa pieza.</p>
+        <p><b>Olvidé mi contraseña:</b> pide a un Admin o Gerente que entre a "Usuarios" — todavía no hay recuperación automática.</p>
+        <p><b>¿Los datos están seguros?</b> Sí — editar información exige sesión iniciada. Solo la captura de tiempos de operarios queda sin contraseña, a propósito.</p>
+      </div>
+    </section>
+
     <section class="tab-panel" id="panel-m-costos">
       <div class="card">
         <div class="card-head"><h3>Conceptos de costo</h3><span class="card-hint">costos fijos y variables — temporal, mientras crece el módulo de Cotización</span></div>
@@ -631,20 +817,13 @@
           </div>
         </div>
         <div class="field full"><label>Comentario</label><input type="text" id="rc-comentario" placeholder="opcional"></div>
-        <div class="field full">
-          <label><input type="checkbox" id="rc-es-tercero"> Este costo es de una orden específica (ej. tercerización: Impresión Digital, Troquelado, Laminado con un tercero…)</label>
-        </div>
-        <div class="form-row" id="rc-tercero-row" style="display:none">
-          <div class="field"><label>Orden</label><select id="rc-orden"><option value="">Selecciona una orden…</option></select></div>
-          <div class="field"><label>Suborden / pieza <span class="card-hint">(opcional, deja en blanco si aplica a toda la orden)</span></label><select id="rc-opp"><option value="">— Toda la orden —</option></select></div>
-        </div>
         <div class="form-foot"><span></span><button type="button" class="btn-primary" id="rc-save">Guardar costo</button></div>
       </div>
       <div class="card">
         <div class="card-head"><h3>Últimos costos registrados</h3></div>
         <div class="table-wrap">
           <table id="tbl-costos-recientes">
-            <thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Proveedor</th><th>Orden</th><th class="num">Valor</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Proveedor</th><th class="num">Valor</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -652,119 +831,6 @@
     </section>
 
   </main>
-
-  <div id="ger-detalle-overlay" class="ger-detalle-overlay" style="display:none">
-    <div class="ger-detalle-modal">
-      <div class="card-head"><h3 id="ger-detalle-titulo">Detalle</h3><span class="card-hint"><button type="button" class="row-btn" id="ger-detalle-cerrar">Cerrar ✕</button></span></div>
-      <div id="ger-detalle-cuerpo"></div>
-    </div>
-  </div>
-
-  <button type="button" id="ayuda-fab" title="Ayuda">❓</button>
-
-  <div id="ayuda-overlay" class="ayuda-overlay" style="display:none">
-    <div class="ayuda-modal">
-      <div class="card-head"><h3>Ayuda — cómo funciona todo, explicado sencillo</h3><span class="card-hint"><button type="button" class="row-btn" id="ayuda-cerrar">Cerrar ✕</button></span></div>
-
-      <div class="help-toc" style="margin-bottom:16px">
-        <a href="#ayuda-intro">¿Qué es esto?</a>
-        <a href="#ayuda-flujo">Cómo va el flujo de producción</a>
-        <a href="#ayuda-primeros">Primeros pasos</a>
-        <a href="#ayuda-operarios">Soy operario</a>
-        <a href="#ayuda-produccion">Soy jefe de producción / diseño</a>
-        <a href="#ayuda-admin">Soy administradora</a>
-        <a href="#ayuda-gerente">Soy gerente</a>
-        <a href="#ayuda-costos">Costos y tercerización</a>
-        <a href="#ayuda-glosario">Palabras raras, explicadas</a>
-        <a href="#ayuda-faq">Preguntas frecuentes</a>
-      </div>
-
-      <div id="ayuda-intro">
-        <h4>¿Qué es esto?</h4>
-        <p>Es el programa donde queda todo lo que pasa con la producción de LitoColor: qué se está imprimiendo, quién lo está haciendo, cuánto tiempo toma, cuánto cuesta, y cuánta plata está entrando y saliendo. Antes esto vivía repartido en Excel y en la cabeza de la gente — ahora vive en un solo lugar.</p>
-        <p>No necesitas leer todo este manual. Busca arriba la sección de tu rol y ya.</p>
-      </div>
-
-      <div id="ayuda-flujo">
-        <h4>Cómo va el flujo de producción, de principio a fin</h4>
-        <p>Así se mueve un trabajo real dentro del sistema, paso a paso:</p>
-        <ol>
-          <li><b>Llega un pedido de un cliente.</b> Alguien (jefe de producción o Diana) crea la <b>Orden</b> en la pestaña "Órdenes" — escribiendo los datos a mano, o importando el Excel que ya usan en planta.</li>
-          <li><b>La orden se parte en piezas.</b> Un cuaderno, por ejemplo, casi nunca es una sola pieza — tiene carátula, guarda, cartón, interiores... Cada una de esas es una <b>suborden</b>, y cada suborden tiene su propio código: la orden seguida de un número. Ej. la orden 5961 con 4 piezas es 5961-1, 5961-2, 5961-3, 5961-4.</li>
-          <li><b>Se define qué necesita cada pieza.</b> Al crear la pieza se marca su tamaño, el papel, cuántos colores lleva y de cuáles (no solo "4 tintas", sino si son de proceso o Pantone), y qué acabados necesita (laminado, troquelado, barniz, etc.) — y qué "Procesos requeridos" tiene que pasar (Diseño, Litografía, Guillotina...).</li>
-          <li><b>Producción trabaja la pieza.</b> Cada operario, desde su pantalla de Registro, elige la orden y la pieza exacta, elige la actividad que está haciendo (ej. "Impresión"), y le da "Iniciar". Cuando termina, le da "Finalizar" y anota cuánto produjo. Ese tiempo queda guardado contra esa pieza puntual.</li>
-          <li><b>El sistema junta todo eso solo.</b> Con esos registros, el programa ya sabe cuánto ha avanzado cada pieza (barra de % en "Órdenes vivas en producción"), cuánto ha costado en mano de obra, y si algo lleva mucho tiempo sin moverse (Alertas).</li>
-          <li><b>Si una parte se manda a hacer afuera</b> (tercerización, ej. la impresión digital la hace otra empresa), eso se registra como un costo en "Registrar costo", ligado a esa orden/pieza puntual — así ese gasto queda exacto en esa orden, no repartido entre todas.</li>
-          <li><b>Al final, Gerencial muestra el resultado</b>: cuánto se facturó, cuánto costó en mano de obra y en tercerizaciones, y qué margen quedó — por orden y por tipo de producto. Haciendo clic en el número de cualquier orden se puede entrar al detalle completo, hasta el nivel de cada suborden.</li>
-        </ol>
-        <div class="help-tip"><b>En una frase:</b> Orden → se parte en piezas/subórdenes → cada pieza se trabaja y se le registra tiempo/costo → el sistema suma todo solo y se ve en los tableros.</div>
-      </div>
-
-      <div id="ayuda-primeros">
-        <h4>Primeros pasos (para todos)</h4>
-        <p><b>Entrar:</b> ve a lito-color-erp.vercel.app, escribe tu correo y contraseña, click en "Entrar". Si es tu primera vez, usa "¿Primera vez? Crea tu contraseña aquí" (solo funciona si ya te agregaron en "Usuarios").</p>
-        <p><b>Cambiar tu contraseña:</b> arriba a la derecha, tu nombre → "Cambiar contraseña".</p>
-        <p><b>El menú lateral:</b> solo ves las pestañas que tu rol tiene permiso de ver. Si falta algo, pide que revisen tu rol en "Usuarios".</p>
-      </div>
-
-      <div id="ayuda-operarios">
-        <h4>Soy operario</h4>
-        <p>Vas a <code>registro.html</code> (no necesitas contraseña ahí). Elige tu nombre, elige la orden (solo salen las activas) y la pieza exacta en la que vas a trabajar, elige actividad y máquina, y dale "▶ Iniciar actividad". Cuando termines, busca tu tarjeta en "Tus actividades en curso", pon cuánto produjiste, y dale "Finalizar".</p>
-        <div class="help-tip"><b>Importante:</b> si no elegiste la pieza exacta, tu tiempo se guarda pero no se ve reflejado en el avance de esa orden. Puedes tener varias actividades corriendo al mismo tiempo, sin límite.</div>
-      </div>
-
-      <div id="ayuda-produccion">
-        <h4>Soy jefe de producción / diseño</h4>
-        <p><b>Crear una orden:</b> en "Órdenes", llena cliente/producto (si no existen, los creas ahí mismo con "+ Nuevo") y agrega cada pieza con su tamaño, papel, colores y acabados.</p>
-        <p><b>Importar una orden desde Excel:</b> si ya tienes el Excel de la orden como lo maneja planta, usa el botón "⬆ Importar desde Excel" — llena el formulario solo, tú solo revisas y guardas.</p>
-        <p><b>Ver el avance:</b> "Órdenes vivas en producción" muestra cada pieza con su código (ej. 5961-1) y qué porcentaje de sus procesos ya está hecho.</p>
-        <p><b>Calendario:</b> línea de tiempo por máquina. Las barras son actividad real; si está rayado, está en curso ahora mismo.</p>
-        <p><b>Alertas:</b> se generan solas — órdenes sin movimiento en varios días, o actividades que quedaron abiertas por horas sin que nadie les diera "Finalizar" (posible olvido).</p>
-      </div>
-
-      <div id="ayuda-admin">
-        <h4>Soy administradora</h4>
-        <p>Todos los maestros (Empleados, Máquinas, Materias primas, Clientes, Proveedores, Productos) funcionan igual: llenas el formulario y "Agregar"; "Editar" carga la fila para corregirla; "Retirar" la desactiva sin borrar nada (y se puede "Reactivar" después).</p>
-      </div>
-
-      <div id="ayuda-gerente">
-        <h4>Soy gerente</h4>
-        <p><b>Gerencial:</b> muestra ingresos, costo de mano de obra, otros costos y margen — solo de las órdenes activas por ahora. Haz clic en el número de cualquier orden para ver su detalle completo: cada suborden, su ingreso, su costo, y si tuvo tercerización. Haz clic en una suborden para ver el detalle exacto de esa pieza.</p>
-        <p><b>Exportar:</b> casi toda tabla tiene "⬇ Exportar a Excel".</p>
-        <p><b>Usuarios:</b> para dar acceso a alguien nuevo, ponle correo y rol en "Usuarios" — no se necesita ningún código.</p>
-      </div>
-
-      <div id="ayuda-costos">
-        <h4>Costos y tercerización</h4>
-        <p>En "Registrar costo" anotas cualquier gasto real: arriendo, nómina, materia prima, servicios, impuestos. El proveedor lo escribes y lo busca solo mientras tecleas — si no existe, se crea solo.</p>
-        <p><b>Tercerización</b> (ej. mandar a imprimir afuera, o un troquelado especial que hace otra empresa): marca la casilla "Este costo es de una orden específica", elige la orden (y la pieza si aplica), y ese gasto queda pegado exacto a esa orden — no se reparte entre las demás.</p>
-        <p>Los demás costos (los que NO marcas con una orden) se reparten entre todas las órdenes activas según cuánto facturó cada una — eso es lo que en el sistema se ve como "prorrateado".</p>
-      </div>
-
-      <div id="ayuda-glosario">
-        <h4>Palabras raras, explicadas</h4>
-        <table>
-          <tbody>
-            <tr><td><b>OPP</b></td><td>El código de una orden o de una pieza puntual, ej. "5961-1"</td></tr>
-            <tr><td><b>Suborden / pieza</b></td><td>Cada parte de una orden (ej. carátula, interiores)</td></tr>
-            <tr><td><b>Pliego</b></td><td>El tamaño del papel completo antes de cortarlo</td></tr>
-            <tr><td><b>Tira y retira</b></td><td>Impreso en las dos caras de la hoja</td></tr>
-            <tr><td><b>Tercerización</b></td><td>Cuando parte del trabajo (o todo) lo hace otra empresa, no LitoColor</td></tr>
-            <tr><td><b>Prorrateado</b></td><td>Un gasto general repartido entre varias órdenes según lo que facturó cada una</td></tr>
-            <tr><td><b>Procesos requeridos</b></td><td>Las etapas por las que tiene que pasar una pieza para estar terminada</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div id="ayuda-faq">
-        <h4>Preguntas frecuentes</h4>
-        <p><b>No veo una pestaña que debería ver:</b> pide que revisen tu rol en "Usuarios".</p>
-        <p><b>Registré un tiempo y no se ve reflejado en el avance:</b> revisa si elegiste la pieza exacta al capturar, y si esa actividad está dentro de los "Procesos requeridos" de esa pieza.</p>
-        <p><b>Olvidé mi contraseña:</b> pide a un Admin o Gerente que te ayude desde "Usuarios".</p>
-        <p><b>¿Los datos están seguros?</b> Sí, editar información exige tener sesión iniciada. Solo la pantalla de registro de tiempos del operario queda sin contraseña, a propósito, para que sea rápida.</p>
-      </div>
-    </div>
-  </div>
   </div>
 
   <div class="toast" id="toast"></div>

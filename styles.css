@@ -192,27 +192,22 @@ select, input, textarea{ font-family:inherit; font-size:13px; padding:7px 9px; b
 .detalle-mini-table{ width:100%; font-size:11.5px; border-collapse:collapse; }
 .detalle-mini-table th{ text-align:left; color:var(--ink-faint); font-weight:600; padding:4px 6px; border-bottom:1px solid var(--line); }
 .detalle-mini-table td{ padding:4px 6px; border-bottom:1px solid var(--line); }
+.detalle-ficha-grid{ display:grid; grid-template-columns:1fr 1fr; gap:0 14px; margin-bottom:10px; }
+@media (max-width:520px){ .detalle-ficha-grid{ grid-template-columns:1fr; } }
+.ficha-item{ display:flex; justify-content:space-between; gap:8px; padding:3px 0; border-bottom:1px dashed var(--line); font-size:12px; }
+.ficha-lbl{ color:var(--ink-faint); }
+.ficha-val{ font-weight:600; text-align:right; }
+.detalle-orden-obs{ font-size:12px; color:var(--ink-soft); margin-bottom:12px; padding:8px 10px; background:rgba(0,0,0,0.03); border-radius:8px; }
+.campo-requerido-error{ border:1.5px solid #d64545 !important; box-shadow:0 0 0 2px rgba(214,69,69,0.15); border-radius:6px; }
+
+/* Formulario de Órdenes: alterna entre la ficha completa de Litografía y la
+   ficha simplificada de los demás tipos de trabajo (Gran Formato, Impresión
+   Digital, Servicio de Impresión Externo, Trabajo Externo). */
+.otros-tipos-only{ display:none; }
+#opp-piezas-list.tipo-otros .litografia-only,
+#opp-piezas-list.tipo-otros .litografia-only-check{ display:none; }
+#opp-piezas-list.tipo-otros .otros-tipos-only{ display:block; }
+.tipo-trabajo-chip{ display:inline-block; font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:20px; background:var(--brand-soft,#e8f0fb); color:var(--brand,#185FA5); }
 
 .toast{ position:fixed; bottom:18px; right:18px; background:var(--ink); color:var(--paper); padding:10px 16px; border-radius:8px; font-size:13px; opacity:0; transform:translateY(8px); transition:opacity .25s, transform .25s; pointer-events:none; z-index:50; }
 .toast.show{ opacity:1; transform:translateY(0); }
-
-.orden-link{ font-weight:700; color:#1B4F8C; text-decoration:none; cursor:pointer; }
-.orden-link:hover{ text-decoration:underline; }
-@media (prefers-color-scheme: dark){ .orden-link{ color:#7CA9E0; } }
-
-.suborden-link{ font-weight:600; color:#1B4F8C; text-decoration:none; cursor:pointer; }
-.suborden-link:hover{ text-decoration:underline; }
-@media (prefers-color-scheme: dark){ .suborden-link{ color:#7CA9E0; } }
-
-.ger-detalle-volver{ font-weight:600; color:var(--accent); text-decoration:none; cursor:pointer; font-size:12.5px; }
-.ger-detalle-volver:hover{ text-decoration:underline; }
-
-.ger-detalle-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:60; display:flex; align-items:flex-start; justify-content:center; padding:40px 16px; overflow-y:auto; }
-.ger-detalle-modal{ background:var(--card); border-radius:12px; border:1px solid var(--line); padding:18px 20px; width:100%; max-width:920px; max-height:calc(100vh - 80px); overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,.25); }
-
-#ayuda-fab{ position:fixed; left:18px; bottom:18px; width:46px; height:46px; border-radius:50%; background:var(--accent); color:#fff; border:none; font-size:19px; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.25); z-index:55; }
-#ayuda-fab:hover{ transform:scale(1.06); }
-.ayuda-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:65; display:flex; align-items:flex-start; justify-content:center; padding:40px 16px; overflow-y:auto; }
-.ayuda-modal{ background:var(--card); border-radius:12px; border:1px solid var(--line); padding:20px 24px; width:100%; max-width:820px; max-height:calc(100vh - 80px); overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,.25); }
-.ayuda-modal h4{ margin-top:22px; margin-bottom:8px; }
-.ayuda-modal > div{ margin-bottom:6px; }

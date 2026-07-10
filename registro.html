@@ -47,6 +47,16 @@
           <div class="field"><label>Orden (solo las que están en curso)</label><select id="r-orden"><option value="">Selecciona una orden…</option></select></div>
         </div>
         <div class="form-row">
+          <div class="field full" style="display:flex;align-items:center">
+            <label style="display:flex;align-items:center;gap:6px;font-weight:500;cursor:pointer">
+              <input type="checkbox" id="r-sin-orden"> Trabajo sin orden asignada (ej. Impresión Digital suelta, Servicio de Trabajo Externo)
+            </label>
+          </div>
+        </div>
+        <div class="form-row" id="r-concepto-wrap" style="display:none">
+          <div class="field full"><label>Cliente / concepto del trabajo</label><input type="text" id="r-concepto" placeholder="ej. Impresión digital tarjetas — Cliente XYZ"></div>
+        </div>
+        <div class="form-row">
           <div class="field"><label>Pieza <span class="card-hint" id="r-pieza-hint"></span></label><select id="r-pieza"><option value="">— Sin OPP / general —</option></select></div>
           <div class="field"><label>Área</label><select id="r-area"></select></div>
         </div>
