@@ -7,6 +7,7 @@ import { initUsuarios } from './usuarios.js';
 import { initCalendario, renderCalendario } from './calendario.js';
 import { initAlertas, renderAlertas } from './alertas.js';
 import { initCostos, poblarDatalistProveedores } from './costos.js';
+import { initRecibosCaja } from './recibos.js';
 import { restaurarSesion, iniciarSesion, cerrarSesion, cambiarContrasena, crearCuentaPropia, getCurrentUser, aplicarPermisos } from './auth.js';
 
 // ---------- pestañas ----------
@@ -76,6 +77,7 @@ async function arrancarApp(){
   pasoSeguro('Calendario', initCalendario);
   pasoSeguro('Alertas', initAlertas);
   pasoSeguro('Costos', initCostos);
+  pasoSeguro('Recibos de caja', initRecibosCaja);
 
   pasoSeguro('Permisos', aplicarPermisos);
 }

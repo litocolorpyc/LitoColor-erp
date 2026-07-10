@@ -120,12 +120,23 @@ export function renderMaestros(){
   empleadosCtl.render();
   maquinasCtl.render();
   materiasCtl.render();
+  insumosCtl.render();
   clientesCtl.render();
   proveedoresCtl.render();
   productosCtl.render();
+  piezasProductoCtl.render();
+  poblarDatalistProductosMaestro();
 }
 
-let empleadosCtl, maquinasCtl, materiasCtl, clientesCtl, proveedoresCtl, productosCtl;
+// Sugerencias de producto para el maestro "Piezas por producto" — toma los
+// nombres ya existentes en el catálogo de Productos.
+function poblarDatalistProductosMaestro(){
+  const dl = document.getElementById('m-pp-producto-list');
+  if(!dl) return;
+  dl.innerHTML = DB.productos.filter(p=>p.activo!==false).map(p => `<option value="${p.nombre}">`).join('');
+}
+
+let empleadosCtl, maquinasCtl, materiasCtl, insumosCtl, clientesCtl, proveedoresCtl, productosCtl, piezasProductoCtl;
 
 export function initMaestros(onChange){
   empleadosCtl = wireCatalog({
@@ -166,6 +177,18 @@ export function initMaestros(onChange){
     onChange
   });
 
+  insumosCtl = wireCatalog({
+    table: 'insumos_area', key: 'id', data: DB.insumos_area, tableSel: '#tbl-m-insumos',
+    saveBtnId: 'm-ins-save', modeId: 'm-ins-mode', addLabel: 'Agregar insumo',
+    fields: [
+      { id:'m-ins-nombre', col:'nombre', required:true },
+      { id:'m-ins-area', col:'area', required:true },
+      { id:'m-ins-unidad', col:'unidad' }
+    ],
+    renderCols: r => [r.nombre, r.area, r.unidad||'—'],
+    onChange
+  });
+
   clientesCtl = wireCatalog({
     table: 'clientes', key: 'id', data: DB.clientes, tableSel: '#tbl-m-clientes',
     saveBtnId: 'm-cli-save', modeId: 'm-cli-mode', addLabel: 'Agregar cliente',
@@ -186,13 +209,14 @@ export function initMaestros(onChange){
     saveBtnId: 'm-prov-save', modeId: 'm-prov-mode', addLabel: 'Agregar proveedor',
     fields: [
       { id:'m-prov-nombre', col:'nombre', required:true },
+      { id:'m-prov-tipo', col:'tipo_proveedor' },
       { id:'m-prov-nit', col:'nit' },
       { id:'m-prov-tel', col:'telefono' },
       { id:'m-prov-email', col:'email' },
       { id:'m-prov-materiales', col:'materiales' },
       { id:'m-prov-ciudad', col:'ciudad' }
     ],
-    renderCols: r => [r.nombre, r.materiales||'—', r.telefono||'—', r.ciudad||'—'],
+    renderCols: r => [r.nombre, r.tipo_proveedor||'—', r.materiales||'—', r.telefono||'—', r.ciudad||'—'],
     onChange
   });
 
@@ -206,4 +230,17 @@ export function initMaestros(onChange){
     renderCols: r => [r.nombre, r.descripcion||'—'],
     onChange
   });
+
+  piezasProductoCtl = wireCatalog({
+    table: 'piezas_producto', key: 'id', data: DB.piezas_producto, tableSel: '#tbl-m-piezas-producto',
+    saveBtnId: 'm-pp-save', modeId: 'm-pp-mode', addLabel: 'Agregar pieza',
+    fields: [
+      { id:'m-pp-producto', col:'producto', required:true },
+      { id:'m-pp-pieza', col:'pieza', required:true }
+    ],
+    renderCols: r => [r.producto, r.pieza],
+    onChange
+  });
+
+  poblarDatalistProductosMaestro();
 }

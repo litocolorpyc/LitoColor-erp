@@ -6,7 +6,8 @@ import { setNote } from './helpers.js';
 export const DB = {
   personal: [], maquinas: [], actividades: [], pedidos: [], produccion: [],
   materias_primas: [], clientes: [], proveedores: [], opp_ordenes: [], opp_piezas: [],
-  productos: [], costos_conceptos: [], costos_movimientos: [], tintas_colores: []
+  productos: [], costos_conceptos: [], costos_movimientos: [], insumos_area: [],
+  piezas_producto: [], presupuesto_orden: [], recibos_caja: []
 };
 
 export function normProd(r){
@@ -52,12 +53,16 @@ export async function loadCatalogos(){
     sb.from('productos').select('*').order('nombre'),
     sb.from('costos_conceptos').select('*').order('tipo'),
     sb.from('costos_movimientos').select('*').order('fecha', { ascending: false }),
-    sb.from('tintas_colores').select('*').order('nombre')
+    sb.from('insumos_area').select('*').order('area'),
+    sb.from('piezas_producto').select('*').order('producto'),
+    sb.from('presupuesto_orden').select('*'),
+    sb.from('recibos_caja').select('*').order('cargado_en', { ascending: false }).limit(100)
   ]);
-  const [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11] = results;
+  const [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14] = results;
   // Solo personal/maquinas/actividades/pedidos son indispensables para arrancar.
-  // Las tablas más nuevas (materias_primas, clientes, proveedores) pueden no
-  // existir todavía si no se ha corrido el SQL más reciente — no rompen el arranque.
+  // Las tablas más nuevas (materias_primas, clientes, proveedores, insumos_area)
+  // pueden no existir todavía si no se ha corrido el SQL más reciente — no
+  // rompen el arranque.
   const erroresCriticos = [p1.error, p2.error, p3.error, p4.error].filter(Boolean);
   if(erroresCriticos.length){
     console.error(erroresCriticos);
@@ -74,7 +79,10 @@ export async function loadCatalogos(){
   DB.productos = p8.data || [];
   DB.costos_conceptos = p9.data || [];
   DB.costos_movimientos = p10.data || [];
-  DB.tintas_colores = p11.data || [];
+  DB.insumos_area = p11.data || [];
+  DB.piezas_producto = p12.data || [];
+  DB.presupuesto_orden = p13.data || [];
+  DB.recibos_caja = p14.data || [];
 }
 
 export async function loadProduccion(){

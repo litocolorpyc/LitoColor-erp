@@ -1,6 +1,10 @@
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
 import { toast, fmtNum, exportarExcel } from './helpers.js';
+import { getCurrentUser } from './auth.js';
+import { poblarDatalistProveedores } from './costos.js';
+
+const ROLES_REORDENAN_PRIORIDAD = ['admin', 'gerente', 'jefe_produccion'];
 
 let oppPiezaCount = 0;
 let editingOrden = null; // si no es null, Guardar actualiza esa orden en vez de crear una nueva
@@ -233,6 +237,17 @@ export function populateProductoSelect(){
 
 const cacheCombinaciones = new Map(); // producto -> filas (para no repetir la consulta)
 
+// Sugiere en el campo "Nombre de la pieza" las piezas que ya se han usado
+// antes para el producto elegido (sigue siendo texto libre — si no está en
+// la lista, se puede escribir y queda registrada al guardar la orden).
+function refreshPiezasDatalist(){
+  const dl = document.getElementById('opp-piezas-datalist');
+  if(!dl) return;
+  const producto = document.getElementById('opp-producto')?.value || '';
+  const piezas = DB.piezas_producto.filter(pp => pp.producto === producto && pp.activo !== false);
+  dl.innerHTML = piezas.map(pp => `<option value="${pp.pieza}">`).join('');
+}
+
 async function renderProductoRef(){
   const nombre = document.getElementById('opp-producto').value;
   const cont = document.getElementById('opp-producto-ref');
@@ -330,6 +345,7 @@ function costoAcumulado(orden){
 // ---------- render: tablas y tableros ----------
 export function renderOppRecent(){
   renderOppLista(DB.opp_ordenes.slice(0, 20));
+  renderPrioridadOrdenes();
   renderEstadoOrdenes();
   renderOrdenesVivas();
   renderRadarHistorico();
@@ -366,6 +382,97 @@ function renderOppLista(rows){
   document.querySelectorAll('#tbl-opp-recent [data-cancel]').forEach(b => b.addEventListener('click', () => cancelarOrden(parseInt(b.dataset.cancel,10))));
 }
 function fmtCOPlocal(n){ if(n==null||isNaN(n)) return '—'; return '$' + Math.round(n).toLocaleString('es-CO'); }
+
+// ---------- prioridad de producción (arrastrar y soltar) ----------
+// Menor prioridad = se muestra más arriba = se debe trabajar primero.
+// Solo gerente/jefe de producción pueden reordenar; los demás solo ven la lista.
+let prioridadDragOrden = null; // número de orden que se está arrastrando ahora mismo
+
+function puedeReordenarPrioridad(){
+  const user = getCurrentUser();
+  return !!user && ROLES_REORDENAN_PRIORIDAD.includes(user.rol);
+}
+
+// Mismo grupo de roles (gerente/jefe de producción/admin) también puede
+// cargar y editar el presupuesto de una orden.
+function puedeEditarPresupuesto(){
+  return puedeReordenarPrioridad();
+}
+
+function renderPrioridadOrdenes(){
+  const cont = document.getElementById('opp-prioridad-list');
+  if(!cont) return;
+  const activas = DB.opp_ordenes
+    .filter(o => o.estado !== 'Cerrada' && o.estado !== 'Cancelada')
+    .sort((a,b) => (a.prioridad ?? 999999) - (b.prioridad ?? 999999));
+
+  const puedeArrastrar = puedeReordenarPrioridad();
+  document.getElementById('opp-prioridad-hint').textContent = puedeArrastrar
+    ? 'Arrastra las filas (⠿) para cambiar el orden en que se deben trabajar.'
+    : 'Solo el gerente o el jefe de producción pueden cambiar este orden.';
+
+  if(!activas.length){
+    cont.innerHTML = '<p style="color:var(--ink-faint);font-size:13px">No hay órdenes activas para priorizar.</p>';
+    return;
+  }
+
+  cont.innerHTML = activas.map((o, i) => {
+    const estado = estadoOrden(o);
+    return `<div class="prioridad-row" data-orden="${o.orden}" draggable="${puedeArrastrar}">
+      <span class="prioridad-handle">${puedeArrastrar ? '⠿' : '·'}</span>
+      <span class="prioridad-num">${i + 1}</span>
+      <span class="prioridad-info"><b>Orden ${o.orden}</b> — ${o.cliente || '—'} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></span>
+      ${estadoBadgeHTML(estado)}
+    </div>`;
+  }).join('');
+
+  if(!puedeArrastrar) return;
+
+  cont.querySelectorAll('.prioridad-row').forEach(row => {
+    row.addEventListener('dragstart', () => {
+      prioridadDragOrden = parseInt(row.dataset.orden, 10);
+      row.classList.add('dragging');
+    });
+    row.addEventListener('dragend', () => {
+      row.classList.remove('dragging');
+      persistirPrioridad();
+    });
+    row.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      const enCurso = cont.querySelector('.dragging');
+      if(!enCurso || enCurso === row) return;
+      const rect = row.getBoundingClientRect();
+      const despuesDelPunto = (e.clientY - rect.top) > rect.height / 2;
+      row.parentNode.insertBefore(enCurso, despuesDelPunto ? row.nextSibling : row);
+    });
+  });
+}
+
+// Toma el orden visual actual del panel, le asigna 1..N, actualiza en
+// memoria y guarda en Supabase. Se llama al soltar una fila.
+async function persistirPrioridad(){
+  const cont = document.getElementById('opp-prioridad-list');
+  if(!cont) return;
+  const ordenIds = Array.from(cont.querySelectorAll('.prioridad-row')).map(r => parseInt(r.dataset.orden, 10));
+  const cambios = [];
+  ordenIds.forEach((ordenId, i) => {
+    const nuevaPrioridad = i + 1;
+    const o = DB.opp_ordenes.find(x => x.orden === ordenId);
+    if(o && o.prioridad !== nuevaPrioridad){
+      o.prioridad = nuevaPrioridad;
+      cambios.push({ orden: ordenId, prioridad: nuevaPrioridad });
+    }
+  });
+  renderPrioridadOrdenes(); // repinta ya con los números 1..N correctos
+  if(!cambios.length) return;
+  try{
+    await Promise.all(cambios.map(c => sb.from('opp_ordenes').update({ prioridad: c.prioridad }).eq('orden', c.orden)));
+    toast('Prioridad actualizada');
+  }catch(err){
+    console.error(err);
+    toast('No se pudo guardar el nuevo orden de prioridad — intenta de nuevo');
+  }
+}
 
 // par etiqueta/valor para la ficha técnica del detalle de orden — se omite si no hay valor
 function filaFicha(label, value){
@@ -458,6 +565,61 @@ export function renderRadarHistorico(){
 let chartDetalle = null;
 let ordenDetalleActual = null; // recuerda qué orden está abierta en el detalle, para el botón de imprimir
 
+// ---------- presupuesto vs. real, por orden ----------
+function comparativoPresupuestoHTML(pres, costoReal, ingresoReal){
+  const totalCosto = (pres.total_costo != null) ? pres.total_costo : ((pres.costo || 0) + (pres.imprevistos || 0));
+  const desviacion = totalCosto ? costoReal - totalCosto : null;
+  const desviacionPct = totalCosto ? (desviacion / totalCosto * 100) : null;
+  const margenEsperado = (pres.precio_venta_antes_iva != null && totalCosto != null) ? pres.precio_venta_antes_iva - totalCosto : null;
+  const margenReal = (pres.precio_venta_antes_iva != null) ? pres.precio_venta_antes_iva - costoReal : null;
+
+  return [
+    filaFicha('Costo total presupuestado', totalCosto ? fmtCOPlocal(totalCosto) : ''),
+    filaFicha('Costo real (mano de obra)', fmtCOPlocal(costoReal)),
+    filaFicha('Desviación de costo', desviacion != null ? `${fmtCOPlocal(desviacion)} (${fmtNum(desviacionPct,1)}%)` : ''),
+    filaFicha('Ingreso facturado real', ingresoReal ? fmtCOPlocal(ingresoReal) : ''),
+    filaFicha('Rentabilidad esperada', pres.rentabilidad_esperada_pct != null ? fmtNum(pres.rentabilidad_esperada_pct,1) + '%' : ''),
+    filaFicha('Margen esperado (presupuesto)', margenEsperado != null ? fmtCOPlocal(margenEsperado) : ''),
+    filaFicha('Margen real estimado (vs. costo real)', margenReal != null ? fmtCOPlocal(margenReal) : '')
+  ].join('') || '<p class="card-hint">Sin presupuesto cargado todavía para esta orden.</p>';
+}
+
+function wirePresupuestoOrden(orden, costoReal, ingresoReal){
+  const btn = document.getElementById('pres-guardar');
+  if(!btn) return; // usuario sin permiso de edición — solo lectura
+  btn.addEventListener('click', async () => {
+    const costoVal = parseFloat(document.getElementById('pres-costo').value) || 0;
+    const imprevistosVal = parseFloat(document.getElementById('pres-imprevistos').value) || 0;
+    const precioSinIva = parseFloat(document.getElementById('pres-precio-sin-iva').value) || null;
+    const precioConIva = parseFloat(document.getElementById('pres-precio-con-iva').value) || null;
+    const totalCosto = costoVal + imprevistosVal;
+    const rentabilidadPct = (precioSinIva && totalCosto) ? ((precioSinIva - totalCosto) / precioSinIva * 100) : null;
+
+    const payload = {
+      orden, costo: costoVal, imprevistos: imprevistosVal, total_costo: totalCosto,
+      precio_venta_antes_iva: precioSinIva, precio_con_iva: precioConIva,
+      rentabilidad_esperada_pct: rentabilidadPct, actualizado_en: new Date().toISOString()
+    };
+
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    try{
+      const { error } = await sb.from('presupuesto_orden').upsert([payload]).select();
+      if(error) throw error;
+      const idx = DB.presupuesto_orden.findIndex(p => p.orden === orden);
+      if(idx >= 0) DB.presupuesto_orden[idx] = payload; else DB.presupuesto_orden.push(payload);
+      document.getElementById('pres-comparativo').innerHTML = comparativoPresupuestoHTML(payload, costoReal, ingresoReal);
+      const hint = document.getElementById('pres-guardado-hint');
+      if(hint) hint.textContent = 'Presupuesto guardado ✓';
+      toast('Presupuesto de la orden ' + orden + ' guardado');
+    }catch(err){
+      console.error(err);
+      toast('No se pudo guardar el presupuesto — revisa la consola');
+    }finally{
+      btn.disabled = false; btn.textContent = 'Guardar presupuesto';
+    }
+  });
+}
+
 function ingresoDeOrden(orden){
   return DB.pedidos.filter(p => p.orden === orden).reduce((s,p)=>s+(p.total||0),0);
 }
@@ -539,6 +701,10 @@ export function mostrarDetalleOrden(orden){
     </div>`;
   }).join('') || '<p class="card-hint">Esta orden no tiene piezas registradas (probablemente migrada del histórico sin detalle de OPP).</p>';
 
+  const pres = DB.presupuesto_orden.find(p => p.orden === orden) || {};
+  const puedeEditar = puedeEditarPresupuesto();
+  const dis = puedeEditar ? '' : 'disabled';
+
   document.getElementById('opp-detalle-body').innerHTML = `
     <div class="kpi-row" style="margin-bottom:16px">
       <div class="kpi"><div class="lbl">Estado</div><div class="val" style="font-size:16px">${o.cliente||'—'}</div><div class="sub">${o.producto||''} · ${(o.fecha||'').slice(0,10)}</div></div>
@@ -548,8 +714,25 @@ export function mostrarDetalleOrden(orden){
     </div>
     ${areas.length ? '<canvas id="chart-detalle-area" height="90" style="margin-bottom:16px"></canvas>' : ''}
     ${o.observaciones ? `<div class="detalle-orden-obs"><b>Observaciones de la orden:</b> ${o.observaciones}</div>` : ''}
+
+    <div class="card presupuesto-card" style="margin:0 0 16px">
+      <div class="card-head"><h3>Presupuesto vs. Real</h3><span class="card-hint">${puedeEditar ? 'como lo entrega el gerente a producción' : 'solo gerente/jefe de producción pueden editar estos valores'}</span></div>
+      <div class="form-row">
+        <div class="field"><label>Costo</label><input type="number" id="pres-costo" min="0" ${dis} value="${pres.costo ?? ''}"></div>
+        <div class="field"><label>Imprevistos</label><input type="number" id="pres-imprevistos" min="0" ${dis} value="${pres.imprevistos ?? ''}"></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>Precio venta antes de IVA</label><input type="number" id="pres-precio-sin-iva" min="0" ${dis} value="${pres.precio_venta_antes_iva ?? ''}"></div>
+        <div class="field"><label>Precio con IVA</label><input type="number" id="pres-precio-con-iva" min="0" ${dis} value="${pres.precio_con_iva ?? ''}"></div>
+      </div>
+      ${puedeEditar ? `<div class="form-foot"><span id="pres-guardado-hint" class="card-hint"></span><button type="button" class="btn-primary" id="pres-guardar">Guardar presupuesto</button></div>` : ''}
+      <div class="detalle-ficha-grid" id="pres-comparativo" style="margin-top:12px">${comparativoPresupuestoHTML(pres, costo, ingreso)}</div>
+    </div>
+
     <div class="detalle-piezas-grid">${piezasHTML}</div>
   `;
+
+  wirePresupuestoOrden(orden, costo, ingreso);
 
   if(areas.length){
     const el = document.getElementById('chart-detalle-area');
@@ -670,6 +853,7 @@ function resetOppForm(nextOrden){
   oppPiezaCount = 0;
   document.getElementById('opp-cliente').value = '';
   document.getElementById('opp-producto').value = '';
+  refreshPiezasDatalist();
   document.getElementById('opp-cliente-nuevo-wrap').style.display = 'none';
   document.getElementById('opp-producto-nuevo-wrap').style.display = 'none';
   document.getElementById('opp-producto-ref').style.display = 'none';
@@ -694,6 +878,7 @@ function loadOrdenParaEditar(orden){
   setValSafe('opp-tipo-trabajo', o.tipo_trabajo || 'Litografia');
   aplicarTipoTrabajo();
   renderProductoRef();
+  refreshPiezasDatalist();
 
   document.getElementById('opp-piezas-list').innerHTML = '';
   oppPiezaCount = 0;
@@ -718,6 +903,7 @@ function duplicarOrden(orden){
   setValSafe('opp-tipo-trabajo', o.tipo_trabajo || 'Litografia');
   aplicarTipoTrabajo();
   renderProductoRef();
+  refreshPiezasDatalist();
 
   document.getElementById('opp-piezas-list').innerHTML = '';
   oppPiezaCount = 0;
@@ -766,6 +952,9 @@ async function saveOpp(){
       const { error: errDel } = await sb.from('opp_piezas').delete().eq('orden', orden);
       if(errDel) throw errDel;
     } else {
+      // orden nueva: entra de última en la prioridad de producción
+      const maxPrioridad = DB.opp_ordenes.reduce((max, o) => Math.max(max, o.prioridad || 0), 0);
+      cabecera.prioridad = maxPrioridad + 1;
       const { error: errIns } = await sb.from('opp_ordenes').insert([cabecera]);
       if(errIns) throw errIns;
     }
@@ -830,6 +1019,11 @@ async function saveOpp(){
     DB.opp_ordenes = o1 || [];
     DB.opp_piezas = o2 || [];
 
+    // Registra automáticamente en los maestros lo que se usó por primera vez
+    // (piezas nuevas para este producto, proveedores nuevos) — así la próxima
+    // vez ya aparecen sugeridos, sin tener que ir a Maestros a crearlos antes.
+    await registrarPiezasYProveedoresNuevos(cabecera.producto, piezasPayload);
+
     resetOppForm(suggestNextOrden());
     renderOppRecent();
   }catch(err){
@@ -838,6 +1032,41 @@ async function saveOpp(){
     toast('Error al guardar la orden: ' + detalle);
   }finally{
     btn.disabled = false; btn.textContent = 'Guardar orden completa';
+  }
+}
+
+// Después de guardar una orden, registra en los maestros lo que se usó por
+// primera vez: combinaciones producto+pieza nuevas, y proveedores nuevos
+// escritos a mano en la ficha simplificada.
+async function registrarPiezasYProveedoresNuevos(producto, piezasPayload){
+  try{
+    if(producto){
+      const nombresUnicos = [...new Set(piezasPayload.map(p => p.pieza).filter(Boolean))];
+      const nuevas = nombresUnicos.filter(nombre =>
+        !DB.piezas_producto.some(pp => pp.producto === producto && pp.pieza.toLowerCase() === nombre.toLowerCase())
+      );
+      if(nuevas.length){
+        const payload = nuevas.map(pieza => ({ producto, pieza }));
+        const { data } = await sb.from('piezas_producto').insert(payload).select();
+        if(data) DB.piezas_producto.push(...data);
+      }
+    }
+
+    const proveedoresUsados = [...new Set(piezasPayload.map(p => p.proveedor).filter(Boolean))];
+    const nuevosProveedores = proveedoresUsados.filter(nombre =>
+      !DB.proveedores.some(pv => pv.nombre.toLowerCase() === nombre.toLowerCase())
+    );
+    if(nuevosProveedores.length){
+      const payload = nuevosProveedores.map(nombre => ({ nombre }));
+      const { data } = await sb.from('proveedores').insert(payload).select();
+      if(data){
+        DB.proveedores.push(...data);
+        poblarDatalistProveedores();
+      }
+    }
+  }catch(err){
+    // no bloquea el guardado de la orden si esto falla — solo se pierde la sugerencia automática
+    console.warn('No se pudieron registrar piezas/proveedores nuevos en los maestros:', err);
   }
 }
 
@@ -883,9 +1112,10 @@ function setValSafe(id, valor){
 export function initOppForm(){
   populateClienteSelect();
   populateProductoSelect();
+  poblarDatalistProveedores();
   wireNuevoInline('opp-cliente', 'opp-cliente-nuevo-wrap', 'opp-cliente-nuevo-nombre', 'opp-cliente-nuevo-add', 'clientes', c => DB.clientes.push(c));
   wireNuevoInline('opp-producto', 'opp-producto-nuevo-wrap', 'opp-producto-nuevo-nombre', 'opp-producto-nuevo-add', 'productos', p => DB.productos.push(p));
-  on('opp-producto', 'change', renderProductoRef);
+  on('opp-producto', 'change', () => { renderProductoRef(); refreshPiezasDatalist(); });
   on('opp-tipo-trabajo', 'change', aplicarTipoTrabajo);
   resetOppForm();
   on('opp-add-pieza', 'click', () => addPiezaCard());
