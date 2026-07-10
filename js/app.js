@@ -8,10 +8,9 @@ import { initCalendario, renderCalendario } from './calendario.js';
 import { initAlertas, renderAlertas } from './alertas.js';
 import { initCostos, poblarDatalistProveedores } from './costos.js';
 import { restaurarSesion, iniciarSesion, cerrarSesion, cambiarContrasena, crearCuentaPropia, getCurrentUser, aplicarPermisos } from './auth.js';
-import { initAyudaGlobal } from './helpers.js';
 
 // ---------- pestañas ----------
-document.querySelectorAll('.tab-btn[data-tab]').forEach(btn=>{
+document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
     document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
@@ -21,21 +20,33 @@ document.querySelectorAll('.tab-btn[data-tab]').forEach(btn=>{
 });
 
 function onRegistrarChange(){
-  renderGerencial();
-  renderProduccion();
-  renderOperario();
-  renderOppRecent();
-  renderCalendario();
-  renderAlertas();
+  pasoSeguro('refrescar Gerencial', renderGerencial);
+  pasoSeguro('refrescar Producción', renderProduccion);
+  pasoSeguro('refrescar Operario', renderOperario);
+  pasoSeguro('refrescar Órdenes', renderOppRecent);
+  pasoSeguro('refrescar Calendario', renderCalendario);
+  pasoSeguro('refrescar Alertas', renderAlertas);
 }
 
 function onMaestrosChange(){
-  populateReg();          // refresca selects del reloj checador (empleados/máquinas)
-  populateOperarioSelect(); // refresca el selector de la pestaña Operario
-  populateClienteSelect();
-  populateProductoSelect();
-  refreshPapelPliegoSelects();
-  poblarDatalistProveedores();
+  pasoSeguro('refrescar selects Registrar', populateReg);
+  pasoSeguro('refrescar select Operario', populateOperarioSelect);
+  pasoSeguro('refrescar select Cliente', populateClienteSelect);
+  pasoSeguro('refrescar select Producto', populateProductoSelect);
+  pasoSeguro('refrescar Papel/Pliego', refreshPapelPliegoSelects);
+  pasoSeguro('refrescar Proveedores', poblarDatalistProveedores);
+}
+
+// Corre cada paso de arranque de forma aislada: si uno falla (por ejemplo,
+// un HTML desactualizado que le falta un campo nuevo a algún módulo), el
+// error queda en la consola pero el resto de la app sigue funcionando en
+// vez de quedarse a medio cargar.
+function pasoSeguro(nombre, fn){
+  try{
+    fn();
+  }catch(e){
+    console.error('Error arrancando "' + nombre + '":', e);
+  }
 }
 
 async function arrancarApp(){
@@ -51,23 +62,22 @@ async function arrancarApp(){
     return; // el error ya quedó mostrado por setNote dentro de loadAll
   }
 
-  populateOperarioSelect();
-  initDashboardFilters();
-  renderGerencial();
-  renderProduccion();
-  renderOperario();
+  pasoSeguro('Operario select', populateOperarioSelect);
+  pasoSeguro('Filtros dashboard', initDashboardFilters);
+  pasoSeguro('Gerencial', renderGerencial);
+  pasoSeguro('Producción', renderProduccion);
+  pasoSeguro('Operario', renderOperario);
 
-  initRegistrar(onRegistrarChange);
-  initOppForm();
-  renderOppRecent();
-  initMaestros(onMaestrosChange);
-  initUsuarios();
-  initCalendario();
-  initAlertas();
-  initCostos();
+  pasoSeguro('Registrar', () => initRegistrar(onRegistrarChange));
+  pasoSeguro('Órdenes (formulario)', initOppForm);
+  pasoSeguro('Órdenes (tablas)', renderOppRecent);
+  pasoSeguro('Maestros', () => initMaestros(onMaestrosChange));
+  pasoSeguro('Usuarios', initUsuarios);
+  pasoSeguro('Calendario', initCalendario);
+  pasoSeguro('Alertas', initAlertas);
+  pasoSeguro('Costos', initCostos);
 
-  initAyudaGlobal();
-  aplicarPermisos();
+  pasoSeguro('Permisos', aplicarPermisos);
 }
 
 function wireLogin(){

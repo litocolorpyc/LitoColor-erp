@@ -13,6 +13,25 @@ function calcPorPliego(pliegoW, pliegoH, piezaW, piezaH){
   return Math.max(a, b);
 }
 
+const HINT_TIPO_TRABAJO = {
+  'Litografia': '',
+  'Impresión Digital': 'Ficha simplificada: no requiere pliego ni imposición.',
+  'Gran Formato': 'Ficha simplificada: banners, pendones, vinilos, etc.',
+  'Servicio de Impresión Externo': 'Ficha simplificada: trabajo que se subcontrata con un proveedor.',
+  'Trabajo Externo': 'Ficha simplificada: cualquier trabajo que no es de planta propia.'
+};
+
+function aplicarTipoTrabajo(){
+  const tipoSel = document.getElementById('opp-tipo-trabajo');
+  const piezasList = document.getElementById('opp-piezas-list');
+  if(!tipoSel || !piezasList) return;
+  const tipo = tipoSel.value;
+  const esLitografia = tipo === 'Litografia';
+  piezasList.classList.toggle('tipo-otros', !esLitografia);
+  const hint = document.getElementById('opp-tipo-trabajo-hint');
+  if(hint) hint.textContent = HINT_TIPO_TRABAJO[tipo] || '';
+}
+
 export function refreshPapelPliegoSelects(){
   document.querySelectorAll('#opp-piezas-list .opp-pieza-card').forEach(node => {
     populatePapelSelect(node);
@@ -20,13 +39,9 @@ export function refreshPapelPliegoSelects(){
   });
 }
 
-function distinctPliegos(){
-  const set = new Set();
-  DB.materias_primas.forEach(m => {
-    if(m.pliego_ancho && m.pliego_alto) set.add(m.pliego_ancho + 'x' + m.pliego_alto);
-  });
-  return Array.from(set).sort();
-}
+// Tamaños de pliego que maneja la planta. 70x100 es el más usado, por eso
+// queda seleccionado por defecto en cada pieza nueva.
+const PLIEGOS_PERMITIDOS = ['70x100', '60x90'];
 
 function populatePapelSelect(node){
   const sel = node.querySelector('.f-papel');
@@ -41,15 +56,9 @@ function populatePapelSelect(node){
 function populatePliegoSelect(node){
   const sel = node.querySelector('.f-pliego');
   const valorPrevio = sel.value;
-  const pliegos = distinctPliegos();
-  sel.innerHTML = pliegos.map(p => `<option value="${p}">${p.replace('x',' x ')} cm</option>`).join('') || '<option value="">— sin papeles con pliego definido —</option>';
-  if(valorPrevio) ensureOptionExists(sel, valorPrevio);
-}
-
-function populateListaColores(){
-  const dl = document.getElementById('lista-colores');
-  if(!dl) return;
-  dl.innerHTML = (DB.tintas_colores || []).map(c => `<option value="${c.nombre}">`).join('');
+  sel.innerHTML = PLIEGOS_PERMITIDOS.map(p => `<option value="${p}">${p.replace('x',' x ')} cm</option>`).join('');
+  // si ya tenía un valor válido lo respeta; si no, cae en 70x100 (el más usado)
+  sel.value = (valorPrevio && PLIEGOS_PERMITIDOS.includes(valorPrevio)) ? valorPrevio : '70x100';
 }
 
 function addPiezaCard(prefill){
@@ -82,8 +91,7 @@ function addPiezaCard(prefill){
   node.querySelector('.f-papel').addEventListener('change', () => {
     const opt = node.querySelector('.f-papel').selectedOptions[0];
     const pliego = opt && opt.dataset.pliego;
-    if(pliego){
-      ensureOptionExists(node.querySelector('.f-pliego'), pliego);
+    if(pliego && PLIEGOS_PERMITIDOS.includes(pliego)){
       node.querySelector('.f-pliego').value = pliego;
     }
     recalcPieza(node);
@@ -101,11 +109,12 @@ function fillPiezaCard(node, p){
   node.querySelector('.f-tam-ancho').value = p.tamano_ancho ?? '';
   node.querySelector('.f-tam-alto').value = p.tamano_alto ?? '';
   ensureOptionExists(node.querySelector('.f-papel'), p.papel || '');
-  if(p.pliego_ancho && p.pliego_alto) ensureOptionExists(node.querySelector('.f-pliego'), p.pliego_ancho + 'x' + p.pliego_alto);
+  if(p.pliego_ancho && p.pliego_alto){
+    const pliegoGuardado = p.pliego_ancho + 'x' + p.pliego_alto;
+    node.querySelector('.f-pliego').value = PLIEGOS_PERMITIDOS.includes(pliegoGuardado) ? pliegoGuardado : '70x100';
+  }
   node.querySelector('.f-tintas-frente').value = p.tintas_frente ?? 4;
   node.querySelector('.f-tintas-atras').value = p.tintas_atras ?? 0;
-  node.querySelector('.f-colores-frente').value = p.colores_frente || '';
-  node.querySelector('.f-colores-atras').value = p.colores_atras || '';
   node.querySelector('.f-ctp').value = p.ctp || 'Convencional';
   node.querySelector('.f-tira').value = p.tira_retira || 'Tira y retira';
   node.querySelector('.f-laminado').value = p.laminado || '';
@@ -115,6 +124,11 @@ function fillPiezaCard(node, p){
   node.querySelector('.f-troquel-detalle').value = p.troquel_detalle || '';
   node.querySelector('.f-talonarios').checked = !!p.talonarios;
   node.querySelector('.f-otros').value = p.otros_acabados || '';
+  const otrosSimple = node.querySelector('.f-otros-simple');
+  if(otrosSimple) otrosSimple.value = p.otros_acabados || '';
+  const prov = node.querySelector('.f-proveedor'); if(prov) prov.value = p.proveedor || '';
+  const costoExt = node.querySelector('.f-costo-externo'); if(costoExt) costoExt.value = p.costo_externo ?? '';
+  const fechaEnt = node.querySelector('.f-fecha-entrega'); if(fechaEnt) fechaEnt.value = (p.fecha_entrega_estimada || '').slice(0,10);
   node.querySelector('.f-unidades-montaje').value = p.unidades_por_montaje || 1;
   const ma = node.querySelector('.f-medida-ancho'), mal = node.querySelector('.f-medida-alto');
   ma.value = p.medida_tamano_ancho ?? ''; ma.dataset.touched = '1';
@@ -321,6 +335,10 @@ export function renderOppRecent(){
   renderRadarHistorico();
 }
 
+function tipoTrabajoLabel(o){
+  return o.tipo_trabajo === 'Litografia' ? 'Litografía' : (o.tipo_trabajo || 'Litografía');
+}
+
 function renderOppLista(rows){
   const conteo = {};
   DB.opp_piezas.forEach(p => { conteo[p.orden] = (conteo[p.orden] || 0) + 1; });
@@ -328,7 +346,9 @@ function renderOppLista(rows){
     const estado = estadoOrden(o);
     const costo = costoAcumulado(o.orden);
     return `<tr>
-      <td>${o.orden}</td><td>${o.cliente || '—'}</td><td>${o.producto || '—'}</td>
+      <td>${o.orden}</td><td>${o.cliente || '—'}</td>
+      <td><span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></td>
+      <td>${o.producto || '—'}</td>
       <td class="num">${conteo[o.orden] || 0}</td><td>${(o.fecha || '').slice(0,10)}</td>
       <td>${estadoBadgeHTML(estado)}</td><td class="num">${fmtCOPlocal(costo)}</td>
       <td><div class="row-actions">
@@ -338,7 +358,7 @@ function renderOppLista(rows){
         ${o.estado!=='Cancelada' ? `<button type="button" class="row-btn row-btn-danger" data-cancel="${o.orden}">Cancelar</button>` : ''}
       </div></td>
     </tr>`;
-  }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--ink-faint)">Sin órdenes registradas</td></tr>';
+  }).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--ink-faint)">Sin órdenes registradas</td></tr>';
 
   document.querySelectorAll('#tbl-opp-recent [data-detalle]').forEach(b => b.addEventListener('click', () => mostrarDetalleOrden(parseInt(b.dataset.detalle,10))));
   document.querySelectorAll('#tbl-opp-recent [data-edit]').forEach(b => b.addEventListener('click', () => loadOrdenParaEditar(parseInt(b.dataset.edit,10))));
@@ -346,6 +366,12 @@ function renderOppLista(rows){
   document.querySelectorAll('#tbl-opp-recent [data-cancel]').forEach(b => b.addEventListener('click', () => cancelarOrden(parseInt(b.dataset.cancel,10))));
 }
 function fmtCOPlocal(n){ if(n==null||isNaN(n)) return '—'; return '$' + Math.round(n).toLocaleString('es-CO'); }
+
+// par etiqueta/valor para la ficha técnica del detalle de orden — se omite si no hay valor
+function filaFicha(label, value){
+  if(value === null || value === undefined || value === '' || value === false) return '';
+  return `<div class="ficha-item"><span class="ficha-lbl">${label}</span><span class="ficha-val">${value}</span></div>`;
+}
 
 export function renderOrdenesVivas(){
   const tbody = document.querySelector('#tbl-ordenes-vivas tbody');
@@ -361,12 +387,12 @@ export function renderOrdenesVivas(){
       const pendientes = requeridos.filter(a => !completados.has(a));
       if(pendientes.length){
         const pct = Math.round(((requeridos.length - pendientes.length) / requeridos.length) * 100);
-        filas.push({ orden: o.orden, op: p.op || (o.orden + '-' + p.suborden), cliente: o.cliente, producto: o.producto, pieza: p.pieza || ('Pieza ' + p.suborden), pct });
+        filas.push({ orden: o.orden, cliente: o.cliente, producto: o.producto, pieza: p.pieza || ('Pieza ' + p.suborden), pct });
       }
     });
   });
   filas.sort((a,b) => b.orden - a.orden);
-  tbody.innerHTML = filas.map(f => `<tr><td>${f.op}</td><td>${f.cliente || '—'}</td><td>${f.producto || '—'}</td><td>${f.pieza}</td><td class="num">${f.pct}%</td></tr>`).join('')
+  tbody.innerHTML = filas.map(f => `<tr><td>${f.orden}</td><td>${f.cliente || '—'}</td><td>${f.producto || '—'}</td><td>${f.pieza}</td><td class="num">${f.pct}%</td></tr>`).join('')
     || '<tr><td colspan="5" style="text-align:center;color:var(--ink-faint)">No hay órdenes con procesos pendientes</td></tr>';
 }
 
@@ -391,7 +417,7 @@ export function renderEstadoOrdenes(){
         return `<span class="estado-chip ${done ? 'done' : 'pending'}">${done ? '✓' : '·'} ${a}</span>`;
       }).join('');
       return `<div class="estado-pieza-row">
-        <span class="estado-pieza-nombre"><b>${p.op || (o.orden + '-' + p.suborden)}</b> · ${p.pieza || ('Pieza ' + p.suborden)}</span>
+        <span class="estado-pieza-nombre">${p.pieza || ('Pieza ' + p.suborden)}</span>
         <div class="estado-bar-wrap"><div class="estado-bar-fill" style="width:${pct}%"></div></div>
         ${chips}
       </div>`;
@@ -430,6 +456,7 @@ export function renderRadarHistorico(){
 }
 
 let chartDetalle = null;
+let ordenDetalleActual = null; // recuerda qué orden está abierta en el detalle, para el botón de imprimir
 
 function ingresoDeOrden(orden){
   return DB.pedidos.filter(p => p.orden === orden).reduce((s,p)=>s+(p.total||0),0);
@@ -444,7 +471,8 @@ export function mostrarDetalleOrden(orden){
   const ingreso = ingresoDeOrden(orden);
   const costo = registros.reduce((s,r)=>s+(r.valorActividad||0),0);
 
-  document.getElementById('opp-detalle-titulo').textContent = `Orden ${orden} — ${o.cliente || ''}`;
+  document.getElementById('opp-detalle-titulo').textContent = `Orden ${orden} — ${o.cliente || ''} · ${tipoTrabajoLabel(o)}`;
+  ordenDetalleActual = orden;
 
   // ---- horas por área de TODA la orden, para el gráfico ----
   const areaMap = {};
@@ -459,6 +487,32 @@ export function mostrarDetalleOrden(orden){
 
     const materiales = [...new Set(recsPieza.map(r => [r.materiaPrima, r.consumoMP].filter(Boolean).join(' — ')).filter(Boolean))];
 
+    const ficha = [
+      filaFicha('OP', p.op),
+      filaFicha('Tamaño terminado', (p.tamano_ancho || p.tamano_alto) ? `${fmtNum(p.tamano_ancho,1)} x ${fmtNum(p.tamano_alto,1)} cm` : ''),
+      filaFicha('Papel', p.papel),
+      filaFicha('Pliego', (p.pliego_ancho && p.pliego_alto) ? `${p.pliego_ancho} x ${p.pliego_alto} cm` : ''),
+      filaFicha('Tintas frente/atrás', p.tintas_frente != null ? `${p.tintas_frente} x ${p.tintas_atras || 0}` : ''),
+      filaFicha('CTP', p.ctp),
+      filaFicha('Impresión', p.tira_retira),
+      filaFicha('Laminado', p.laminado ? `${p.laminado}${p.laminado_lados ? ' · ' + p.laminado_lados + ' lado(s)' : ''}` : ''),
+      filaFicha('Barniz UV', p.barniz_uv ? 'Sí' : ''),
+      filaFicha('Troquelado', p.troquelado ? (p.troquel_detalle || 'Sí') : ''),
+      filaFicha('Talonarios', p.talonarios ? 'Sí' : ''),
+      filaFicha('Otros acabados', p.otros_acabados),
+      filaFicha('Diagrama de corte', p.diagrama_corte),
+      filaFicha('Unidades por montaje', p.unidades_por_montaje),
+      filaFicha('Tamaños solicitados', p.tamanos_solicitados != null ? fmtNum(p.tamanos_solicitados,0) : ''),
+      filaFicha('Tamaños programados', p.tamanos_programados != null ? fmtNum(p.tamanos_programados,0) : ''),
+      filaFicha('Medida con margen', (p.medida_tamano_ancho || p.medida_tamano_alto) ? `${fmtNum(p.medida_tamano_ancho,1)} x ${fmtNum(p.medida_tamano_alto,1)} cm` : ''),
+      filaFicha('Tamaños por pliego', p.tamanos_por_pliego != null ? fmtNum(p.tamanos_por_pliego,0) : ''),
+      filaFicha('Pliegos necesarios', p.pliegos != null ? fmtNum(p.pliegos,0) : ''),
+      filaFicha('Proveedor / quién lo realiza', p.proveedor),
+      filaFicha('Costo del servicio', p.costo_externo != null ? fmtCOPlocal(p.costo_externo) : ''),
+      filaFicha('Fecha de entrega estimada', p.fecha_entrega_estimada ? (p.fecha_entrega_estimada||'').slice(0,10) : ''),
+      filaFicha('Notas', p.notas)
+    ].join('');
+
     const porOperarioMaquina = {};
     recsPieza.forEach(r => {
       const k = (r.operario||'—') + ' · ' + (r.maquina || 'Manual');
@@ -472,9 +526,10 @@ export function mostrarDetalleOrden(orden){
 
     return `<div class="detalle-pieza-card">
       <div class="detalle-pieza-head">
-        <b>${p.op || (orden + '-' + p.suborden)} · ${p.pieza || ('Pieza ' + p.suborden)}</b>
-        <span class="card-hint">${p.cantidad ? fmtNum(p.cantidad,0)+' uds' : ''} ${p.papel ? '· '+p.papel : ''} ${p.tintas_frente!=null ? '· Tintas '+p.tintas_frente+'x'+(p.tintas_atras||0) : ''}</span>
+        <b>${p.pieza || ('Pieza ' + p.suborden)}</b>
+        <span class="card-hint">${p.cantidad ? fmtNum(p.cantidad,0)+' uds solicitadas' : ''}</span>
       </div>
+      <div class="detalle-ficha-grid">${ficha}</div>
       <div class="detalle-pieza-chips">${chips}</div>
       ${materiales.length ? `<div class="detalle-pieza-materiales"><b>Materiales consumidos:</b> ${materiales.join(' · ')}</div>` : ''}
       <table class="detalle-mini-table">
@@ -492,6 +547,7 @@ export function mostrarDetalleOrden(orden){
       <div class="kpi"><div class="lbl">Margen</div><div class="val ${ingreso-costo>=0?'pos':'neg'}">${fmtCOPlocal(ingreso-costo)}</div><div class="sub">${estadoBadgeHTML(estado)}</div></div>
     </div>
     ${areas.length ? '<canvas id="chart-detalle-area" height="90" style="margin-bottom:16px"></canvas>' : ''}
+    ${o.observaciones ? `<div class="detalle-orden-obs"><b>Observaciones de la orden:</b> ${o.observaciones}</div>` : ''}
     <div class="detalle-piezas-grid">${piezasHTML}</div>
   `;
 
@@ -507,216 +563,106 @@ export function mostrarDetalleOrden(orden){
   document.getElementById('opp-detalle-card').scrollIntoView({ behavior:'smooth' });
 }
 
+// ---------- imprimir la orden (para cuando no hay pantalla a mano en planta) ----------
+export function imprimirOrdenActual(){
+  if(ordenDetalleActual == null){ toast('Primero abre el detalle de una orden'); return; }
+  imprimirDetalleOrden(ordenDetalleActual);
+}
+
+export function imprimirDetalleOrden(orden){
+  const o = DB.opp_ordenes.find(x => x.orden === orden);
+  if(!o) return;
+  const piezas = DB.opp_piezas.filter(p => p.orden === orden).sort((a,b)=>a.suborden-b.suborden);
+  const registros = DB.produccion.filter(r => r.orden === orden);
+  const estado = estadoOrden(o);
+
+  const piezasHTML = piezas.map(p => {
+    const recsPieza = registros.filter(r => r.op === p.op || (r.suborden === p.suborden));
+    const requeridos = Array.isArray(p.procesos_requeridos) ? p.procesos_requeridos : [];
+    const completados = areasCompletadasPorPieza(p);
+    const procesosTxt = requeridos.map(a => `${completados.has(a) ? '✓' : '☐'} ${a}`).join('&nbsp;&nbsp;&nbsp;') || 'sin procesos definidos';
+    const materiales = [...new Set(recsPieza.map(r => [r.materiaPrima, r.consumoMP].filter(Boolean).join(' — ')).filter(Boolean))];
+
+    const porOM = {};
+    recsPieza.forEach(r => {
+      const k = (r.operario||'—') + ' · ' + (r.maquina || 'Manual');
+      porOM[k] = porOM[k] || { horas:0, cantidad:0 };
+      porOM[k].horas += (r.tiempoHr||0);
+      porOM[k].cantidad += (r.cantidad||0);
+    });
+    const filasOM = Object.entries(porOM).map(([k,v]) =>
+      `<tr><td>${k}</td><td>${fmtNum(v.horas,2)}</td><td>${fmtNum(v.cantidad,0)}</td></tr>`
+    ).join('') || '<tr><td colspan="3">Sin registros de producción aún</td></tr>';
+
+    const ficha = [
+      ['OP', p.op],
+      ['Tamaño terminado', (p.tamano_ancho || p.tamano_alto) ? `${fmtNum(p.tamano_ancho,1)} x ${fmtNum(p.tamano_alto,1)} cm` : ''],
+      ['Papel', p.papel],
+      ['Pliego', (p.pliego_ancho && p.pliego_alto) ? `${p.pliego_ancho} x ${p.pliego_alto} cm` : ''],
+      ['Tintas frente/atrás', p.tintas_frente != null ? `${p.tintas_frente} x ${p.tintas_atras || 0}` : ''],
+      ['CTP', p.ctp],
+      ['Impresión', p.tira_retira],
+      ['Laminado', p.laminado ? `${p.laminado}${p.laminado_lados ? ' · ' + p.laminado_lados + ' lado(s)' : ''}` : ''],
+      ['Barniz UV', p.barniz_uv ? 'Sí' : ''],
+      ['Troquelado', p.troquelado ? (p.troquel_detalle || 'Sí') : ''],
+      ['Talonarios', p.talonarios ? 'Sí' : ''],
+      ['Otros acabados', p.otros_acabados],
+      ['Diagrama de corte', p.diagrama_corte],
+      ['Unidades por montaje', p.unidades_por_montaje],
+      ['Tamaños solicitados', p.tamanos_solicitados != null ? fmtNum(p.tamanos_solicitados,0) : ''],
+      ['Tamaños programados', p.tamanos_programados != null ? fmtNum(p.tamanos_programados,0) : ''],
+      ['Medida con margen', (p.medida_tamano_ancho || p.medida_tamano_alto) ? `${fmtNum(p.medida_tamano_ancho,1)} x ${fmtNum(p.medida_tamano_alto,1)} cm` : ''],
+      ['Tamaños por pliego', p.tamanos_por_pliego != null ? fmtNum(p.tamanos_por_pliego,0) : ''],
+      ['Pliegos necesarios', p.pliegos != null ? fmtNum(p.pliegos,0) : ''],
+      ['Proveedor / quién lo realiza', p.proveedor],
+      ['Costo del servicio', p.costo_externo != null ? fmtCOPlocal(p.costo_externo) : ''],
+      ['Fecha de entrega estimada', p.fecha_entrega_estimada ? (p.fecha_entrega_estimada||'').slice(0,10) : ''],
+      ['Notas', p.notas]
+    ].filter(([,v]) => v !== null && v !== undefined && v !== '' && v !== false)
+     .map(([l,v]) => `<tr><td class="lbl">${l}</td><td>${v}</td></tr>`).join('');
+
+    return `<div class="pieza-print">
+      <h3>${p.pieza || ('Pieza ' + p.suborden)}${p.cantidad ? ' — ' + fmtNum(p.cantidad,0) + ' uds' : ''}</h3>
+      <table class="ficha-print"><tbody>${ficha}</tbody></table>
+      <p class="procesos-print"><b>Procesos:</b> ${procesosTxt}</p>
+      ${materiales.length ? `<p class="materiales-print"><b>Materiales consumidos:</b> ${materiales.join(' · ')}</p>` : ''}
+      <table class="om-print">
+        <thead><tr><th>Operario · Máquina</th><th>Horas</th><th>Cantidad</th></tr></thead>
+        <tbody>${filasOM}</tbody>
+      </table>
+    </div>`;
+  }).join('') || '<p>Esta orden no tiene piezas registradas (probablemente migrada del histórico sin detalle de OPP).</p>';
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<title>Orden ${orden} — ${o.cliente || ''}</title>
+<style>
+  body{ font-family: Arial, Helvetica, sans-serif; color:#111; margin:20px; }
+  h1{ font-size:20px; margin:0 0 2px; }
+  .sub{ color:#444; font-size:13px; margin-bottom:16px; }
+  h3{ font-size:15px; margin:16px 0 6px; border-bottom:1px solid #999; padding-bottom:3px; }
+  table{ border-collapse:collapse; width:100%; margin-bottom:8px; font-size:12px; }
+  td, th{ border:1px solid #ccc; padding:4px 6px; text-align:left; }
+  .ficha-print td.lbl{ color:#555; width:38%; }
+  .procesos-print, .materiales-print{ font-size:12px; margin:4px 0; }
+  .pieza-print{ page-break-inside: avoid; margin-bottom:14px; }
+  @media print{ body{ margin:10mm; } }
+</style>
+</head><body>
+  <h1>Orden de producción ${orden}</h1>
+  <div class="sub">${o.cliente || '—'} ${o.producto ? '· ' + o.producto : ''} · ${tipoTrabajoLabel(o)} · ${(o.fecha||'').slice(0,10)} · Estado: ${estado.label}${estado.pct!=null ? ' (' + estado.pct + '%)' : ''}</div>
+  ${o.observaciones ? `<p><b>Observaciones:</b> ${o.observaciones}</p>` : ''}
+  ${piezasHTML}
+</body></html>`;
+
+  const w = window.open('', '_blank');
+  if(!w){ toast('El navegador bloqueó la ventana de impresión — permite ventanas emergentes para este sitio'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 300);
+}
+
 // ---------- crear / editar / duplicar / cancelar ----------
-// ============================================================
-// IMPORTAR ORDEN DESDE EXCEL
-// Lee un archivo .xlsx con el formato "formulario" que usa
-// producción (bloques de columnas repetidos, uno por pieza) y
-// llena el formulario de arriba — NO guarda nada solo, siempre
-// hay que revisar y darle click a "Guardar orden completa".
-// ============================================================
-
-function normalizarTexto(s){
-  return String(s == null ? '' : s).trim().toLowerCase().replace(/\s+/g, ' ');
-}
-
-// Busca la primera fila (desde `desde`) donde alguna de las primeras
-// columnas contenga una de las etiquetas dadas (ej. "Cliente", "Orden").
-// No asume en qué columna exacta está la etiqueta porque cambia de un
-// archivo a otro según cómo estén combinadas las celdas.
-function buscarFila(grid, etiquetas, desde = 0){
-  const objetivo = etiquetas.map(normalizarTexto);
-  for(let i = desde; i < grid.length; i++){
-    const fila = grid[i] || [];
-    for(let c = 0; c < Math.min(fila.length, 5); c++){
-      if(objetivo.includes(normalizarTexto(fila[c]))) return i;
-    }
-  }
-  return -1;
-}
-
-function valorCelda(grid, fila, col){
-  if(fila < 0 || col < 0) return null;
-  const v = (grid[fila] || [])[col];
-  return (v === undefined || v === '') ? null : v;
-}
-
-function leerArchivoComoGrid(file){
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try{
-        const wb = XLSX.read(e.target.result, { type: 'array' });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        resolve(XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true }));
-      }catch(err){ reject(err); }
-    };
-    reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
-    reader.readAsArrayBuffer(file);
-  });
-}
-
-// Detecta en qué columnas empieza cada "bloque" (cada pieza/suborden)
-// usando la fila de "Orden" como referencia: cada valor numérico en
-// esa fila marca el inicio de un bloque de 3 columnas.
-function columnasDeBloque(grid, filaOrden){
-  const fila = grid[filaOrden] || [];
-  const cols = [];
-  for(let c = 0; c < fila.length; c++){
-    const v = fila[c];
-    if(v !== null && v !== '' && !isNaN(parseFloat(v))) cols.push(c);
-  }
-  return cols;
-}
-
-function extraerPiezasDelGrid(grid){
-  const filaOrden = buscarFila(grid, ['Orden']);
-  if(filaOrden === -1){
-    throw new Error('No encontré la fila "Orden" en el archivo. ¿Es el formato de orden de producción que usa planta?');
-  }
-  const cols = columnasDeBloque(grid, filaOrden);
-  if(!cols.length){
-    throw new Error('Encontré la fila "Orden" pero no logré leer ningún número de orden en ella.');
-  }
-
-  const filaCliente = buscarFila(grid, ['Cliente']);
-  const filaSuborden = buscarFila(grid, ['SubOrden', 'Sub Orden', 'Sub orden']);
-  const filaProducto = buscarFila(grid, ['Producto']);
-  const filaPieza = buscarFila(grid, ['Piezas', 'Pieza']);
-  const filaCantidad = buscarFila(grid, ['Cantidad']);
-  const filaTamano = buscarFila(grid, ['Tamaño', 'Tamano']);
-  const filaPapel = buscarFila(grid, ['Papel']);
-  const filaTintas = buscarFila(grid, ['Tintas']);
-  const filaCtp = buscarFila(grid, ['Ctp']);
-  const filaLaminados = buscarFila(grid, ['Laminados']);
-  const filaBarniz = buscarFila(grid, ['Barniz UV']);
-  const filaTroquelado = buscarFila(grid, ['Troquelado']);
-  const filaTroquel = buscarFila(grid, ['Troquel']);
-  const filaTalonarios = buscarFila(grid, ['Talonarios']);
-  const filaOtros = buscarFila(grid, ['Otros']);
-  const filaUnidadesMontaje = buscarFila(grid, ['Unidades Por Montaje', 'Unidades por Montaje']);
-  const filaTamProgramados = buscarFila(grid, ['Tamaños Programados', 'Tamanos Programados']);
-  const filaMedidas = buscarFila(grid, ['Medidas Tamaño', 'Medida Tamaño', 'Medidas Tamano']);
-  const filaTamPorPliego = buscarFila(grid, ['Tamaños por pliego', 'Tamanos por pliego']);
-
-  const bloques = cols.map(c => {
-    const otrosLineas = [];
-    if(filaOtros !== -1){
-      for(let r = filaOtros; r < filaOtros + 3 && r < grid.length; r++){
-        const v = valorCelda(grid, r, c);
-        if(v) otrosLineas.push(String(v).trim());
-      }
-    }
-    return {
-      cliente: valorCelda(grid, filaCliente, c),
-      orden: valorCelda(grid, filaOrden, c),
-      suborden: valorCelda(grid, filaSuborden, c),
-      producto: valorCelda(grid, filaProducto, c),
-      pieza: valorCelda(grid, filaPieza, c),
-      cantidad: valorCelda(grid, filaCantidad, c),
-      tamano_ancho: valorCelda(grid, filaTamano, c),
-      tamano_alto: valorCelda(grid, filaTamano, c + 2),
-      papel: valorCelda(grid, filaPapel, c),
-      tintas_frente: valorCelda(grid, filaTintas, c),
-      tintas_atras: valorCelda(grid, filaTintas, c + 2),
-      ctp: valorCelda(grid, filaCtp, c) || 'Convencional',
-      laminado: valorCelda(grid, filaLaminados, c),
-      laminado_lados: valorCelda(grid, filaLaminados, c + 2),
-      barniz_uv: !!valorCelda(grid, filaBarniz, c),
-      troquelado: !!valorCelda(grid, filaTroquelado, c),
-      troquel_detalle: (() => {
-        const n = valorCelda(grid, filaTroquel, c + 2);
-        return n ? `${n} troquel(es)` : null;
-      })(),
-      talonarios: !!valorCelda(grid, filaTalonarios, c),
-      otros_acabados: otrosLineas.length ? otrosLineas.join(', ') : null,
-      unidades_por_montaje: valorCelda(grid, filaUnidadesMontaje, c) || 1,
-      tamanos_programados: valorCelda(grid, filaTamProgramados, c),
-      medida_tamano_ancho: valorCelda(grid, filaMedidas, c),
-      medida_tamano_alto: valorCelda(grid, filaMedidas, c + 2),
-      tamanos_por_pliego: valorCelda(grid, filaTamPorPliego, c)
-    };
-  }).filter(b => b.orden != null && !isNaN(parseFloat(b.orden)));
-
-  return bloques;
-}
-
-// Llena el formulario con las piezas ya interpretadas — el usuario
-// sigue teniendo que revisar y darle "Guardar orden completa".
-function aplicarImportacion(ordenNum, piezas){
-  editingOrden = null;
-  document.getElementById('opp-form-mode').textContent = 'Importado desde Excel — revisa los datos antes de guardar';
-  document.getElementById('opp-orden').value = ordenNum;
-  document.getElementById('opp-orden').disabled = false;
-  document.getElementById('opp-fecha').value = new Date().toISOString().slice(0, 10);
-
-  const cliente = piezas[0] && piezas[0].cliente ? String(piezas[0].cliente).trim() : '';
-  ensureOptionExists(document.getElementById('opp-cliente'), cliente);
-
-  const producto = piezas[0] && piezas[0].producto ? String(piezas[0].producto).trim() : '';
-  ensureOptionExists(document.getElementById('opp-producto'), producto);
-  renderProductoRef();
-
-  document.getElementById('opp-piezas-list').innerHTML = '';
-  oppPiezaCount = 0;
-  piezas.forEach(p => addPiezaCard({
-    pieza: p.pieza ? String(p.pieza).trim() : '',
-    cantidad: p.cantidad,
-    tamano_ancho: p.tamano_ancho,
-    tamano_alto: p.tamano_alto,
-    papel: p.papel ? String(p.papel).trim() : '',
-    tintas_frente: p.tintas_frente,
-    tintas_atras: p.tintas_atras,
-    ctp: p.ctp,
-    laminado: p.laminado,
-    laminado_lados: p.laminado_lados,
-    barniz_uv: p.barniz_uv,
-    troquelado: p.troquelado,
-    troquel_detalle: p.troquel_detalle,
-    talonarios: p.talonarios,
-    otros_acabados: p.otros_acabados,
-    unidades_por_montaje: p.unidades_por_montaje,
-    medida_tamano_ancho: p.medida_tamano_ancho,
-    medida_tamano_alto: p.medida_tamano_alto,
-    tamanos_por_pliego: p.tamanos_por_pliego,
-    tamanos_programados: p.tamanos_programados
-  }));
-
-  toast(`Se leyeron ${piezas.length} pieza(s) de la orden ${ordenNum} — revísalas antes de guardar`);
-  document.getElementById('panel-ordenes').scrollIntoView({ behavior: 'smooth' });
-}
-
-async function importarOrdenExcel(file){
-  const grid = await leerArchivoComoGrid(file);
-  const bloques = extraerPiezasDelGrid(grid);
-  if(!bloques.length){
-    throw new Error('No encontré ninguna pieza reconocible en el archivo.');
-  }
-
-  const ordenesDistintas = [...new Set(bloques.map(b => Math.round(parseFloat(b.orden))))];
-  let ordenElegida = ordenesDistintas[0];
-
-  if(ordenesDistintas.length > 1){
-    const resp = prompt(
-      'Este archivo tiene varias órdenes: ' + ordenesDistintas.join(', ') +
-      '.\nEscribe cuál quieres importar (se importa una a la vez):',
-      ordenesDistintas[0]
-    );
-    if(resp == null) return; // el usuario canceló
-    ordenElegida = parseInt(resp, 10);
-    if(!ordenesDistintas.includes(ordenElegida)){
-      toast('Ese número de orden no está en el archivo');
-      return;
-    }
-  }
-
-  const piezas = bloques
-    .filter(b => Math.round(parseFloat(b.orden)) === ordenElegida)
-    .sort((a, b) => (parseFloat(a.suborden) || 0) - (parseFloat(b.suborden) || 0));
-
-  aplicarImportacion(ordenElegida, piezas);
-}
-
 function resetOppForm(nextOrden){
   editingOrden = null;
   document.getElementById('opp-form-mode').textContent = 'Creando una orden nueva';
@@ -730,6 +676,8 @@ function resetOppForm(nextOrden){
   document.getElementById('opp-orden').value = nextOrden != null ? nextOrden : suggestNextOrden();
   document.getElementById('opp-orden').disabled = false;
   document.getElementById('opp-fecha').value = new Date().toISOString().slice(0,10);
+  setValSafe('opp-tipo-trabajo', 'Litografia');
+  aplicarTipoTrabajo();
   addPiezaCard();
 }
 
@@ -743,6 +691,8 @@ function loadOrdenParaEditar(orden){
   ensureOptionExists(document.getElementById('opp-cliente'), o.cliente || '');
   ensureOptionExists(document.getElementById('opp-producto'), o.producto || '');
   document.getElementById('opp-fecha').value = (o.fecha || '').slice(0,10) || new Date().toISOString().slice(0,10);
+  setValSafe('opp-tipo-trabajo', o.tipo_trabajo || 'Litografia');
+  aplicarTipoTrabajo();
   renderProductoRef();
 
   document.getElementById('opp-piezas-list').innerHTML = '';
@@ -765,6 +715,8 @@ function duplicarOrden(orden){
   ensureOptionExists(document.getElementById('opp-cliente'), o.cliente || '');
   ensureOptionExists(document.getElementById('opp-producto'), o.producto || '');
   document.getElementById('opp-fecha').value = new Date().toISOString().slice(0,10);
+  setValSafe('opp-tipo-trabajo', o.tipo_trabajo || 'Litografia');
+  aplicarTipoTrabajo();
   renderProductoRef();
 
   document.getElementById('opp-piezas-list').innerHTML = '';
@@ -799,10 +751,13 @@ async function saveOpp(){
 
   btn.disabled = true; btn.textContent = 'Guardando…';
   try{
+    const tipoTrabajo = document.getElementById('opp-tipo-trabajo')?.value || 'Litografia';
+    const esLitografia = tipoTrabajo === 'Litografia';
     const cabecera = {
       orden, cliente,
       producto: document.getElementById('opp-producto').value.trim() || null,
-      fecha: document.getElementById('opp-fecha').value
+      fecha: document.getElementById('opp-fecha').value,
+      tipo_trabajo: tipoTrabajo
     };
 
     if(editingOrden === orden){
@@ -815,36 +770,37 @@ async function saveOpp(){
       if(errIns) throw errIns;
     }
 
-    // Colores nuevos que se hayan escrito a mano se suman solos al catálogo
-    // (igual que ya pasa con Clientes/Productos nuevos)
-    const coloresEscritos = new Set();
-    cards.forEach(node => {
-      [node.querySelector('.f-colores-frente').value.trim(), node.querySelector('.f-colores-atras').value.trim()]
-        .filter(Boolean)
-        .forEach(c => coloresEscritos.add(c));
-    });
-    const coloresNuevos = Array.from(coloresEscritos).filter(c => !DB.tintas_colores.some(t => t.nombre === c));
-    if(coloresNuevos.length){
-      const { data: insertados } = await sb.from('tintas_colores').insert(coloresNuevos.map(nombre => ({ nombre }))).select();
-      if(insertados) DB.tintas_colores.push(...insertados);
-      populateListaColores();
-    }
-
     const piezasPayload = Array.from(cards).map((node, i) => {
-      const pliego = node.querySelector('.f-pliego').value.split('x').map(Number);
       const suborden = i + 1;
-      return {
+      const base = {
         orden, suborden, op: orden + '-' + suborden,
         pieza: node.querySelector('.f-pieza').value.trim() || null,
         cantidad: parseFloat(node.querySelector('.f-cantidad').value) || null,
+        procesos_requeridos: Array.from(node.querySelectorAll('.f-proc:checked')).map(cb => cb.value)
+      };
+
+      if(!esLitografia){
+        // ficha simplificada: nada de imposición/pliego, solo lo relevante
+        // para Impresión Digital, Gran Formato, Servicio de Impresión
+        // Externo o Trabajo Externo.
+        return {
+          ...base,
+          proveedor: node.querySelector('.f-proveedor')?.value.trim() || null,
+          costo_externo: parseFloat(node.querySelector('.f-costo-externo')?.value) || null,
+          fecha_entrega_estimada: node.querySelector('.f-fecha-entrega')?.value || null,
+          otros_acabados: node.querySelector('.f-otros-simple')?.value.trim() || null
+        };
+      }
+
+      const pliego = node.querySelector('.f-pliego').value.split('x').map(Number);
+      return {
+        ...base,
         tamano_ancho: parseFloat(node.querySelector('.f-tam-ancho').value) || null,
         tamano_alto: parseFloat(node.querySelector('.f-tam-alto').value) || null,
         papel: node.querySelector('.f-papel').value.trim() || null,
         pliego_ancho: pliego[0] || null, pliego_alto: pliego[1] || null,
         tintas_frente: parseInt(node.querySelector('.f-tintas-frente').value) || 0,
         tintas_atras: parseInt(node.querySelector('.f-tintas-atras').value) || 0,
-        colores_frente: node.querySelector('.f-colores-frente').value.trim() || null,
-        colores_atras: node.querySelector('.f-colores-atras').value.trim() || null,
         ctp: node.querySelector('.f-ctp').value,
         tira_retira: node.querySelector('.f-tira').value,
         laminado: node.querySelector('.f-laminado').value || null,
@@ -860,8 +816,7 @@ async function saveOpp(){
         medida_tamano_ancho: parseFloat(node.querySelector('.f-medida-ancho').value) || null,
         medida_tamano_alto: parseFloat(node.querySelector('.f-medida-alto').value) || null,
         tamanos_por_pliego: parseFloat(node.querySelector('.f-tam-por-pliego').value) || null,
-        pliegos: parseFloat(node.querySelector('.f-pliegos-result').textContent.replace(/\./g,'')) || null,
-        procesos_requeridos: Array.from(node.querySelectorAll('.f-proc:checked')).map(cb => cb.value)
+        pliegos: parseFloat(node.querySelector('.f-pliegos-result').textContent.replace(/\./g,'')) || null
       };
     });
 
@@ -879,7 +834,8 @@ async function saveOpp(){
     renderOppRecent();
   }catch(err){
     console.error(err);
-    toast('Error al guardar la orden — revisa la consola');
+    const detalle = (err && (err.message || err.details || err.hint)) || 'revisa la consola';
+    toast('Error al guardar la orden: ' + detalle);
   }finally{
     btn.disabled = false; btn.textContent = 'Guardar orden completa';
   }
@@ -896,37 +852,71 @@ function filtrarOrdenes(){
   renderOppLista(filtradas.slice(0,50));
 }
 
+// Si el número que se escribió en "Orden N°" ya existe, carga esa orden
+// completa (cliente, producto y piezas) en modo edición automáticamente.
+function checkOrdenExistente(){
+  const input = document.getElementById('opp-orden');
+  const val = parseInt(input.value, 10);
+  if(!val || input.disabled) return; // disabled = ya está en modo edición, no repetir
+  const existe = DB.opp_ordenes.find(o => o.orden === val);
+  if(existe){
+    loadOrdenParaEditar(val);
+    toast('La orden ' + val + ' ya existe — cargada para editar');
+  }
+}
+
+// Conecta un evento de forma segura: si el elemento no existe en esta
+// página (por ejemplo un HTML desactualizado), avisa en consola pero NO
+// lanza una excepción — así una sola pieza faltante no bloquea todo lo
+// demás que venga después en initOppForm().
+function on(id, evento, handler){
+  const el = document.getElementById(id);
+  if(!el){ console.warn('[ordenes.js] No se encontró #' + id + ' — revisa que index.html esté actualizado.'); return; }
+  el.addEventListener(evento, handler);
+}
+
+function setValSafe(id, valor){
+  const el = document.getElementById(id);
+  if(el) el.value = valor;
+}
+
 export function initOppForm(){
   populateClienteSelect();
   populateProductoSelect();
-  populateListaColores();
   wireNuevoInline('opp-cliente', 'opp-cliente-nuevo-wrap', 'opp-cliente-nuevo-nombre', 'opp-cliente-nuevo-add', 'clientes', c => DB.clientes.push(c));
   wireNuevoInline('opp-producto', 'opp-producto-nuevo-wrap', 'opp-producto-nuevo-nombre', 'opp-producto-nuevo-add', 'productos', p => DB.productos.push(p));
-  document.getElementById('opp-producto').addEventListener('change', renderProductoRef);
+  on('opp-producto', 'change', renderProductoRef);
+  on('opp-tipo-trabajo', 'change', aplicarTipoTrabajo);
   resetOppForm();
-  document.getElementById('opp-add-pieza').addEventListener('click', () => addPiezaCard());
-  document.getElementById('opp-save').addEventListener('click', saveOpp);
-  document.getElementById('opp-reset').addEventListener('click', () => resetOppForm());
-  document.getElementById('opp-buscar').addEventListener('input', filtrarOrdenes);
-
-  const inputImportar = document.getElementById('opp-import-file');
-  document.getElementById('opp-import-btn').addEventListener('click', () => inputImportar.click());
-  inputImportar.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    e.target.value = ''; // para poder volver a elegir el mismo archivo después
-    if(!file) return;
-    try{
-      await importarOrdenExcel(file);
-    }catch(err){
-      console.error(err);
-      toast('No se pudo importar el Excel: ' + err.message);
-    }
-  });
-  document.getElementById('opp-detalle-cerrar').addEventListener('click', () => {
+  on('opp-add-pieza', 'click', () => addPiezaCard());
+  on('opp-save', 'click', saveOpp);
+  on('opp-reset', 'click', () => resetOppForm());
+  on('opp-buscar', 'input', filtrarOrdenes);
+  on('opp-detalle-cerrar', 'click', () => {
     document.getElementById('opp-detalle-card').style.display = 'none';
   });
-  const btnExport = document.getElementById('export-ordenes');
-  if(btnExport) btnExport.addEventListener('click', () => {
+  on('opp-detalle-imprimir', 'click', imprimirOrdenActual);
+  on('opp-orden', 'change', checkOrdenExistente);
+  on('opp-orden', 'blur', checkOrdenExistente);
+
+  // ---------- botón superior: consultar el detalle completo de cualquier orden ----------
+  const consultarBtn = document.getElementById('opp-consultar-btn');
+  const consultarInput = document.getElementById('opp-consultar-orden');
+  if(consultarBtn && consultarInput){
+    const ejecutarConsulta = () => {
+      const val = parseInt(consultarInput.value, 10);
+      if(!val){ toast('Escribe un número de orden'); return; }
+      const existe = DB.opp_ordenes.find(o => o.orden === val);
+      if(!existe){ toast('No existe una orden con ese número'); return; }
+      mostrarDetalleOrden(val);
+    };
+    consultarBtn.addEventListener('click', ejecutarConsulta);
+    consultarInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') ejecutarConsulta(); });
+  } else {
+    console.warn('[ordenes.js] No se encontró la tarjeta "Consultar orden" — revisa que index.html esté actualizado.');
+  }
+
+  on('export-ordenes', 'click', () => {
     const conteo = {};
     DB.opp_piezas.forEach(p => { conteo[p.orden] = (conteo[p.orden] || 0) + 1; });
     exportarExcel('LitoColor_ordenes.xlsx', [{
@@ -934,7 +924,7 @@ export function initOppForm(){
       filas: DB.opp_ordenes.map(o => {
         const estado = estadoOrden(o);
         return {
-          Orden: o.orden, Cliente: o.cliente, Producto: o.producto, Fecha: (o.fecha||'').slice(0,10),
+          Orden: o.orden, Cliente: o.cliente, Tipo: tipoTrabajoLabel(o), Producto: o.producto, Fecha: (o.fecha||'').slice(0,10),
           Piezas: conteo[o.orden] || 0, Estado: estado.label,
           'Avance %': estado.pct, 'Costo M.O.': costoAcumulado(o.orden)
         };
