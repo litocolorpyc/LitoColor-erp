@@ -266,6 +266,7 @@
 
         <div id="opp-piezas-list"></div>
         <datalist id="opp-piezas-datalist"></datalist>
+        <datalist id="opp-proveedores-datalist"></datalist>
 
         <button type="button" class="btn-secondary" id="opp-add-pieza">+ Agregar pieza</button>
 
@@ -366,7 +367,7 @@
 
         <div class="otros-tipos-only">
           <div class="form-row">
-            <div class="field"><label>Proveedor / quién lo realiza</label><input type="text" class="f-proveedor" list="rc-proveedor-list" placeholder="ej. Taller XYZ, propio con plotter, etc."></div>
+            <div class="field"><label>Proveedor / quién lo realiza <span class="card-hint" id="opp-proveedor-hint"></span></label><input type="text" class="f-proveedor" list="opp-proveedores-datalist" placeholder="ej. Taller XYZ, propio con plotter, etc."></div>
             <div class="field"><label>Costo del servicio</label><input type="number" class="f-costo-externo" min="0" placeholder="si se subcontrata"></div>
           </div>
           <div class="form-row">
@@ -754,17 +755,26 @@
           <li>Elige Área, Actividad y Máquina (o "Trabajo manual").</li>
           <li>Click en "▶ Iniciar actividad" — la hora la toma el sistema solo.</li>
         </ol>
-        <div class="help-tip"><b>Importante:</b> si no eliges la Pieza, tu tiempo se guarda pero NO se refleja en el avance de la orden.</div>
+        <div class="help-tip"><b>Importante:</b> ahora el sistema NO te deja iniciar sin elegir la Orden, y si esa orden tiene piezas cargadas, tampoco sin elegir la Pieza. Si intentas iniciar sin eso, el campo se pone en rojo y te avisa qué falta.</div>
+        <h4>Trabajo sin orden asignada</h4>
+        <p>Si vas a trabajar algo que todavía no tiene una orden formal (ej. una Impresión Digital suelta o un Servicio de Trabajo Externo rápido), marca la casilla <b>"Trabajo sin orden asignada"</b> — los campos Orden y Pieza se ocultan y aparece uno de "Cliente / concepto del trabajo" para que escribas de qué se trata. Sigue siendo obligatorio llenarlo.</p>
+        <h4>Insumo consumido</h4>
+        <p>En la tarjeta de la actividad en curso, "Insumo consumido" te muestra solo los insumos del <b>Área</b> que elegiste (ej. si trabajas en Litografía, te muestra planchas y tintas; si es Terminado, colbón y grapas). Si el insumo que usaste no aparece en la lista, elige <b>"Otro / no está en la lista…"</b> y escríbelo — igual queda registrado. Cuando el insumo tiene una unidad definida (kg, unidad, rollo…), el campo "Consumo" se vuelve un número y la unidad aparece sola al lado; si no, escribes libremente.</p>
         <h4>Finalizar</h4>
         <p>Busca la tarjeta en "Tus actividades en curso", llena la cantidad producida, y click en "⏹ Finalizar esta actividad". Puedes tener varias actividades corriendo a la vez. Si cierras la pantalla sin finalizar, no se pierde nada — al volver a elegir tu nombre, la actividad sigue ahí.</p>
       </div>
 
       <div class="card" id="ayuda-produccion">
         <div class="card-head"><h3>Para Jefe de Producción y Diseño</h3></div>
-        <h4>Órdenes</h4>
-        <p><b>Crear:</b> llena Orden, Cliente/Producto (listas desplegables, con "+ Nuevo…" si no existe), y cada Pieza con su tamaño, papel, tintas y acabados. Revisa los "Procesos requeridos" — definen el avance que se ve después.</p>
+        <h4>Tipo de trabajo</h4>
+        <p>Cada orden tiene un <b>"Tipo de trabajo"</b>: Litografía (el más usado, trae la ficha completa de papel/pliego/tintas/troquelado), o Impresión Digital, Gran Formato, Servicio de Impresión Externo y Trabajo Externo — estos 4 muestran una ficha simplificada (proveedor, costo del servicio, fecha de entrega) en vez de los campos de litografía, porque no aplican.</p>
+        <div class="help-tip"><b>Tip:</b> el campo "Proveedor" te sugiere primero los proveedores del tipo más relevante según el tipo de trabajo (ej. "Proveedor de Maquila" para Trabajo Externo) — pero puedes elegir cualquiera. Si escribes uno que no existe, se crea solo.</div>
+        <h4>Crear / Consultar una orden</h4>
+        <p><b>Crear:</b> llena Orden, Cliente/Producto (listas desplegables, con "+ Nuevo…" si no existe), y cada Pieza. Al elegir el Producto, "Nombre de la pieza" sugiere las piezas ya usadas antes para ese producto — si escribes una nueva, queda registrada sola para la próxima vez. El "Pliego" solo permite 70x100 (el más común, viene por defecto) o 60x90.</p>
+        <p><b>Si escribes el número de una orden que ya existe</b> en "Orden N°", el sistema la detecta sola y carga todo (cliente, producto, piezas) en modo edición — no hace falta ir a buscarla en la tabla.</p>
+        <p><b>Consultar orden:</b> arriba del todo en Órdenes hay una tarjeta para escribir cualquier número de orden y ver su detalle completo sin tener que buscarla en la tabla de abajo.</p>
         <p><b>Buscar/Editar/Duplicar/Cancelar:</b> en "Buscar y administrar órdenes". "Duplicar" crea una orden NUEVA con los mismos datos — útil cuando un cliente repite un pedido. "Cancelar" no borra historial, solo retira.</p>
-        <p><b>Ver detalle:</b> abre el desglose completo — gráfica de horas, materiales consumidos, y tiempos por operario/máquina, pieza por pieza.</p>
+        <p><b>Ver detalle:</b> muestra absolutamente todo — ficha técnica completa de cada pieza (tamaño, papel, tintas, corte, acabados…), procesos con su check, materiales consumidos, horas por operario/máquina, y el comparativo de Presupuesto vs. Real. Tiene un botón <b>"🖨 Imprimir"</b> para cuando no hay pantalla a mano en planta — abre una hoja limpia lista para imprimir.</p>
         <table>
           <thead><tr><th>Estado</th><th>Significa</th></tr></thead>
           <tbody>
@@ -774,6 +784,10 @@
             <tr><td>Cerrada / Cancelada</td><td>Histórica terminada / retirada</td></tr>
           </tbody>
         </table>
+        <h4>Prioridad de producción</h4>
+        <p>La tarjeta "Prioridad de producción" (arriba en Órdenes) muestra todas las órdenes activas en el orden en que se deben trabajar. Las órdenes nuevas siempre entran de últimas. <b>Solo Gerente, Jefe de Producción o Admin</b> pueden arrastrar las filas (ícono ⠿) para cambiar ese orden — los demás roles solo la ven.</p>
+        <h4>Materiales por área y Piezas por producto</h4>
+        <p>En Maestros encontrarás <b>"Materiales por área"</b> (qué insumo consume cada área — planchas en Litografía, colbón en Terminado, etc., usado en Registrar) y <b>"Piezas por producto"</b> (qué piezas suele tener cada producto — se completa sola, pero también se puede editar ahí directamente).</p>
         <h4>Calendario</h4>
         <p>Línea de tiempo por máquina (6am-8pm). Barras de color = actividad real; rayado = en curso ahora.</p>
         <h4>Alertas</h4>
@@ -782,12 +796,16 @@
 
       <div class="card" id="ayuda-admin">
         <div class="card-head"><h3>Para Administradora</h3></div>
-        <p>Todos los maestros (Empleados, Máquinas, Materias primas, Clientes, Proveedores, Productos) funcionan igual: llena el formulario y "Agregar"; "Editar" carga la fila para corregirla; "Retirar" desactiva sin borrar nada (y se puede "Reactivar").</p>
+        <p>Todos los maestros (Empleados, Máquinas, Materias primas, Materiales por área, Clientes, Proveedores, Productos, Piezas por producto) funcionan igual: llena el formulario y "Agregar"; "Editar" carga la fila para corregirla; "Retirar" desactiva sin borrar nada (y se puede "Reactivar").</p>
+        <p><b>Proveedores:</b> ahora tienen un campo "Tipo de proveedor" (ej. "Proveedor de Insumos", "Proveedor de Maquila") — es texto libre con sugerencias, no una lista cerrada. Vale la pena categorizar los que ya existen: eso hace que, al elegir un proveedor desde una orden, el sistema sugiera primero el tipo más relevante para ese trabajo.</p>
+        <p><b>Importar recibo de caja:</b> en Costos > Registrar un costo hay una tarjeta para subir el PDF del recibo de caja que descarga la administradora desde Siigo. El sistema intenta leer el número de recibo, fecha, NIT y cada línea automáticamente — siempre se revisa/corrige en una tabla antes de guardar, y por cada línea se puede elegir a qué orden se asocia y escribir una observación. <b>Solo funciona automático con el PDF real</b> (el que tiene texto, no una foto); con fotos o capturas, la tabla se llena a mano.</p>
       </div>
 
       <div class="card" id="ayuda-gerente">
         <div class="card-head"><h3>Para Gerente y Admin</h3></div>
-        <p><b>Gerencial:</b> ingresos, costo de mano de obra, margen — con comparación automática vs. el periodo anterior, filtros de fecha, y rentabilidad por orden y por tipo de producto.</p>
+        <p><b>Gerencial:</b> ingresos, costo de mano de obra, margen — con comparación automática vs. el periodo anterior, filtros de fecha, y rentabilidad por orden (la vista principal) y por producto (agrupada, para un rango de fechas).</p>
+        <p><b>Presupuesto vs. Real (por orden):</b> en el detalle de cada orden, solo Gerente/Jefe de Producción/Admin pueden cargar Costo, Imprevistos, Precio de venta antes y con IVA — el sistema calcula solo el Total Costo, la Rentabilidad esperada, y compara contra el costo real de mano de obra y el ingreso facturado.</p>
+        <p><b>Prioridad de producción:</b> desde Órdenes, arrastra las filas de la tarjeta "Prioridad de producción" para decidir en qué orden se debe trabajar — se guarda solo, sin botón aparte.</p>
         <p><b>Exportar:</b> casi toda tabla tiene "⬇ Exportar a Excel". El botón "⬇ Respaldo completo" descarga Pedidos, Producción, Órdenes, Empleados, Máquinas y Clientes en un solo archivo.</p>
         <p><b>Usuarios:</b> para dar acceso a alguien nuevo, ponle correo y rol ahí, y dile que use "¿Primera vez? Crea tu contraseña aquí" en el login — sin pedir ningún SQL.</p>
       </div>
@@ -798,10 +816,14 @@
           <tbody>
             <tr><td><b>OPP</b></td><td>Orden de Producción</td></tr>
             <tr><td><b>Pieza / Suborden</b></td><td>Cada componente de una orden (ej. carátula, interiores)</td></tr>
-            <tr><td><b>Pliego</b></td><td>Tamaño del papel completo antes de cortar</td></tr>
+            <tr><td><b>Pliego</b></td><td>Tamaño del papel completo antes de cortar (70x100 o 60x90)</td></tr>
             <tr><td><b>Tira y retira</b></td><td>Impreso en ambas caras</td></tr>
             <tr><td><b>Área</b></td><td>Etapa del proceso (Litografía, Guillotina, Troquelado…)</td></tr>
             <tr><td><b>Procesos requeridos</b></td><td>Áreas que una pieza debe pasar para estar terminada</td></tr>
+            <tr><td><b>Tipo de trabajo</b></td><td>Litografía, Impresión Digital, Gran Formato, Servicio de Impresión Externo o Trabajo Externo — define qué ficha usa la orden</td></tr>
+            <tr><td><b>Insumo por área</b></td><td>Lo que consume cada área al producir (planchas, colbón, grapas…), distinto del papel de la orden</td></tr>
+            <tr><td><b>Prioridad de producción</b></td><td>Orden en que se deben trabajar las órdenes activas — lo decide Gerente/Jefe de Producción arrastrando</td></tr>
+            <tr><td><b>Presupuesto de la orden</b></td><td>Costo, imprevistos y precio de venta que carga el gerente ANTES de producir, para comparar contra lo real</td></tr>
           </tbody>
         </table>
       </div>
@@ -810,6 +832,9 @@
         <div class="card-head"><h3>Preguntas frecuentes</h3></div>
         <p><b>No veo una pestaña que debería ver:</b> pide que revisen tu rol en "Usuarios".</p>
         <p><b>Capturé un tiempo y no se refleja en el avance:</b> probablemente no elegiste la "Pieza" al capturar, o el "Área" usada no está en los "Procesos requeridos" de esa pieza.</p>
+        <p><b>No puedo arrastrar las órdenes en "Prioridad de producción":</b> solo Gerente, Jefe de Producción o Admin pueden reordenar — los demás roles ven la lista pero no la mueven.</p>
+        <p><b>No veo los campos de "Presupuesto vs. Real" habilitados:</b> igual que la prioridad, solo Gerente/Jefe de Producción/Admin pueden editarlos — los demás roles los ven, pero bloqueados.</p>
+        <p><b>Subí una foto del recibo de caja y no leyó nada:</b> por ahora la lectura automática solo funciona con el PDF real descargado de Siigo (tiene texto adentro). Con fotos, se llena la tabla a mano.</p>
         <p><b>Olvidé mi contraseña:</b> pide a un Admin o Gerente que entre a "Usuarios" — todavía no hay recuperación automática.</p>
         <p><b>¿Los datos están seguros?</b> Sí — editar información exige sesión iniciada. Solo la captura de tiempos de operarios queda sin contraseña, a propósito.</p>
       </div>
