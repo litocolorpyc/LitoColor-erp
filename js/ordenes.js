@@ -25,6 +25,40 @@ const HINT_TIPO_TRABAJO = {
   'Trabajo Externo': 'Ficha simplificada: cualquier trabajo que no es de planta propia.'
 };
 
+// Qué tipo de proveedor tiene más sentido sugerir primero según el tipo de
+// trabajo de la orden. No es una restricción — solo ordena la lista para
+// que lo más probable aparezca de primero; cualquier proveedor se puede
+// elegir igual.
+const TIPO_PROVEEDOR_RELEVANTE = {
+  'Servicio de Impresión Externo': ['Proveedor de Maquila', 'Proveedor de Servicios'],
+  'Trabajo Externo': ['Proveedor de Maquila', 'Proveedor de Servicios'],
+  'Gran Formato': ['Proveedor de Maquila', 'Proveedor de Insumos'],
+  'Impresión Digital': ['Proveedor de Insumos', 'Proveedor de Maquila']
+};
+
+function refreshProveedoresDatalist(){
+  const dl = document.getElementById('opp-proveedores-datalist');
+  const hint = document.getElementById('opp-proveedor-hint');
+  if(!dl) return;
+  const tipo = document.getElementById('opp-tipo-trabajo')?.value || 'Litografia';
+  const relevantes = TIPO_PROVEEDOR_RELEVANTE[tipo] || [];
+
+  const activos = DB.proveedores.filter(p => p.activo !== false);
+  const ordenados = activos.slice().sort((a, b) => {
+    const ra = relevantes.indexOf(a.tipo_proveedor);
+    const rb = relevantes.indexOf(b.tipo_proveedor);
+    const pa = ra === -1 ? 99 : ra;
+    const pb = rb === -1 ? 99 : rb;
+    return pa - pb || a.nombre.localeCompare(b.nombre);
+  });
+
+  dl.innerHTML = ordenados.map(p =>
+    `<option value="${p.nombre}">${p.tipo_proveedor ? ' — ' + p.tipo_proveedor : ''}</option>`
+  ).join('');
+
+  if(hint) hint.textContent = relevantes.length ? `sugerido primero: ${relevantes.join(' / ')}` : '';
+}
+
 function aplicarTipoTrabajo(){
   const tipoSel = document.getElementById('opp-tipo-trabajo');
   const piezasList = document.getElementById('opp-piezas-list');
@@ -34,6 +68,7 @@ function aplicarTipoTrabajo(){
   piezasList.classList.toggle('tipo-otros', !esLitografia);
   const hint = document.getElementById('opp-tipo-trabajo-hint');
   if(hint) hint.textContent = HINT_TIPO_TRABAJO[tipo] || '';
+  refreshProveedoresDatalist();
 }
 
 export function refreshPapelPliegoSelects(){
@@ -1062,6 +1097,7 @@ async function registrarPiezasYProveedoresNuevos(producto, piezasPayload){
       if(data){
         DB.proveedores.push(...data);
         poblarDatalistProveedores();
+        refreshProveedoresDatalist();
       }
     }
   }catch(err){
