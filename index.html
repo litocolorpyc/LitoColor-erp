@@ -60,6 +60,7 @@
         <button class="tab-btn" data-tab="m-maquinas" role="tab">Máquinas</button>
         <button class="tab-btn" data-tab="m-materias" role="tab">Materias primas</button>
         <button class="tab-btn" data-tab="m-insumos" role="tab">Materiales por área</button>
+        <button class="tab-btn" data-tab="m-piezas-producto" role="tab">Piezas por producto</button>
         <button class="tab-btn" data-tab="m-clientes" role="tab">Clientes</button>
         <button class="tab-btn" data-tab="m-proveedores" role="tab">Proveedores</button>
         <button class="tab-btn" data-tab="m-productos" role="tab">Productos</button>
@@ -214,6 +215,11 @@
       </div>
 
       <div class="card">
+        <div class="card-head"><h3>Prioridad de producción</h3><span class="card-hint" id="opp-prioridad-hint"></span></div>
+        <div id="opp-prioridad-list"></div>
+      </div>
+
+      <div class="card">
         <div class="card-head"><h3>Orden de producción</h3><span class="card-hint" id="opp-form-mode">Creando una orden nueva</span></div>
         <div class="form-foot" style="margin-top:0;margin-bottom:14px">
           <span></span>
@@ -259,6 +265,7 @@
         <div id="opp-producto-ref" style="display:none;margin-bottom:14px"></div>
 
         <div id="opp-piezas-list"></div>
+        <datalist id="opp-piezas-datalist"></datalist>
 
         <button type="button" class="btn-secondary" id="opp-add-pieza">+ Agregar pieza</button>
 
@@ -311,7 +318,7 @@
         </div>
 
         <div class="form-row">
-          <div class="field"><label>Nombre de la pieza / trabajo</label><input type="text" class="f-pieza" placeholder="ej. Caratula"></div>
+          <div class="field"><label>Nombre de la pieza / trabajo</label><input type="text" class="f-pieza" list="opp-piezas-datalist" placeholder="ej. Caratula"></div>
           <div class="field"><label>Cantidad solicitada</label><input type="number" class="f-cantidad" min="0"></div>
         </div>
 
@@ -359,7 +366,7 @@
 
         <div class="otros-tipos-only">
           <div class="form-row">
-            <div class="field"><label>Proveedor / quién lo realiza</label><input type="text" class="f-proveedor" placeholder="ej. Taller XYZ, propio con plotter, etc."></div>
+            <div class="field"><label>Proveedor / quién lo realiza</label><input type="text" class="f-proveedor" list="rc-proveedor-list" placeholder="ej. Taller XYZ, propio con plotter, etc."></div>
             <div class="field"><label>Costo del servicio</label><input type="number" class="f-costo-externo" min="0" placeholder="si se subcontrata"></div>
           </div>
           <div class="form-row">
@@ -618,20 +625,29 @@
         <div class="card-head"><h3>Proveedores</h3><span class="card-hint">a quién le compran</span></div>
         <div class="form-row">
           <div class="field"><label>Nombre</label><input type="text" id="m-prov-nombre" placeholder="Razón social o nombre"></div>
+          <div class="field"><label>Tipo de proveedor</label><input type="text" id="m-prov-tipo" list="m-prov-tipo-list" placeholder="ej. Proveedor de Insumos"></div>
+        </div>
+        <datalist id="m-prov-tipo-list">
+          <option value="Proveedor de Insumos"></option>
+          <option value="Proveedor de Maquila"></option>
+          <option value="Proveedor de Materia Prima"></option>
+          <option value="Proveedor de Servicios"></option>
+        </datalist>
+        <div class="form-row">
           <div class="field"><label>NIT / identificación</label><input type="text" id="m-prov-nit" placeholder="opcional"></div>
-        </div>
-        <div class="form-row">
           <div class="field"><label>Teléfono</label><input type="text" id="m-prov-tel" placeholder="opcional"></div>
-          <div class="field"><label>Correo</label><input type="text" id="m-prov-email" placeholder="opcional"></div>
         </div>
         <div class="form-row">
+          <div class="field"><label>Correo</label><input type="text" id="m-prov-email" placeholder="opcional"></div>
           <div class="field"><label>Materiales que provee</label><input type="text" id="m-prov-materiales" placeholder="ej. Papel, tintas"></div>
+        </div>
+        <div class="form-row">
           <div class="field"><label>Ciudad</label><input type="text" id="m-prov-ciudad" placeholder="opcional"></div>
         </div>
         <div class="form-foot"><span id="m-prov-mode"></span><button type="button" class="btn-primary" id="m-prov-save">Agregar proveedor</button></div>
         <div class="table-wrap" style="margin-top:12px">
           <table id="tbl-m-proveedores">
-            <thead><tr><th>Nombre</th><th>Materiales</th><th>Teléfono</th><th>Ciudad</th><th></th></tr></thead>
+            <thead><tr><th>Nombre</th><th>Tipo</th><th>Materiales</th><th>Teléfono</th><th>Ciudad</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -649,6 +665,24 @@
         <div class="table-wrap" style="margin-top:12px">
           <table id="tbl-m-productos">
             <thead><tr><th>Nombre</th><th>Descripción</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-m-piezas-producto">
+      <div class="card">
+        <div class="card-head"><h3>Piezas por producto</h3><span class="card-hint">qué piezas suele tener cada producto — se completa sola cada vez que usas una pieza nueva en una orden, pero también puedes agregarlas aquí de una vez</span></div>
+        <div class="form-row">
+          <div class="field"><label>Producto</label><input type="text" id="m-pp-producto" list="m-pp-producto-list" placeholder="ej. Cuaderno 100 hojas"></div>
+          <div class="field"><label>Pieza</label><input type="text" id="m-pp-pieza" placeholder="ej. Carátula"></div>
+        </div>
+        <datalist id="m-pp-producto-list"></datalist>
+        <div class="form-foot"><span id="m-pp-mode"></span><button type="button" class="btn-primary" id="m-pp-save">Agregar pieza</button></div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table id="tbl-m-piezas-producto">
+            <thead><tr><th>Producto</th><th>Pieza</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -819,6 +853,38 @@
         <div class="field full"><label>Comentario</label><input type="text" id="rc-comentario" placeholder="opcional"></div>
         <div class="form-foot"><span></span><button type="button" class="btn-primary" id="rc-save">Guardar costo</button></div>
       </div>
+
+      <div class="card" id="recibo-import-card">
+        <div class="card-head"><h3>Importar recibo de caja (PDF/imagen)</h3><span class="card-hint">como los que descarga Siigo — revisa y corrige antes de guardar, nada se guarda automático</span></div>
+        <div class="form-row">
+          <div class="field full">
+            <label>Archivo del recibo</label>
+            <input type="file" id="recibo-file" accept="application/pdf,image/*">
+            <span class="card-hint" id="recibo-file-hint">PDF: se intenta leer el texto solo. Imagen/foto: por ahora se llena la tabla a mano.</span>
+          </div>
+        </div>
+        <div id="recibo-review" style="display:none">
+          <div class="form-row">
+            <div class="field"><label>N° de recibo</label><input type="text" id="recibo-numero" placeholder="ej. R - 001 - 215"></div>
+            <div class="field"><label>Fecha</label><input type="date" id="recibo-fecha"></div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>NIT</label><input type="text" id="recibo-nit"></div>
+            <div class="field"><label>A nombre de</label><input type="text" id="recibo-tercero"></div>
+          </div>
+          <div class="table-wrap">
+            <table id="tbl-recibo-items">
+              <thead><tr><th>Código</th><th>Descripción</th><th class="num">Débito</th><th class="num">Crédito</th><th>Orden asociada</th><th>Observación</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="form-foot">
+            <button type="button" class="row-btn" id="recibo-add-item">+ Agregar línea</button>
+            <span class="card-hint" id="recibo-total-hint"></span>
+            <button type="button" class="btn-primary" id="recibo-guardar">Guardar recibo</button>
+          </div>
+        </div>
+      </div>
       <div class="card">
         <div class="card-head"><h3>Últimos costos registrados</h3></div>
         <div class="table-wrap">
@@ -839,6 +905,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="config.js"></script>
 <script type="module" src="js/app.js"></script>
 </body>
