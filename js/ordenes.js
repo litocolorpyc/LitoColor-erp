@@ -8,6 +8,7 @@ const ROLES_REORDENAN_PRIORIDAD = ['admin', 'gerente', 'jefe_produccion'];
 
 let oppPiezaCount = 0;
 let editingOrden = null; // si no es null, Guardar actualiza esa orden en vez de crear una nueva
+let presupuestoPendienteImportacion = null; // presupuesto leído del Excel, se guarda junto con la orden
 
 // ---------- cálculo de imposición (geometría pura, sugerida y editable) ----------
 function calcPorPliego(pliegoW, pliegoH, piezaW, piezaH){
@@ -154,6 +155,7 @@ function fillPiezaCard(node, p){
   }
   node.querySelector('.f-tintas-frente').value = p.tintas_frente ?? 4;
   node.querySelector('.f-tintas-atras').value = p.tintas_atras ?? 0;
+  const tintasDet = node.querySelector('.f-tintas-detalle'); if(tintasDet) tintasDet.value = p.tintas_detalle || '';
   node.querySelector('.f-ctp').value = p.ctp || 'Convencional';
   node.querySelector('.f-tira').value = p.tira_retira || 'Tira y retira';
   node.querySelector('.f-laminado').value = p.laminado || '';
@@ -174,11 +176,20 @@ function fillPiezaCard(node, p){
   mal.value = p.medida_tamano_alto ?? ''; mal.dataset.touched = '1';
   const pp = node.querySelector('.f-tam-por-pliego'); pp.value = p.tamanos_por_pliego ?? ''; pp.dataset.touched = '1';
   const tp = node.querySelector('.f-tam-programados'); tp.value = p.tamanos_programados ?? ''; tp.dataset.touched = '1';
-  const requeridos = Array.isArray(p.procesos_requeridos) ? p.procesos_requeridos : [];
-  node.querySelectorAll('.f-proc').forEach(cb => {
-    cb.checked = requeridos.includes(cb.value);
-    cb.dataset.touched = '1';
-  });
+  // OJO: si p.procesos_requeridos no viene definido (ej. al importar desde
+  // Excel, que no trae esa lista), NO tocar las casillas — se quedan con
+  // los valores por defecto de la plantilla (Diseño/Litografía/Corte
+  // inicial/Guillotina/Terminado marcados). Si se tratara como "lista
+  // vacía" y se desmarcara todo, la pieza queda con 0 procesos requeridos
+  // y el avance de la orden nunca se puede calcular — ese fue el bug que
+  // afectó a las órdenes importadas.
+  if(Array.isArray(p.procesos_requeridos)){
+    const requeridos = p.procesos_requeridos;
+    node.querySelectorAll('.f-proc').forEach(cb => {
+      cb.checked = requeridos.includes(cb.value);
+      cb.dataset.touched = '1';
+    });
+  }
 }
 
 function recalcPieza(node){
@@ -690,6 +701,7 @@ export function mostrarDetalleOrden(orden){
       filaFicha('Papel', p.papel),
       filaFicha('Pliego', (p.pliego_ancho && p.pliego_alto) ? `${p.pliego_ancho} x ${p.pliego_alto} cm` : ''),
       filaFicha('Tintas frente/atrás', p.tintas_frente != null ? `${p.tintas_frente} x ${p.tintas_atras || 0}` : ''),
+      filaFicha('Detalle de tintas', p.tintas_detalle),
       filaFicha('CTP', p.ctp),
       filaFicha('Impresión', p.tira_retira),
       filaFicha('Laminado', p.laminado ? `${p.laminado}${p.laminado_lados ? ' · ' + p.laminado_lados + ' lado(s)' : ''}` : ''),
@@ -818,6 +830,7 @@ export function imprimirDetalleOrden(orden){
       ['Papel', p.papel],
       ['Pliego', (p.pliego_ancho && p.pliego_alto) ? `${p.pliego_ancho} x ${p.pliego_alto} cm` : ''],
       ['Tintas frente/atrás', p.tintas_frente != null ? `${p.tintas_frente} x ${p.tintas_atras || 0}` : ''],
+      ['Detalle de tintas', p.tintas_detalle],
       ['CTP', p.ctp],
       ['Impresión', p.tira_retira],
       ['Laminado', p.laminado ? `${p.laminado}${p.laminado_lados ? ' · ' + p.laminado_lados + ' lado(s)' : ''}` : ''],
@@ -972,6 +985,11 @@ function extraerPiezasDelGrid(grid){
   const filaTamProgramados = buscarFila(grid, ['Tamaños Programados', 'Tamanos Programados']);
   const filaMedidas = buscarFila(grid, ['Medidas Tamaño', 'Medida Tamaño', 'Medidas Tamano']);
   const filaTamPorPliego = buscarFila(grid, ['Tamaños por pliego', 'Tamanos por pliego']);
+  // filas del presupuesto que trae el Excel (parte de abajo, "ITEMS" sub-total)
+  const filaCosto = buscarFila(grid, ['Costo']);
+  const filaImprevistos = buscarFila(grid, ['Imprevistos']);
+  const filaPrecioVentaSinIva = buscarFila(grid, ['Precio Venta Antes De Iva', 'Precio Venta Antes de IVA']);
+  const filaPrecioConIva = buscarFila(grid, ['Precio Total Con Iva', 'Precio Total Con IVA']);
 
   const bloques = cols.map(c => {
     const otrosLineas = [];
@@ -981,6 +999,14 @@ function extraerPiezasDelGrid(grid){
         if(v) otrosLineas.push(String(v).trim());
       }
     }
+    // "Tintas" a veces no trae un número limpio (ej. "2 (cm)") sino una
+    // nota descriptiva — si pasa, se guarda el texto tal cual en el
+    // detalle de tintas, en vez de perderlo intentando forzarlo a número.
+    const esNumeroLimpio = v => v != null && /^-?\d+(\.\d+)?$/.test(String(v).trim());
+    const tintasFrenteRaw = valorCelda(grid, filaTintas, c);
+    const tintasAtrasRaw = valorCelda(grid, filaTintas, c + 2);
+    const tintasLimpias = esNumeroLimpio(tintasFrenteRaw) && esNumeroLimpio(tintasAtrasRaw);
+
     return {
       cliente: valorCelda(grid, filaCliente, c),
       orden: valorCelda(grid, filaOrden, c),
@@ -991,8 +1017,9 @@ function extraerPiezasDelGrid(grid){
       tamano_ancho: valorCelda(grid, filaTamano, c),
       tamano_alto: valorCelda(grid, filaTamano, c + 2),
       papel: valorCelda(grid, filaPapel, c),
-      tintas_frente: valorCelda(grid, filaTintas, c),
-      tintas_atras: valorCelda(grid, filaTintas, c + 2),
+      tintas_frente: tintasLimpias ? parseFloat(tintasFrenteRaw) : null,
+      tintas_atras: tintasLimpias ? parseFloat(tintasAtrasRaw) : null,
+      tintas_detalle: tintasLimpias ? null : `Según Excel — frente: ${tintasFrenteRaw ?? '—'}, atrás: ${tintasAtrasRaw ?? '—'}`,
       ctp: valorCelda(grid, filaCtp, c) || 'Convencional',
       laminado: valorCelda(grid, filaLaminados, c),
       laminado_lados: valorCelda(grid, filaLaminados, c + 2),
@@ -1005,7 +1032,11 @@ function extraerPiezasDelGrid(grid){
       tamanos_programados: valorCelda(grid, filaTamProgramados, c),
       medida_tamano_ancho: valorCelda(grid, filaMedidas, c),
       medida_tamano_alto: valorCelda(grid, filaMedidas, c + 2),
-      tamanos_por_pliego: valorCelda(grid, filaTamPorPliego, c)
+      tamanos_por_pliego: valorCelda(grid, filaTamPorPliego, c),
+      costo: valorCelda(grid, filaCosto, c),
+      imprevistos: valorCelda(grid, filaImprevistos, c),
+      precio_venta_antes_iva: valorCelda(grid, filaPrecioVentaSinIva, c),
+      precio_con_iva: valorCelda(grid, filaPrecioConIva, c)
     };
   }).filter(b => b.orden != null && !isNaN(parseFloat(b.orden)));
 
@@ -1016,8 +1047,11 @@ function extraerPiezasDelGrid(grid){
 // sigue teniendo que revisar y darle "Guardar orden completa". El
 // formato importado es siempre de Litografía.
 function aplicarImportacion(ordenNum, piezas){
-  editingOrden = null;
-  document.getElementById('opp-form-mode').textContent = 'Importado desde Excel — revisa los datos antes de guardar';
+  const yaExiste = DB.opp_ordenes.some(o => o.orden === ordenNum);
+  editingOrden = yaExiste ? ordenNum : null;
+  document.getElementById('opp-form-mode').textContent = yaExiste
+    ? `Importado desde Excel — la orden ${ordenNum} ya existía, esto va a ACTUALIZARLA. Revisa antes de guardar`
+    : 'Importado desde Excel — revisa los datos antes de guardar';
   document.getElementById('opp-orden').value = ordenNum;
   document.getElementById('opp-orden').disabled = false;
   document.getElementById('opp-fecha').value = new Date().toISOString().slice(0, 10);
@@ -1042,6 +1076,7 @@ function aplicarImportacion(ordenNum, piezas){
     papel: p.papel ? String(p.papel).trim() : '',
     tintas_frente: p.tintas_frente,
     tintas_atras: p.tintas_atras,
+    tintas_detalle: p.tintas_detalle,
     ctp: p.ctp,
     laminado: p.laminado,
     laminado_lados: p.laminado_lados,
@@ -1057,7 +1092,23 @@ function aplicarImportacion(ordenNum, piezas){
     tamanos_programados: p.tamanos_programados
   }));
 
-  toast(`Se leyeron ${piezas.length} pieza(s) de la orden ${ordenNum} — revísalas antes de guardar`);
+  // El presupuesto (Costo/Imprevistos/Precio de venta) viene en el mismo
+  // Excel, más abajo — se suma entre todas las piezas de esta orden y
+  // queda lista para guardarse apenas se guarde la orden.
+  const sumar = campo => piezas.reduce((s, p) => s + (parseFloat(p[campo]) || 0), 0);
+  presupuestoPendienteImportacion = {
+    orden: ordenNum,
+    costo: sumar('costo'),
+    imprevistos: sumar('imprevistos'),
+    precio_venta_antes_iva: sumar('precio_venta_antes_iva'),
+    precio_con_iva: sumar('precio_con_iva')
+  };
+  const hayPresupuesto = presupuestoPendienteImportacion.costo || presupuestoPendienteImportacion.precio_venta_antes_iva;
+
+  const avisoExiste = yaExiste ? ` ⚠️ La orden ${ordenNum} ya existía — al guardar se van a REEMPLAZAR sus piezas actuales por las del Excel.` : '';
+  toast((hayPresupuesto
+    ? `Se leyeron ${piezas.length} pieza(s) de la orden ${ordenNum} — el presupuesto también se leyó y se guardará junto con la orden`
+    : `Se leyeron ${piezas.length} pieza(s) de la orden ${ordenNum} — revísalas antes de guardar`) + avisoExiste);
   document.getElementById('panel-ordenes').scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -1094,6 +1145,7 @@ async function importarOrdenExcel(file){
 
 function resetOppForm(nextOrden){
   editingOrden = null;
+  presupuestoPendienteImportacion = null;
   document.getElementById('opp-form-mode').textContent = 'Creando una orden nueva';
   document.getElementById('opp-piezas-list').innerHTML = '';
   oppPiezaCount = 0;
@@ -1236,6 +1288,7 @@ async function saveOpp(){
         pliego_ancho: pliego[0] || null, pliego_alto: pliego[1] || null,
         tintas_frente: parseInt(node.querySelector('.f-tintas-frente').value) || 0,
         tintas_atras: parseInt(node.querySelector('.f-tintas-atras').value) || 0,
+        tintas_detalle: node.querySelector('.f-tintas-detalle')?.value.trim() || null,
         ctp: node.querySelector('.f-ctp').value,
         tira_retira: node.querySelector('.f-tira').value,
         laminado: node.querySelector('.f-laminado').value || null,
@@ -1268,7 +1321,32 @@ async function saveOpp(){
     // Registra automáticamente en los maestros lo que se usó por primera vez
     // (piezas nuevas para este producto, proveedores nuevos) — así la próxima
     // vez ya aparecen sugeridos, sin tener que ir a Maestros a crearlos antes.
-    await registrarPiezasYProveedoresNuevos(cabecera.producto, piezasPayload);
+    await registrarPiezasYProveedoresNuevos(cabecera.cliente, cabecera.producto, piezasPayload);
+
+    // Si esta orden se creó importando un Excel que traía el presupuesto,
+    // se guarda solo — el gerente lo puede seguir editando después
+    // normalmente desde el detalle de la orden.
+    if(presupuestoPendienteImportacion && presupuestoPendienteImportacion.orden === orden){
+      const pres = presupuestoPendienteImportacion;
+      const totalCosto = pres.costo + pres.imprevistos;
+      const rentabilidadPct = (pres.precio_venta_antes_iva && totalCosto)
+        ? ((pres.precio_venta_antes_iva - totalCosto) / pres.precio_venta_antes_iva * 100) : null;
+      try{
+        await sb.from('presupuesto_orden').upsert([{
+          orden, costo: pres.costo, imprevistos: pres.imprevistos, total_costo: totalCosto,
+          precio_venta_antes_iva: pres.precio_venta_antes_iva, precio_con_iva: pres.precio_con_iva,
+          rentabilidad_esperada_pct: rentabilidadPct, actualizado_en: new Date().toISOString()
+        }]);
+        const idx = DB.presupuesto_orden.findIndex(p => p.orden === orden);
+        const registro = { orden, costo: pres.costo, imprevistos: pres.imprevistos, total_costo: totalCosto,
+          precio_venta_antes_iva: pres.precio_venta_antes_iva, precio_con_iva: pres.precio_con_iva,
+          rentabilidad_esperada_pct: rentabilidadPct };
+        if(idx >= 0) DB.presupuesto_orden[idx] = registro; else DB.presupuesto_orden.push(registro);
+        toast('Presupuesto de la orden ' + orden + ' cargado automáticamente desde el Excel');
+      }catch(err){
+        console.warn('No se pudo guardar el presupuesto importado automáticamente:', err);
+      }
+    }
 
     resetOppForm(suggestNextOrden());
     renderOppRecent();
@@ -1282,10 +1360,29 @@ async function saveOpp(){
 }
 
 // Después de guardar una orden, registra en los maestros lo que se usó por
-// primera vez: combinaciones producto+pieza nuevas, y proveedores nuevos
-// escritos a mano en la ficha simplificada.
-async function registrarPiezasYProveedoresNuevos(producto, piezasPayload){
+// primera vez: cliente nuevo, producto nuevo, combinaciones producto+pieza
+// nuevas, y proveedores nuevos escritos a mano en la ficha simplificada.
+// Esto es lo que hace que importar un Excel con un cliente o producto que
+// todavía no existe funcione solo, sin tener que ir a Maestros antes o
+// después — igual pasa si alguien los escribe a mano sin usar "+ Nuevo".
+async function registrarPiezasYProveedoresNuevos(cliente, producto, piezasPayload){
   try{
+    if(cliente && !DB.clientes.some(c => c.nombre.toLowerCase() === cliente.toLowerCase())){
+      const { data } = await sb.from('clientes').insert([{ nombre: cliente }]).select();
+      if(data){
+        DB.clientes.push(...data);
+        populateClienteSelect();
+      }
+    }
+
+    if(producto && !DB.productos.some(p => p.nombre.toLowerCase() === producto.toLowerCase())){
+      const { data } = await sb.from('productos').insert([{ nombre: producto }]).select();
+      if(data){
+        DB.productos.push(...data);
+        populateProductoSelect();
+      }
+    }
+
     if(producto){
       const nombresUnicos = [...new Set(piezasPayload.map(p => p.pieza).filter(Boolean))];
       const nuevas = nombresUnicos.filter(nombre =>
@@ -1313,7 +1410,7 @@ async function registrarPiezasYProveedoresNuevos(producto, piezasPayload){
     }
   }catch(err){
     // no bloquea el guardado de la orden si esto falla — solo se pierde la sugerencia automática
-    console.warn('No se pudieron registrar piezas/proveedores nuevos en los maestros:', err);
+    console.warn('No se pudieron registrar cliente/producto/piezas/proveedores nuevos en los maestros:', err);
   }
 }
 

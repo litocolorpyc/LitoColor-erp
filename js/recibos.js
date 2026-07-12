@@ -9,9 +9,9 @@ if(typeof pdfjsLib !== 'undefined'){
 
 // ---------- lectura del archivo ----------
 
-// Los PDF que exporta Siigo tienen el texto ya seleccionable (no son una
-// imagen escaneada), así que se puede leer con pdf.js directamente en el
-// navegador — sin subir el archivo a ningún servidor externo.
+// Los PDF que descarga Siigo (documentos "Compra") tienen el texto ya
+// seleccionable (no son una imagen escaneada), así que se leen con pdf.js
+// directamente en el navegador — sin subir el archivo a ningún servidor.
 async function extraerTextoPDF(file){
   if(typeof pdfjsLib === 'undefined'){
     throw new Error('La librería para leer PDF no cargó (revisa tu conexión a internet)');
@@ -22,60 +22,107 @@ async function extraerTextoPDF(file){
   for(let i = 1; i <= pdf.numPages; i++){
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    // pdf.js entrega los fragmentos de texto con su posición; los agrupamos
-    // por línea (misma altura aproximada) para reconstruir las filas de la tabla.
-    const porLinea = {};
-    content.items.forEach(it => {
-      const y = Math.round(it.transform[5]);
-      porLinea[y] = porLinea[y] || [];
-      porLinea[y].push(it.str);
+    // Agrupa los fragmentos de texto en líneas "a barrido": los ordena de
+    // arriba hacia abajo y agrupa los que caen a menos de 3pt de distancia
+    // vertical entre sí — una sola tabla puede tener columnas con la línea
+    // base a una fracción de punto de diferencia, y redondear con una
+    // rejilla fija a veces parte una misma fila en dos.
+    const items = content.items.map(it => ({ x: it.transform[4], y: it.transform[5], str: it.str }));
+    items.sort((a, b) => b.y - a.y || a.x - b.x);
+    const TOL = 3;
+    const lineas = [];
+    let actual = [];
+    let anclaY = null;
+    items.forEach(it => {
+      if(anclaY === null || Math.abs(it.y - anclaY) <= TOL){
+        actual.push(it);
+        if(anclaY === null) anclaY = it.y;
+      } else {
+        lineas.push(actual);
+        actual = [it];
+        anclaY = it.y;
+      }
     });
-    const lineas = Object.keys(porLinea).sort((a,b) => b - a).map(y => porLinea[y].join(' '));
-    texto += lineas.join('\n') + '\n';
+    if(actual.length) lineas.push(actual);
+    texto += lineas.map(l => l.sort((a,b) => a.x - b.x).map(it => it.str).join(' ')).join('\n') + '\n';
   }
   return texto;
 }
 
-function parseMoneyCO(str){
-  if(!str) return 0;
-  const limpio = String(str).replace(/[^\d.,-]/g, '').replace(/\./g, '').replace(',', '.');
-  const n = parseFloat(limpio);
+function parseMoneyUS(str){
+  if(str == null) return 0;
+  const n = parseFloat(String(str).replace(/[^\d.\-]/g, ''));
   return isNaN(n) ? 0 : n;
 }
 
-// Intenta reconocer el formato de "Recibos de Caja" de Siigo. Si algo no
+function parsePct(str){
+  if(str == null) return 0;
+  const n = parseFloat(String(str).replace(/[^\d.]/g, ''));
+  return isNaN(n) ? 0 : n;
+}
+
+// Busca un número de OP dentro de la descripción de un ítem (ej. "Servicio
+// de Planchas / CTP - OP5955-2") para sugerir a qué orden asociarlo — la
+// persona igual puede cambiarlo si la sugerencia no es la correcta.
+function detectarOrdenEnTexto(texto){
+  if(!texto) return null;
+  const m = String(texto).match(/OP\s?-?\s?(\d{3,6})/i);
+  if(!m) return null;
+  return parseInt(m[1], 10);
+}
+
+// Intenta reconocer el formato "Compra" que genera Siigo. Si algo no
 // calza, simplemente no lo llena — la persona lo completa a mano en la
 // tabla de revisión, nunca se guarda nada sin que alguien lo confirme.
-function parseReciboTexto(texto){
-  const cabecera = { numero_recibo: '', fecha: '', nit: '', tercero: '' };
+function parseCompraTexto(texto){
+  const cabecera = { numero_recibo: '', fecha: '', nit: '', tercero: '', total_bruto: null, iva: null, retefuente: null, valor_total: null };
 
-  const mNumero = texto.match(/R\s*-\s*\d{3}\s*-\s*\d{3}/);
-  if(mNumero) cabecera.numero_recibo = mNumero[0].replace(/\s+/g, '');
+  const mNumero = texto.match(/Compra[\s\S]{0,80}?No\.?\s*(\d+)/i);
+  if(mNumero) cabecera.numero_recibo = 'Compra No. ' + mNumero[1];
 
-  const mFecha = texto.match(/(\d{4}-\d{2}-\d{2})/);
-  if(mFecha) cabecera.fecha = mFecha[1];
+  const mFechas = texto.match(/(\d{4}-\d{2}-\d{2})\s+(\d{4}-\d{2}-\d{2})/);
+  if(mFechas) cabecera.fecha = mFechas[1];
+  else {
+    const mFecha = texto.match(/(\d{4}-\d{2}-\d{2})/);
+    if(mFecha) cabecera.fecha = mFecha[1];
+  }
 
-  const mNit = texto.match(/NIT[:\s]*([\d.,\-]{6,})/i);
+  const mNit = texto.match(/Nit\s+([\d.\-]{6,})\s+Tel[eé]fono/i);
   if(mNit) cabecera.nit = mNit[1].trim();
 
-  const mTercero = texto.match(/Señores\s+(.+)/i);
-  if(mTercero) cabecera.tercero = mTercero[1].trim();
+  const lineaProveedor = texto.split('\n').find(l => /^\s*Proveedor\b/i.test(l));
+  if(lineaProveedor){
+    const m = lineaProveedor.match(/Proveedor\s+(.+?)(?:\s+Fecha de compra\b.*)?$/i);
+    if(m) cabecera.tercero = m[1].trim();
+  }
 
-  // Filas de la tabla: un código contable (7 a 10 dígitos) al inicio de la
-  // línea, seguido de la descripción, y terminando en dos valores en pesos
-  // (débito y crédito). Todo lo demás de la línea se ignora (la columna
-  // "Comprobante" normalmente viene vacía, marcada como "- -").
+  const mBruto = texto.match(/Total Bruto\s+([\d.,]+)/i);
+  if(mBruto) cabecera.total_bruto = parseMoneyUS(mBruto[1]);
+  const mIva = texto.match(/IVA\s+[\d.]+\s*%\s+([\d.,]+)/i);
+  if(mIva) cabecera.iva = parseMoneyUS(mIva[1]);
+  const mRete = texto.match(/Retefuente\s+[\d.]+\s*%\s+([\d.,]+)/i);
+  if(mRete) cabecera.retefuente = parseMoneyUS(mRete[1]);
+  const mPagar = texto.match(/Total a Pagar\s+([\d.,]+)/i);
+  if(mPagar) cabecera.valor_total = parseMoneyUS(mPagar[1]);
+
+  // Filas de la tabla de ítems: N° · Valor desc. · IVA% · Retención% ·
+  // Vr. Unitario · Descripción · Cantidad · Vr. Total
   const items = [];
-  const filaRegex = /^(\d{7,10})\s+(.+?)\s+([\d.,]+)\s+([\d.,]+)\s*$/;
+  const filaRegex = /^(\d+)\s+([\d.,]+)\s+(\d+(?:\.\d+)?)\s*%\s+(\d+(?:\.\d+)?)\s*%\s+([\d.,]+)\s+(.+?)\s+([\d.,]+)\s+([\d.,]+)\s*$/;
   texto.split('\n').forEach(linea => {
     const m = linea.trim().match(filaRegex);
     if(!m) return;
+    const descripcion = m[6].trim();
     items.push({
       codigo: m[1],
-      descripcion: m[2].replace(/\s*-\s*-\s*$/, '').trim(),
-      valor_debito: parseMoneyCO(m[3]),
-      valor_credito: parseMoneyCO(m[4]),
-      orden: null,
+      descripcion,
+      valor_unitario: parseMoneyUS(m[5]),
+      iva_pct: parseFloat(m[3]),
+      retencion_pct: parseFloat(m[4]),
+      cantidad: parseMoneyUS(m[7]),
+      valor_credito: parseMoneyUS(m[8]), // se usa esta columna como "Vr. Total" del ítem
+      valor_debito: 0,
+      orden: detectarOrdenEnTexto(descripcion),
       observacion: ''
     });
   });
@@ -83,17 +130,9 @@ function parseReciboTexto(texto){
   return { cabecera, items };
 }
 
-// ---------- detectar impuestos/retenciones por palabra clave ----------
-function analizarImpuestos(items){
-  const patron = /retenci|impuesto|iva\b/i;
-  const impuestos = items.filter(it => patron.test(it.descripcion || ''));
-  const totalImpuestos = impuestos.reduce((s,it) => s + (it.valor_debito||0) + (it.valor_credito||0), 0);
-  const totalGeneral = items.reduce((s,it) => s + (it.valor_debito||0) + (it.valor_credito||0), 0);
-  return { totalImpuestos, costoBase: totalGeneral - totalImpuestos, cantidadDetectados: impuestos.length };
-}
-
 // ---------- render de la tabla de revisión ----------
 let itemsActuales = [];
+let cabeceraTotalesActuales = {};
 
 function opcionesOrden(ordenSeleccionada){
   const activas = DB.opp_ordenes.slice().sort((a,b) => b.orden - a.orden).slice(0, 200);
@@ -105,20 +144,27 @@ function renderTablaItems(){
   const tbody = document.querySelector('#tbl-recibo-items tbody');
   tbody.innerHTML = itemsActuales.map((it, i) => `
     <tr data-i="${i}">
-      <td><input type="text" class="ri-codigo" value="${it.codigo||''}" style="width:90px"></td>
-      <td><input type="text" class="ri-desc" value="${it.descripcion||''}" style="width:100%"></td>
-      <td><input type="number" class="ri-debito num" value="${it.valor_debito||0}" style="width:110px"></td>
-      <td><input type="number" class="ri-credito num" value="${it.valor_credito||0}" style="width:110px"></td>
+      <td><input type="text" class="ri-codigo" value="${it.codigo||''}" style="width:36px"></td>
+      <td><input type="text" class="ri-desc" value="${it.descripcion||''}" style="width:100%;min-width:160px"></td>
+      <td><input type="number" class="ri-cantidad num" value="${it.cantidad||0}" style="width:70px"></td>
+      <td><input type="number" class="ri-unitario num" value="${it.valor_unitario||0}" style="width:90px"></td>
+      <td><input type="number" class="ri-iva num" value="${it.iva_pct||0}" style="width:55px"></td>
+      <td><input type="number" class="ri-reten num" value="${it.retencion_pct||0}" style="width:55px"></td>
+      <td><input type="number" class="ri-credito num" value="${it.valor_credito||0}" style="width:100px"></td>
       <td><select class="ri-orden">${opcionesOrden(it.orden)}</select></td>
-      <td><input type="text" class="ri-obs" value="${it.observacion||''}" placeholder="opcional" style="width:100%"></td>
+      <td><input type="text" class="ri-obs" value="${it.observacion||''}" placeholder="opcional" style="width:100%;min-width:120px"></td>
       <td><button type="button" class="row-btn row-btn-danger ri-del">✕</button></td>
-    </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint)">Sin líneas todavía — agrega una manualmente</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="10" style="text-align:center;color:var(--ink-faint)">Sin líneas todavía — agrega una manualmente</td></tr>';
 
   tbody.querySelectorAll('tr').forEach(tr => {
     const i = parseInt(tr.dataset.i, 10);
+    if(isNaN(i)) return;
     tr.querySelector('.ri-codigo').addEventListener('input', e => itemsActuales[i].codigo = e.target.value);
     tr.querySelector('.ri-desc').addEventListener('input', e => itemsActuales[i].descripcion = e.target.value);
-    tr.querySelector('.ri-debito').addEventListener('input', e => { itemsActuales[i].valor_debito = parseFloat(e.target.value)||0; actualizarResumen(); });
+    tr.querySelector('.ri-cantidad').addEventListener('input', e => { itemsActuales[i].cantidad = parseFloat(e.target.value)||0; actualizarResumen(); });
+    tr.querySelector('.ri-unitario').addEventListener('input', e => { itemsActuales[i].valor_unitario = parseFloat(e.target.value)||0; actualizarResumen(); });
+    tr.querySelector('.ri-iva').addEventListener('input', e => { itemsActuales[i].iva_pct = parseFloat(e.target.value)||0; actualizarResumen(); });
+    tr.querySelector('.ri-reten').addEventListener('input', e => { itemsActuales[i].retencion_pct = parseFloat(e.target.value)||0; actualizarResumen(); });
     tr.querySelector('.ri-credito').addEventListener('input', e => { itemsActuales[i].valor_credito = parseFloat(e.target.value)||0; actualizarResumen(); });
     tr.querySelector('.ri-orden').addEventListener('change', e => itemsActuales[i].orden = e.target.value ? parseInt(e.target.value,10) : null);
     tr.querySelector('.ri-obs').addEventListener('input', e => itemsActuales[i].observacion = e.target.value);
@@ -129,11 +175,11 @@ function renderTablaItems(){
 function actualizarResumen(){
   const hint = document.getElementById('recibo-total-hint');
   if(!hint) return;
-  const { totalImpuestos, costoBase, cantidadDetectados } = analizarImpuestos(itemsActuales);
-  const totalDebito = itemsActuales.reduce((s,it)=>s+(it.valor_debito||0),0);
-  const totalCredito = itemsActuales.reduce((s,it)=>s+(it.valor_credito||0),0);
-  hint.innerHTML = `Total débito: ${fmtCOP(totalDebito)} · Total crédito: ${fmtCOP(totalCredito)}`
-    + (cantidadDetectados ? ` · Impuestos/retenciones detectados (${cantidadDetectados}): ${fmtCOP(totalImpuestos)} · Costo base: ${fmtCOP(costoBase)}` : '');
+  const totalItems = itemsActuales.reduce((s,it)=>s+(it.valor_credito||0),0);
+  const baseAprox = itemsActuales.reduce((s,it)=>s+((it.valor_unitario||0)*(it.cantidad||0)),0);
+  const conOrden = itemsActuales.filter(it => it.orden).length;
+  hint.innerHTML = `Total de líneas: ${fmtCOP(totalItems)} · Base aprox. (unitario × cantidad): ${fmtCOP(baseAprox)}`
+    + (conOrden ? ` · ${conOrden}/${itemsActuales.length} línea(s) con orden asociada` : '');
 }
 
 // ---------- flujo principal ----------
@@ -145,24 +191,31 @@ async function manejarArchivo(file){
     hint.textContent = 'Leyendo el PDF…';
     try{
       const texto = await extraerTextoPDF(file);
-      const { cabecera, items } = parseReciboTexto(texto);
+      const { cabecera, items } = parseCompraTexto(texto);
       document.getElementById('recibo-numero').value = cabecera.numero_recibo;
       document.getElementById('recibo-fecha').value = cabecera.fecha;
       document.getElementById('recibo-nit').value = cabecera.nit;
       document.getElementById('recibo-tercero').value = cabecera.tercero;
       itemsActuales = items;
-      hint.textContent = items.length
-        ? `Se leyeron ${items.length} línea(s) automáticamente — revisa que estén correctas antes de guardar.`
-        : 'No se pudieron reconocer líneas automáticamente en este PDF — agrégalas manualmente abajo.';
+      cabeceraTotalesActuales = cabecera;
+      const conOrden = items.filter(it => it.orden).length;
+      const yaCargado = cabecera.numero_recibo && DB.recibos_caja.some(r => r.numero_recibo === cabecera.numero_recibo);
+      const avisoDuplicado = yaCargado ? ` ⚠️ Este documento (${cabecera.numero_recibo}) ya se había cargado antes — revisa que no sea un duplicado.` : '';
+      hint.textContent = (items.length
+        ? `Se leyeron ${items.length} línea(s) automáticamente${conOrden ? ` (${conOrden} con orden sugerida por el número de OP)` : ''} — revisa que estén correctas antes de guardar.`
+        : 'No se pudieron reconocer líneas automáticamente en este PDF — agrégalas manualmente abajo.') + avisoDuplicado;
+      if(yaCargado) toast('Este documento ya se había cargado antes — revisa que no sea un duplicado');
     }catch(err){
       console.error(err);
       hint.textContent = 'No se pudo leer el PDF automáticamente — completa los datos manualmente abajo.';
       itemsActuales = [];
+      cabeceraTotalesActuales = {};
     }
   } else {
     // imagen/foto: por ahora no se lee automático, solo se habilita la captura manual
     hint.textContent = 'Es una imagen — no se puede leer sola todavía. Completa los datos manualmente abajo.';
     itemsActuales = [];
+    cabeceraTotalesActuales = {};
   }
   renderTablaItems();
   actualizarResumen();
@@ -177,7 +230,7 @@ async function guardarRecibo(){
 
   if(!itemsActuales.length){ toast('Agrega al menos una línea antes de guardar'); return; }
 
-  const valorTotal = itemsActuales.reduce((s,it)=>s+(it.valor_debito||0)+(it.valor_credito||0),0) / 2;
+  const valorTotal = cabeceraTotalesActuales.valor_total || itemsActuales.reduce((s,it)=>s+(it.valor_credito||0),0);
   const user = getCurrentUser();
 
   btn.disabled = true; btn.textContent = 'Guardando…';
@@ -185,6 +238,10 @@ async function guardarRecibo(){
     const { data: recibo, error: errRecibo } = await sb.from('recibos_caja').insert([{
       numero_recibo: numero || null, fecha, nit, tercero,
       valor_total: valorTotal || null,
+      tipo_documento: 'Compra',
+      total_bruto: cabeceraTotalesActuales.total_bruto ?? null,
+      iva: cabeceraTotalesActuales.iva ?? null,
+      retefuente: cabeceraTotalesActuales.retefuente ?? null,
       archivo_nombre: document.getElementById('recibo-file').files[0]?.name || null,
       cargado_por: user ? user.nombre : null
     }]).select();
@@ -193,28 +250,31 @@ async function guardarRecibo(){
 
     const payloadItems = itemsActuales.map(it => ({
       recibo_id: reciboId, codigo: it.codigo || null, descripcion: it.descripcion || null,
+      cantidad: it.cantidad || null, valor_unitario: it.valor_unitario || null,
+      iva_pct: it.iva_pct || null, retencion_pct: it.retencion_pct || null,
       valor_debito: it.valor_debito || 0, valor_credito: it.valor_credito || 0,
       orden: it.orden || null, observacion: it.observacion || null
     }));
     const { error: errItems } = await sb.from('recibos_caja_items').insert(payloadItems);
     if(errItems) throw errItems;
 
-    toast('Recibo ' + (numero || reciboId) + ' guardado con ' + payloadItems.length + ' línea(s)');
+    toast('Documento ' + (numero || reciboId) + ' guardado con ' + payloadItems.length + ' línea(s)');
     DB.recibos_caja.unshift(recibo[0]);
 
-    // limpia el formulario para el próximo recibo
+    // limpia el formulario para el próximo documento
     document.getElementById('recibo-file').value = '';
     document.getElementById('recibo-numero').value = '';
     document.getElementById('recibo-fecha').value = '';
     document.getElementById('recibo-nit').value = '';
     document.getElementById('recibo-tercero').value = '';
     itemsActuales = [];
+    cabeceraTotalesActuales = {};
     renderTablaItems();
     actualizarResumen();
     document.getElementById('recibo-review').style.display = 'none';
   }catch(err){
     console.error(err);
-    toast('Error al guardar el recibo — revisa la consola');
+    toast('Error al guardar el documento — revisa la consola');
   }finally{
     btn.disabled = false; btn.textContent = 'Guardar recibo';
   }
@@ -228,7 +288,7 @@ export function initRecibosCaja(){
     if(file) manejarArchivo(file);
   });
   document.getElementById('recibo-add-item').addEventListener('click', () => {
-    itemsActuales.push({ codigo:'', descripcion:'', valor_debito:0, valor_credito:0, orden:null, observacion:'' });
+    itemsActuales.push({ codigo:'', descripcion:'', cantidad:0, valor_unitario:0, iva_pct:0, retencion_pct:0, valor_credito:0, valor_debito:0, orden:null, observacion:'' });
     document.getElementById('recibo-review').style.display = '';
     renderTablaItems();
     actualizarResumen();
