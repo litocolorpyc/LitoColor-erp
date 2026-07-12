@@ -230,6 +230,22 @@ async function guardarRecibo(){
 
   if(!itemsActuales.length){ toast('Agrega al menos una línea antes de guardar'); return; }
 
+  // Vuelve a revisar duplicados justo antes de guardar (no solo al leer el
+  // archivo) — por si la persona corrigió el número a mano, o ignoró el
+  // aviso de la pantalla anterior. Aquí sí se detiene hasta que confirme.
+  if(numero){
+    const existente = DB.recibos_caja.find(r => r.numero_recibo === numero);
+    if(existente){
+      const fechaExistente = existente.cargado_en ? new Date(existente.cargado_en).toLocaleString('es-CO') : 'antes';
+      const continuar = confirm(
+        `Ya existe un documento guardado con el número "${numero}" (cargado ${fechaExistente}).\n\n` +
+        `¿Seguro que quieres guardarlo de nuevo? Esto va a crear un registro duplicado — no reemplaza al anterior.\n\n` +
+        `Aceptar = guardar de todos modos · Cancelar = no guardar`
+      );
+      if(!continuar) return;
+    }
+  }
+
   const valorTotal = cabeceraTotalesActuales.valor_total || itemsActuales.reduce((s,it)=>s+(it.valor_credito||0),0);
   const user = getCurrentUser();
 
