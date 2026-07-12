@@ -345,6 +345,9 @@
             <div class="field"><label>Tintas atrás</label><input type="number" class="f-tintas-atras" min="0" max="6" value="0"></div>
           </div>
           <div class="form-row">
+            <div class="field full"><label>Detalle de tintas <span class="card-hint">(cuáles colores específicos — ej. Negro, Pantone 286, Amarillo)</span></label><input type="text" class="f-tintas-detalle" placeholder="opcional, para cuando no es solo CMYK"></div>
+          </div>
+          <div class="form-row">
             <div class="field"><label>CTP</label>
               <select class="f-ctp"><option>Convencional</option><option>Digital</option></select>
             </div>
@@ -383,6 +386,7 @@
         <div class="opp-calc-divider">Procesos que requiere esta pieza</div>
         <div class="form-row opp-checks opp-procesos-grid">
           <label><input type="checkbox" class="f-proc" value="Diseño" checked> Diseño</label>
+          <label class="litografia-only-check"><input type="checkbox" class="f-proc" value="Corte inicial" checked> Corte inicial</label>
           <label class="litografia-only-check"><input type="checkbox" class="f-proc" value="Litografia" checked> Litografía</label>
           <label><input type="checkbox" class="f-proc" value="Impresión Digital"> Impresión Digital</label>
           <label><input type="checkbox" class="f-proc" value="Gran Formato"> Gran Formato</label>
@@ -885,26 +889,26 @@
       </div>
 
       <div class="card" id="recibo-import-card">
-        <div class="card-head"><h3>Importar recibo de caja (PDF/imagen)</h3><span class="card-hint">como los que descarga Siigo — revisa y corrige antes de guardar, nada se guarda automático</span></div>
+        <div class="card-head"><h3>Importar compra / costo (PDF de Siigo)</h3><span class="card-hint">los documentos "Compra" que descarga Siigo — revisa y corrige antes de guardar, nada se guarda automático</span></div>
         <div class="form-row">
           <div class="field full">
-            <label>Archivo del recibo</label>
+            <label>Archivo del documento</label>
             <input type="file" id="recibo-file" accept="application/pdf,image/*">
             <span class="card-hint" id="recibo-file-hint">PDF: se intenta leer el texto solo. Imagen/foto: por ahora se llena la tabla a mano.</span>
           </div>
         </div>
         <div id="recibo-review" style="display:none">
           <div class="form-row">
-            <div class="field"><label>N° de recibo</label><input type="text" id="recibo-numero" placeholder="ej. R - 001 - 215"></div>
+            <div class="field"><label>N° de compra</label><input type="text" id="recibo-numero" placeholder="ej. Compra No. 1750"></div>
             <div class="field"><label>Fecha</label><input type="date" id="recibo-fecha"></div>
           </div>
           <div class="form-row">
-            <div class="field"><label>NIT</label><input type="text" id="recibo-nit"></div>
-            <div class="field"><label>A nombre de</label><input type="text" id="recibo-tercero"></div>
+            <div class="field"><label>NIT del proveedor</label><input type="text" id="recibo-nit"></div>
+            <div class="field"><label>Proveedor</label><input type="text" id="recibo-tercero"></div>
           </div>
           <div class="table-wrap">
             <table id="tbl-recibo-items">
-              <thead><tr><th>Código</th><th>Descripción</th><th class="num">Débito</th><th class="num">Crédito</th><th>Orden asociada</th><th>Observación</th><th></th></tr></thead>
+              <thead><tr><th>Ítem</th><th>Descripción</th><th class="num">Cant.</th><th class="num">Vr. Unit.</th><th class="num">IVA %</th><th class="num">Reten. %</th><th class="num">Vr. Total</th><th>Orden asociada</th><th>Observación</th><th></th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
