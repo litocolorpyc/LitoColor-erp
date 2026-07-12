@@ -222,8 +222,12 @@
       <div class="card">
         <div class="card-head"><h3>Orden de producción</h3><span class="card-hint" id="opp-form-mode">Creando una orden nueva</span></div>
         <div class="form-foot" style="margin-top:0;margin-bottom:14px">
-          <span></span>
-          <button type="button" class="btn-secondary" id="opp-reset">Nueva orden (limpiar formulario)</button>
+          <span class="card-hint">¿Ya tienes la orden en Excel? Impórtala y solo revisa antes de guardar</span>
+          <span style="display:flex;gap:8px">
+            <input type="file" id="opp-import-file" accept=".xlsx,.xls" style="display:none">
+            <button type="button" class="btn-secondary" id="opp-import-btn">⬆ Importar desde Excel</button>
+            <button type="button" class="btn-secondary" id="opp-reset">Nueva orden (limpiar formulario)</button>
+          </span>
         </div>
         <div class="form-row">
           <div class="field"><label>Orden N°</label><input type="number" id="opp-orden" required></div>
@@ -771,6 +775,7 @@
         <div class="help-tip"><b>Tip:</b> el campo "Proveedor" te sugiere primero los proveedores del tipo más relevante según el tipo de trabajo (ej. "Proveedor de Maquila" para Trabajo Externo) — pero puedes elegir cualquiera. Si escribes uno que no existe, se crea solo.</div>
         <h4>Crear / Consultar una orden</h4>
         <p><b>Crear:</b> llena Orden, Cliente/Producto (listas desplegables, con "+ Nuevo…" si no existe), y cada Pieza. Al elegir el Producto, "Nombre de la pieza" sugiere las piezas ya usadas antes para ese producto — si escribes una nueva, queda registrada sola para la próxima vez. El "Pliego" solo permite 70x100 (el más común, viene por defecto) o 60x90.</p>
+        <p><b>Importar desde Excel:</b> si ya tienes la orden en el Excel "formulario" que usa producción (bloques de columnas, uno por pieza), usa el botón <b>"⬆ Importar desde Excel"</b> junto a "Nueva orden" — llena el formulario solo (cliente, producto, y cada pieza con papel, tintas, tamaños, acabados). No guarda nada automáticamente: siempre revisas y le das click a "Guardar orden completa", igual que si la digitaras a mano. Si el archivo trae varias órdenes juntas, te pregunta cuál importar. Este importador es para órdenes de <b>Litografía</b> (el formato clásico de planta).</p>
         <p><b>Si escribes el número de una orden que ya existe</b> en "Orden N°", el sistema la detecta sola y carga todo (cliente, producto, piezas) en modo edición — no hace falta ir a buscarla en la tabla.</p>
         <p><b>Consultar orden:</b> arriba del todo en Órdenes hay una tarjeta para escribir cualquier número de orden y ver su detalle completo sin tener que buscarla en la tabla de abajo.</p>
         <p><b>Buscar/Editar/Duplicar/Cancelar:</b> en "Buscar y administrar órdenes". "Duplicar" crea una orden NUEVA con los mismos datos — útil cuando un cliente repite un pedido. "Cancelar" no borra historial, solo retira.</p>
