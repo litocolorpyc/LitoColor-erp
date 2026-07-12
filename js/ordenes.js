@@ -881,6 +881,217 @@ export function imprimirDetalleOrden(orden){
 }
 
 // ---------- crear / editar / duplicar / cancelar ----------
+// ============================================================
+// IMPORTAR ORDEN DESDE EXCEL
+// Lee un archivo .xlsx con el formato "formulario" que usa
+// producción (bloques de columnas repetidos, uno por pieza) y
+// llena el formulario de arriba — NO guarda nada solo, siempre
+// hay que revisar y darle click a "Guardar orden completa". Este
+// formato es el de Litografía (papel, pliego, tintas, troquelado…).
+// ============================================================
+
+function normalizarTexto(s){
+  return String(s == null ? '' : s).trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+// Busca la primera fila (desde `desde`) donde alguna de las primeras
+// columnas contenga una de las etiquetas dadas (ej. "Cliente", "Orden").
+// No asume en qué columna exacta está la etiqueta porque cambia de un
+// archivo a otro según cómo estén combinadas las celdas.
+function buscarFila(grid, etiquetas, desde = 0){
+  const objetivo = etiquetas.map(normalizarTexto);
+  for(let i = desde; i < grid.length; i++){
+    const fila = grid[i] || [];
+    for(let c = 0; c < Math.min(fila.length, 5); c++){
+      if(objetivo.includes(normalizarTexto(fila[c]))) return i;
+    }
+  }
+  return -1;
+}
+
+function valorCelda(grid, fila, col){
+  if(fila < 0 || col < 0) return null;
+  const v = (grid[fila] || [])[col];
+  return (v === undefined || v === '') ? null : v;
+}
+
+function leerArchivoComoGrid(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try{
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        resolve(XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true }));
+      }catch(err){ reject(err); }
+    };
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// Detecta en qué columnas empieza cada "bloque" (cada pieza/suborden)
+// usando la fila de "Orden" como referencia: cada valor numérico en
+// esa fila marca el inicio de un bloque de 3 columnas.
+function columnasDeBloque(grid, filaOrden){
+  const fila = grid[filaOrden] || [];
+  const cols = [];
+  for(let c = 0; c < fila.length; c++){
+    const v = fila[c];
+    if(v !== null && v !== '' && !isNaN(parseFloat(v))) cols.push(c);
+  }
+  return cols;
+}
+
+function extraerPiezasDelGrid(grid){
+  const filaOrden = buscarFila(grid, ['Orden']);
+  if(filaOrden === -1){
+    throw new Error('No encontré la fila "Orden" en el archivo. ¿Es el formato de orden de producción que usa planta?');
+  }
+  const cols = columnasDeBloque(grid, filaOrden);
+  if(!cols.length){
+    throw new Error('Encontré la fila "Orden" pero no logré leer ningún número de orden en ella.');
+  }
+
+  const filaCliente = buscarFila(grid, ['Cliente']);
+  const filaSuborden = buscarFila(grid, ['SubOrden', 'Sub Orden', 'Sub orden']);
+  const filaProducto = buscarFila(grid, ['Producto']);
+  const filaPieza = buscarFila(grid, ['Piezas', 'Pieza']);
+  const filaCantidad = buscarFila(grid, ['Cantidad']);
+  const filaTamano = buscarFila(grid, ['Tamaño', 'Tamano']);
+  const filaPapel = buscarFila(grid, ['Papel']);
+  const filaTintas = buscarFila(grid, ['Tintas']);
+  const filaCtp = buscarFila(grid, ['Ctp']);
+  const filaLaminados = buscarFila(grid, ['Laminados']);
+  const filaBarniz = buscarFila(grid, ['Barniz UV']);
+  const filaTroquelado = buscarFila(grid, ['Troquelado']);
+  const filaTroquel = buscarFila(grid, ['Troquel']);
+  const filaTalonarios = buscarFila(grid, ['Talonarios']);
+  const filaOtros = buscarFila(grid, ['Otros']);
+  const filaUnidadesMontaje = buscarFila(grid, ['Unidades Por Montaje', 'Unidades por Montaje']);
+  const filaTamProgramados = buscarFila(grid, ['Tamaños Programados', 'Tamanos Programados']);
+  const filaMedidas = buscarFila(grid, ['Medidas Tamaño', 'Medida Tamaño', 'Medidas Tamano']);
+  const filaTamPorPliego = buscarFila(grid, ['Tamaños por pliego', 'Tamanos por pliego']);
+
+  const bloques = cols.map(c => {
+    const otrosLineas = [];
+    if(filaOtros !== -1){
+      for(let r = filaOtros; r < filaOtros + 3 && r < grid.length; r++){
+        const v = valorCelda(grid, r, c);
+        if(v) otrosLineas.push(String(v).trim());
+      }
+    }
+    return {
+      cliente: valorCelda(grid, filaCliente, c),
+      orden: valorCelda(grid, filaOrden, c),
+      suborden: valorCelda(grid, filaSuborden, c),
+      producto: valorCelda(grid, filaProducto, c),
+      pieza: valorCelda(grid, filaPieza, c),
+      cantidad: valorCelda(grid, filaCantidad, c),
+      tamano_ancho: valorCelda(grid, filaTamano, c),
+      tamano_alto: valorCelda(grid, filaTamano, c + 2),
+      papel: valorCelda(grid, filaPapel, c),
+      tintas_frente: valorCelda(grid, filaTintas, c),
+      tintas_atras: valorCelda(grid, filaTintas, c + 2),
+      ctp: valorCelda(grid, filaCtp, c) || 'Convencional',
+      laminado: valorCelda(grid, filaLaminados, c),
+      laminado_lados: valorCelda(grid, filaLaminados, c + 2),
+      barniz_uv: !!valorCelda(grid, filaBarniz, c),
+      troquelado: !!valorCelda(grid, filaTroquelado, c),
+      troquel_detalle: valorCelda(grid, filaTroquel, c),
+      talonarios: !!valorCelda(grid, filaTalonarios, c),
+      otros_acabados: otrosLineas.length ? otrosLineas.join(', ') : null,
+      unidades_por_montaje: valorCelda(grid, filaUnidadesMontaje, c) || 1,
+      tamanos_programados: valorCelda(grid, filaTamProgramados, c),
+      medida_tamano_ancho: valorCelda(grid, filaMedidas, c),
+      medida_tamano_alto: valorCelda(grid, filaMedidas, c + 2),
+      tamanos_por_pliego: valorCelda(grid, filaTamPorPliego, c)
+    };
+  }).filter(b => b.orden != null && !isNaN(parseFloat(b.orden)));
+
+  return bloques;
+}
+
+// Llena el formulario con las piezas ya interpretadas — el usuario
+// sigue teniendo que revisar y darle "Guardar orden completa". El
+// formato importado es siempre de Litografía.
+function aplicarImportacion(ordenNum, piezas){
+  editingOrden = null;
+  document.getElementById('opp-form-mode').textContent = 'Importado desde Excel — revisa los datos antes de guardar';
+  document.getElementById('opp-orden').value = ordenNum;
+  document.getElementById('opp-orden').disabled = false;
+  document.getElementById('opp-fecha').value = new Date().toISOString().slice(0, 10);
+  setValSafe('opp-tipo-trabajo', 'Litografia');
+  aplicarTipoTrabajo();
+
+  const cliente = piezas[0] && piezas[0].cliente ? String(piezas[0].cliente).trim() : '';
+  ensureOptionExists(document.getElementById('opp-cliente'), cliente);
+
+  const producto = piezas[0] && piezas[0].producto ? String(piezas[0].producto).trim() : '';
+  ensureOptionExists(document.getElementById('opp-producto'), producto);
+  renderProductoRef();
+  refreshPiezasDatalist();
+
+  document.getElementById('opp-piezas-list').innerHTML = '';
+  oppPiezaCount = 0;
+  piezas.forEach(p => addPiezaCard({
+    pieza: p.pieza,
+    cantidad: p.cantidad,
+    tamano_ancho: p.tamano_ancho,
+    tamano_alto: p.tamano_alto,
+    papel: p.papel ? String(p.papel).trim() : '',
+    tintas_frente: p.tintas_frente,
+    tintas_atras: p.tintas_atras,
+    ctp: p.ctp,
+    laminado: p.laminado,
+    laminado_lados: p.laminado_lados,
+    barniz_uv: p.barniz_uv,
+    troquelado: p.troquelado,
+    troquel_detalle: p.troquel_detalle,
+    talonarios: p.talonarios,
+    otros_acabados: p.otros_acabados,
+    unidades_por_montaje: p.unidades_por_montaje,
+    medida_tamano_ancho: p.medida_tamano_ancho,
+    medida_tamano_alto: p.medida_tamano_alto,
+    tamanos_por_pliego: p.tamanos_por_pliego,
+    tamanos_programados: p.tamanos_programados
+  }));
+
+  toast(`Se leyeron ${piezas.length} pieza(s) de la orden ${ordenNum} — revísalas antes de guardar`);
+  document.getElementById('panel-ordenes').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function importarOrdenExcel(file){
+  const grid = await leerArchivoComoGrid(file);
+  const bloques = extraerPiezasDelGrid(grid);
+  if(!bloques.length){
+    throw new Error('No encontré ninguna pieza reconocible en el archivo.');
+  }
+
+  const ordenesDistintas = [...new Set(bloques.map(b => Math.round(parseFloat(b.orden))))];
+  let ordenElegida = ordenesDistintas[0];
+
+  if(ordenesDistintas.length > 1){
+    const resp = prompt(
+      'Este archivo tiene varias órdenes: ' + ordenesDistintas.join(', ') +
+      '.\nEscribe cuál quieres importar (se importa una a la vez):',
+      ordenesDistintas[0]
+    );
+    if(resp == null) return; // el usuario canceló
+    ordenElegida = parseInt(resp, 10);
+    if(!ordenesDistintas.includes(ordenElegida)){
+      toast('Ese número de orden no está en el archivo');
+      return;
+    }
+  }
+
+  const piezas = bloques
+    .filter(b => Math.round(parseFloat(b.orden)) === ordenElegida)
+    .sort((a, b) => (parseFloat(a.suborden) || 0) - (parseFloat(b.suborden) || 0));
+
+  aplicarImportacion(ordenElegida, piezas);
+}
+
 function resetOppForm(nextOrden){
   editingOrden = null;
   document.getElementById('opp-form-mode').textContent = 'Creando una orden nueva';
@@ -1157,6 +1368,25 @@ export function initOppForm(){
   on('opp-add-pieza', 'click', () => addPiezaCard());
   on('opp-save', 'click', saveOpp);
   on('opp-reset', 'click', () => resetOppForm());
+
+  const inputImportar = document.getElementById('opp-import-file');
+  const btnImportar = document.getElementById('opp-import-btn');
+  if(inputImportar && btnImportar){
+    btnImportar.addEventListener('click', () => inputImportar.click());
+    inputImportar.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      e.target.value = ''; // para poder volver a elegir el mismo archivo después
+      if(!file) return;
+      try{
+        await importarOrdenExcel(file);
+      }catch(err){
+        console.error(err);
+        toast('No se pudo importar el Excel: ' + err.message);
+      }
+    });
+  } else {
+    console.warn('[ordenes.js] No se encontró el botón "Importar desde Excel" — revisa que index.html esté actualizado.');
+  }
   on('opp-buscar', 'input', filtrarOrdenes);
   on('opp-detalle-cerrar', 'click', () => {
     document.getElementById('opp-detalle-card').style.display = 'none';
