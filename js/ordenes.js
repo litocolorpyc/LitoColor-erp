@@ -467,10 +467,19 @@ function renderPrioridadOrdenes(){
     return `<div class="prioridad-row" data-orden="${o.orden}" draggable="${puedeArrastrar}">
       <span class="prioridad-handle">${puedeArrastrar ? '⠿' : '·'}</span>
       <span class="prioridad-num">${i + 1}</span>
-      <span class="prioridad-info"><b>Orden ${o.orden}</b> — ${o.cliente || '—'} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></span>
+      <span class="prioridad-info fila-clicable"><b>Orden ${o.orden}</b> — ${o.cliente || '—'} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></span>
       ${estadoBadgeHTML(estado)}
     </div>`;
   }).join('');
+
+  // El texto de cada fila abre el detalle completo — separado del arrastre,
+  // que sigue funcionando desde cualquier parte de la fila con el ícono ⠿.
+  cont.querySelectorAll('.prioridad-info').forEach(info => {
+    info.addEventListener('click', () => {
+      const orden = parseInt(info.closest('.prioridad-row').dataset.orden, 10);
+      mostrarDetalleOrden(orden);
+    });
+  });
 
   if(!puedeArrastrar) return;
 
@@ -576,11 +585,14 @@ export function renderEstadoOrdenes(){
       </div>`;
     }).join('');
     const estado = estadoOrden(o);
-    return `<div class="estado-orden">
+    return `<div class="estado-orden fila-clicable" data-orden="${o.orden}">
       <div class="estado-orden-head"><b>Orden ${o.orden} — ${o.cliente || ''}</b>${estadoBadgeHTML(estado)}</div>
       ${filas}
     </div>`;
   }).join('') || '<p style="color:var(--ink-faint);font-size:13px">Sin piezas asociadas todavía.</p>';
+  cont.querySelectorAll('.estado-orden[data-orden]').forEach(el => {
+    el.addEventListener('click', () => mostrarDetalleOrden(parseInt(el.dataset.orden, 10)));
+  });
 }
 
 // ---------- radar histórico: órdenes del Excel migrado, último mes ----------
@@ -604,8 +616,11 @@ export function renderRadarHistorico(){
     .sort((a,b) => b[1].fecha.localeCompare(a[1].fecha));
 
   document.querySelector('#tbl-radar-historico tbody').innerHTML = vivas.map(([orden, info]) =>
-    `<tr><td>${orden}</td><td>${info.cliente || '—'}</td><td>${info.trabajo || '—'}</td><td>${info.fecha.slice(0,10)}</td></tr>`
+    `<tr class="fila-clicable" data-orden="${orden}"><td>${orden}</td><td>${info.cliente || '—'}</td><td>${info.trabajo || '—'}</td><td>${info.fecha.slice(0,10)}</td></tr>`
   ).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--ink-faint)">Sin actividad histórica en el último mes</td></tr>';
+  document.querySelectorAll('#tbl-radar-historico tbody tr[data-orden]').forEach(tr => {
+    tr.addEventListener('click', () => mostrarDetalleOrden(parseInt(tr.dataset.orden, 10)));
+  });
 }
 
 let chartDetalle = null;
@@ -672,7 +687,10 @@ function ingresoDeOrden(orden){
 
 export function mostrarDetalleOrden(orden){
   const o = DB.opp_ordenes.find(x => x.orden === orden);
-  if(!o) return;
+  if(!o){
+    toast('La orden ' + orden + ' es histórica (viene del Excel migrado) y no tiene ficha de detalle en OPP');
+    return;
+  }
   const piezas = DB.opp_piezas.filter(p => p.orden === orden).sort((a,b)=>a.suborden-b.suborden);
   const registros = DB.produccion.filter(r => r.orden === orden);
   const estado = estadoOrden(o);

@@ -1,5 +1,18 @@
 import { DB } from './store.js';
 import { fmtCOP, fmtNum, areaColor, rangoFechas, rangoAnterior, deltaBadge, exportarExcel } from './helpers.js';
+import { mostrarDetalleOrden } from './ordenes.js';
+
+// Cambia a la pestaña de Órdenes y abre el detalle completo de una orden —
+// se usa desde las tablas del Gerencial donde se puede hacer click en una
+// fila para ver de qué se trata esa orden.
+function irAOrdenYVerDetalle(orden){
+  const btnTab = document.querySelector('.tab-btn[data-tab="ordenes"]');
+  if(!btnTab){ return; }
+  btnTab.click();
+  // pequeña espera para que el panel de Órdenes ya esté visible antes de
+  // desplazarse y abrir el detalle.
+  setTimeout(() => mostrarDetalleOrden(orden), 50);
+}
 
 let charts = {};
 function makeChart(id, config){
@@ -20,20 +33,6 @@ function enRango(fecha, desde, hasta){
   return f >= desde && f <= hasta;
 }
 
-// El Gerencial, por ahora, solo debe mostrar lo relacionado a órdenes
-// activas (las que están en el módulo de Órdenes/OPP) -- así lo pidió
-// Julián, para no confundir con todo el histórico mientras se define
-// qué información se le entrega y cómo. Cuando una orden se marca
-// como terminada/cancelada (deja de estar en opp_ordenes o cambia de
-// estado), sale sola de este panel.
-function ordenesActivasSet(){
-  return new Set(
-    DB.opp_ordenes
-      .filter(o => o.estado !== 'Cancelada' && o.estado !== 'Cerrada')
-      .map(o => o.orden)
-  );
-}
-
 function buildCodeMap(){
   const m = {};
   DB.actividades.forEach(a => { m[String(a.codigo)] = a; });
@@ -51,19 +50,15 @@ let ultimaRentabilidad = [];
 let ultimaRentabilidadProducto = [];
 
 function calcularGerencial(desde, hasta){
-  const activas = ordenesActivasSet();
-  const pedidos = DB.pedidos.filter(p => enRango(p.fecha, desde, hasta) && activas.has(p.orden));
-  const produccion = DB.produccion.filter(r => enRango(r.fecha, desde, hasta) && activas.has(r.orden));
+  const pedidos = DB.pedidos.filter(p => enRango(p.fecha, desde, hasta));
+  const produccion = DB.produccion.filter(r => enRango(r.fecha, desde, hasta));
   const costosMov = DB.costos_movimientos.filter(m => enRango(m.fecha, desde, hasta));
-  const costosMovGenerales = costosMov.filter(m => m.orden == null);
-  const costosMovDirectos = costosMov.filter(m => m.orden != null);
   const ingresos = pedidos.reduce((s,p)=>s+(p.total||0),0);
   const costoMO = produccion.reduce((s,r)=>s+(r.valorActividad||0),0);
   const costosFijos = costosMov.filter(m=>m.tipo==='Fijo').reduce((s,m)=>s+(m.valor||0),0);
   const costosVariables = costosMov.filter(m=>m.tipo==='Variable').reduce((s,m)=>s+(m.valor||0),0);
   const otrosCostos = costosFijos + costosVariables;
-  const otrosGenerales = costosMovGenerales.reduce((s,m)=>s+(m.valor||0),0);
-  return { ingresos, costoMO, otrosCostos, otrosGenerales, costosFijos, costosVariables, costosMovDirectos,
+  return { ingresos, costoMO, otrosCostos, costosFijos, costosVariables,
     margen: ingresos - costoMO - otrosCostos,
     ordenes: new Set(pedidos.map(p=>p.orden)).size, pedidos, produccion };
 }
@@ -78,11 +73,11 @@ export function renderGerencial(){
     : calcularGerencial(ant.desde, ant.hasta);
 
   document.getElementById('ger-kpis').innerHTML = `
-    <div class="kpi"><div class="lbl">Ingresos facturados</div><div class="val">${fmtCOP(actual.ingresos)} ${deltaBadge(actual.ingresos, anterior.ingresos)}</div><div class="sub">solo órdenes activas</div></div>
-    <div class="kpi"><div class="lbl">Costo mano de obra</div><div class="val">${fmtCOP(actual.costoMO)} ${deltaBadge(actual.costoMO, anterior.costoMO)}</div><div class="sub">solo órdenes activas</div></div>
-    <div class="kpi"><div class="lbl">Otros costos (fijos + variables)</div><div class="val">${fmtCOP(actual.otrosCostos)} ${deltaBadge(actual.otrosCostos, anterior.otrosCostos)}</div><div class="sub">total de la empresa en el periodo, no solo de estas órdenes</div></div>
-    <div class="kpi"><div class="lbl">Margen estimado</div><div class="val ${actual.margen>=0?'pos':'neg'}">${fmtCOP(actual.margen)} ${deltaBadge(actual.margen, anterior.margen)}</div><div class="sub">ingresos activas − M.O. activas − otros costos totales</div></div>
-    <div class="kpi"><div class="lbl">Órdenes con valor</div><div class="val">${actual.ordenes} ${deltaBadge(actual.ordenes, anterior.ordenes)}</div><div class="sub">activas, vs. periodo anterior equivalente</div></div>`;
+    <div class="kpi"><div class="lbl">Ingresos facturados</div><div class="val">${fmtCOP(actual.ingresos)} ${deltaBadge(actual.ingresos, anterior.ingresos)}</div><div class="sub">según pedidos con valor</div></div>
+    <div class="kpi"><div class="lbl">Costo mano de obra</div><div class="val">${fmtCOP(actual.costoMO)} ${deltaBadge(actual.costoMO, anterior.costoMO)}</div><div class="sub">según bitácora de producción</div></div>
+    <div class="kpi"><div class="lbl">Otros costos (fijos + variables)</div><div class="val">${fmtCOP(actual.otrosCostos)} ${deltaBadge(actual.otrosCostos, anterior.otrosCostos)}</div><div class="sub">arriendo, nómina, materia prima, impuestos…</div></div>
+    <div class="kpi"><div class="lbl">Margen estimado</div><div class="val ${actual.margen>=0?'pos':'neg'}">${fmtCOP(actual.margen)} ${deltaBadge(actual.margen, anterior.margen)}</div><div class="sub">ingresos − mano de obra − otros costos</div></div>
+    <div class="kpi"><div class="lbl">Órdenes con valor</div><div class="val">${actual.ordenes} ${deltaBadge(actual.ordenes, anterior.ordenes)}</div><div class="sub">vs. periodo anterior equivalente</div></div>`;
 
   const mesesMap = {};
   actual.pedidos.forEach(p=>{ if(!p.fecha) return; const k=p.fecha.slice(0,7); mesesMap[k]=mesesMap[k]||{ing:0,cost:0}; mesesMap[k].ing+=(p.total||0); });
@@ -106,26 +101,25 @@ export function renderGerencial(){
   actual.pedidos.forEach(p=>{ ordIng[p.orden]=(ordIng[p.orden]||0)+(p.total||0); ordCliente[p.orden]=p.cliente; ordTrabajo[p.orden]=ordTrabajo[p.orden]||p.trabajo; });
   const ordCost = {};
   actual.produccion.forEach(r=>{ if(r.orden==null) return; ordCost[r.orden]=(ordCost[r.orden]||0)+(r.valorActividad||0); });
-  const ordCostoDirecto = {};
-  actual.costosMovDirectos.forEach(m=>{ ordCostoDirecto[m.orden]=(ordCostoDirecto[m.orden]||0)+(m.valor||0); });
 
-  // tasa de prorrateo: solo los costos generales (SIN orden) se reparten
-  // según el ingreso de cada orden. Los costos ya ligados a una orden
-  // puntual (ej. una tercerización) se le suman completos y exactos,
-  // sin prorratear -- no tiene sentido repartir entre todas un gasto que
-  // ya sabemos a cuál pertenece.
-  const tasaOtros = actual.ingresos > 0 ? (actual.otrosGenerales / actual.ingresos) : 0;
+  // tasa de prorrateo: otros costos (fijos+variables, SIN mano de obra) como
+  // % del ingreso del periodo — se reparte a cada orden/producto según lo
+  // que facturó. La mano de obra nunca entra aquí, ya está exacta por orden.
+  const tasaOtros = actual.ingresos > 0 ? (actual.otrosCostos / actual.ingresos) : 0;
 
   const rows = Object.keys(ordIng).map(o=>({
       orden:o, cliente:ordCliente[o], trabajo:ordTrabajo[o], ing:ordIng[o], cost:ordCost[o]||0,
-      otros: ordIng[o]*tasaOtros + (ordCostoDirecto[o]||0)
+      otros: ordIng[o]*tasaOtros
     }))
     .sort((a,b)=>b.ing-a.ing).slice(0,15);
   ultimaRentabilidad = rows;
   document.querySelector('#tbl-ger-ordenes tbody').innerHTML = rows.map(r=>{
     const m=r.ing-r.cost-r.otros;
-    return `<tr><td><a href="#" class="orden-link" data-orden="${r.orden}">${r.orden}</a></td><td>${r.cliente||'—'}</td><td>${(r.trabajo||'—').toString().trim()}</td><td class="num">${fmtCOP(r.ing)}</td><td class="num">${fmtCOP(r.cost)}</td><td class="num">${fmtCOP(r.otros)}</td><td class="num" style="color:${m>=0?'var(--good)':'var(--bad)'}">${fmtCOP(m)}</td></tr>`;
+    return `<tr class="fila-clicable" data-orden="${r.orden}"><td>${r.orden}</td><td>${r.cliente||'—'}</td><td>${(r.trabajo||'—').toString().trim()}</td><td class="num">${fmtCOP(r.ing)}</td><td class="num">${fmtCOP(r.cost)}</td><td class="num">${fmtCOP(r.otros)}</td><td class="num" style="color:${m>=0?'var(--good)':'var(--bad)'}">${fmtCOP(m)}</td></tr>`;
   }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint)">Sin datos en este rango</td></tr>';
+  document.querySelectorAll('#tbl-ger-ordenes tbody tr[data-orden]').forEach(tr => {
+    tr.addEventListener('click', () => irAOrdenYVerDetalle(parseInt(tr.dataset.orden, 10)));
+  });
 
   // ---- rentabilidad por tipo de producto ----
   const ordProducto = {};
@@ -134,15 +128,14 @@ export function renderGerencial(){
   const prodMap = {};
   Object.keys(ordIng).forEach(o => {
     const prod = ordProducto[o] || 'Sin producto';
-    prodMap[prod] = prodMap[prod] || { ing:0, cost:0, directo:0, ordenes:new Set() };
+    prodMap[prod] = prodMap[prod] || { ing:0, cost:0, ordenes:new Set() };
     prodMap[prod].ing += ordIng[o];
     prodMap[prod].cost += (ordCost[o] || 0);
-    prodMap[prod].directo += (ordCostoDirecto[o] || 0);
     prodMap[prod].ordenes.add(o);
   });
   const filasProducto = Object.entries(prodMap)
     .map(([prod, v]) => {
-      const otros = v.ing * tasaOtros + v.directo;
+      const otros = v.ing * tasaOtros;
       const margen = v.ing - v.cost - otros;
       return { producto: prod, ordenes: v.ordenes.size, ing: v.ing, cost: v.cost, otros, margen, margenPct: v.ing>0 ? (margen/v.ing*100) : 0 };
     })
@@ -225,10 +218,9 @@ export function renderProduccion(){
   const { desde, hasta } = rangoProd;
   const esTodo = desde === '2024-01-01';
   const codeMap = buildCodeMap();
-  const activas = ordenesActivasSet();
-  const produccion = DB.produccion.filter(r => enRango(r.fecha, desde, hasta) && activas.has(r.orden));
+  const produccion = DB.produccion.filter(r => enRango(r.fecha, desde, hasta));
   const ant = rangoAnterior(desde, hasta);
-  const produccionAnt = esTodo ? [] : DB.produccion.filter(r => enRango(r.fecha, ant.desde, ant.hasta) && activas.has(r.orden));
+  const produccionAnt = esTodo ? [] : DB.produccion.filter(r => enRango(r.fecha, ant.desde, ant.hasta));
   const horasAntBase = esTodo ? null : produccionAnt.reduce((s,r)=>s+(r.tiempoHr||0),0);
   const piezasAntBase = esTodo ? null : produccionAnt.reduce((s,r)=>s+(r.cantidad||0),0);
 
@@ -238,7 +230,7 @@ export function renderProduccion(){
   const eficiencia = horasTot>0 ? (directaHrs/horasTot*100) : 0;
 
   document.getElementById('prod-kpis').innerHTML = `
-    <div class="kpi"><div class="lbl">Horas registradas</div><div class="val">${fmtNum(horasTot)} ${deltaBadge(horasTot, horasAntBase)}</div><div class="sub">${produccion.length} registros · solo órdenes activas</div></div>
+    <div class="kpi"><div class="lbl">Horas registradas</div><div class="val">${fmtNum(horasTot)} ${deltaBadge(horasTot, horasAntBase)}</div><div class="sub">${produccion.length} registros</div></div>
     <div class="kpi"><div class="lbl">Piezas producidas</div><div class="val">${fmtNum(piezasTot,0)} ${deltaBadge(piezasTot, piezasAntBase)}</div><div class="sub">suma de cantidad producida</div></div>
     <div class="kpi"><div class="lbl">% tiempo directo</div><div class="val">${fmtNum(eficiencia,0)}%</div><div class="sub">horas directas / horas totales</div></div>`;
 
@@ -273,8 +265,7 @@ export function populateOperarioSelect(){
 }
 export function renderOperario(){
   const sel = document.getElementById('op-select').value;
-  const activas = ordenesActivasSet();
-  const recs = DB.produccion.filter(r => activas.has(r.orden) && (sel==='__ALL__' ? true : (r.operario||'').trim().startsWith(sel.split(' ')[0]) || r.operario===sel));
+  const recs = DB.produccion.filter(r=> sel==='__ALL__' ? true : (r.operario||'').trim().startsWith(sel.split(' ')[0]) || r.operario===sel );
   const horas = recs.reduce((s,r)=>s+(r.tiempoHr||0),0);
   const valor = recs.reduce((s,r)=>s+(r.valorActividad||0),0);
   document.getElementById('op-chart-hint').textContent = sel==='__ALL__' ? 'de toda la planta' : 'de '+sel;
@@ -290,171 +281,17 @@ export function renderOperario(){
     options: baseBarOpts(false,true) });
 
   const recent = recs.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')).slice(0,15);
-  document.querySelector('#tbl-op-log tbody').innerHTML = recent.map(r=>{
-    const opp = r.opp && /^\d+-\d+$/.test(r.opp) ? r.opp : null;
-    const celdaOrden = r.orden==null ? '—'
-      : opp ? `<a href="#" class="suborden-link" data-orden="${r.orden}" data-opp="${opp}">${opp}</a>`
-      : `<a href="#" class="orden-link" data-orden="${r.orden}">${r.orden}</a>`;
-    return `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td>${celdaOrden}</td><td class="num">${fmtNum(r.cantidad,0)}</td><td class="num">${fmtNum(r.tiempoHr,2)}</td><td class="num">${fmtCOP(r.valorActividad)}</td></tr>`;
-  }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin registros</td></tr>';
+  document.querySelector('#tbl-op-log tbody').innerHTML = recent.map(r=>`<tr class="${r.orden!=null?'fila-clicable':''}" data-orden="${r.orden??''}"><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td>${r.orden??'—'}</td><td class="num">${fmtNum(r.cantidad,0)}</td><td class="num">${fmtNum(r.tiempoHr,2)}</td><td class="num">${fmtCOP(r.valorActividad)}</td></tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin registros</td></tr>';
+  document.querySelectorAll('#tbl-op-log tbody tr[data-orden]').forEach(tr => {
+    if(!tr.dataset.orden) return;
+    tr.addEventListener('click', () => irAOrdenYVerDetalle(parseInt(tr.dataset.orden, 10)));
+  });
 }
 
 export function initDashboardFilters(){
   wireRangePresets('ger-presets', 'ger-desde', 'ger-hasta', () => rangoGer, r => rangoGer = r, renderGerencial);
   wireRangePresets('prod-presets', 'prod-desde', 'prod-hasta', () => rangoProd, r => rangoProd = r, renderProduccion);
   wireExportButtons();
-  wireDetalleOrdenGer();
-}
-
-function fmtHr(h){ return h==null || isNaN(h) ? '—' : fmtNum(h,2) + ' hr'; }
-
-// ---------- Detalle de Orden / Suborden, click desde "Rentabilidad por orden" ----------
-function renderDetalleOrdenGer(orden){
-  const pedidosOrden = DB.pedidos.filter(p => p.orden === orden).sort((a,b) => (a.suborden||0)-(b.suborden||0));
-  const produccionOrden = DB.produccion.filter(r => r.orden === orden);
-  const tercerosOrden = DB.costos_movimientos.filter(m => m.orden === orden);
-
-  const costoPorOpp = {};
-  produccionOrden.forEach(r => {
-    const k = r.opp || '—';
-    costoPorOpp[k] = costoPorOpp[k] || { costo:0, horas:0, registros:0 };
-    costoPorOpp[k].costo += (r.valorActividad || 0);
-    costoPorOpp[k].horas += (r.tiempoHr || 0);
-    costoPorOpp[k].registros += 1;
-  });
-  const tercerosPorOpp = {};
-  tercerosOrden.forEach(m => {
-    const k = m.opp || '—';
-    tercerosPorOpp[k] = (tercerosPorOpp[k] || 0) + (m.valor || 0);
-  });
-
-  // agrupa pedidos por suborden/opp (puede haber más de una línea por suborden)
-  const subMap = {};
-  pedidosOrden.forEach(p => {
-    const k = p.opp || ('suborden-' + p.suborden);
-    subMap[k] = subMap[k] || { opp: p.opp, suborden: p.suborden, producto: p.producto, trabajo: p.trabajo, cliente: p.cliente, ingreso: 0, pedido: 0 };
-    subMap[k].ingreso += (p.total || 0);
-    subMap[k].pedido += (p.pedido || 0);
-  });
-
-  const filas = Object.values(subMap).sort((a,b) => (a.suborden||0)-(b.suborden||0));
-  const cliente = filas[0] && filas[0].cliente;
-  const ingresoTotal = filas.reduce((s,f)=>s+f.ingreso, 0);
-  const costoTotal = produccionOrden.reduce((s,r)=>s+(r.valorActividad||0), 0);
-  const tercerosTotal = tercerosOrden.reduce((s,m)=>s+(m.valor||0), 0);
-
-  document.getElementById('ger-detalle-titulo').textContent = `Orden ${orden}${cliente ? ' — ' + cliente : ''}`;
-  document.getElementById('ger-detalle-cuerpo').innerHTML = `
-    <div class="kpi-row" style="margin-bottom:14px">
-      <div class="kpi"><div class="lbl">Ingreso total</div><div class="val">${fmtCOP(ingresoTotal)}</div></div>
-      <div class="kpi"><div class="lbl">Costo mano de obra</div><div class="val">${fmtCOP(costoTotal)}</div></div>
-      <div class="kpi"><div class="lbl">Tercerizado</div><div class="val">${fmtCOP(tercerosTotal)}</div></div>
-      <div class="kpi"><div class="lbl">Subórdenes / piezas</div><div class="val">${filas.length}</div></div>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>OPP</th><th>Producto / Trabajo</th><th class="num">Cant. pedida</th><th class="num">Ingreso</th><th class="num">Costo M.O.</th><th class="num">Tercerizado</th><th class="num">Margen</th></tr></thead>
-        <tbody>
-          ${filas.map(f => {
-            const cost = (costoPorOpp[f.opp] && costoPorOpp[f.opp].costo) || 0;
-            const tercero = tercerosPorOpp[f.opp] || 0;
-            const margen = f.ingreso - cost - tercero;
-            return `<tr><td><a href="#" class="suborden-link" data-orden="${orden}" data-opp="${f.opp || ''}">${f.opp || ('#' + f.suborden)}</a></td>
-              <td>${(f.trabajo || f.producto || '—').toString().trim()}</td>
-              <td class="num">${fmtNum(f.pedido,0)}</td>
-              <td class="num">${fmtCOP(f.ingreso)}</td>
-              <td class="num">${fmtCOP(cost)}</td>
-              <td class="num">${fmtCOP(tercero)}</td>
-              <td class="num" style="color:${margen>=0?'var(--good)':'var(--bad)'}">${fmtCOP(margen)}</td></tr>`;
-          }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint)">Sin subórdenes en Pedidos para esta orden</td></tr>'}
-        </tbody>
-      </table>
-    </div>
-    ${tercerosOrden.length ? `
-    <div class="card-hint" style="margin:14px 0 6px">Costos de tercerización de esta orden</div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>OPP</th><th>Fecha</th><th>Concepto</th><th>Proveedor</th><th class="num">Valor</th></tr></thead>
-        <tbody>${tercerosOrden.map(m => {
-          const conc = DB.costos_conceptos.find(c=>c.id===m.concepto_id);
-          return `<tr><td>${m.opp||'—'}</td><td>${(m.fecha||'').slice(0,10)}</td><td>${conc?conc.nombre:'—'}</td><td>${m.proveedor||'—'}</td><td class="num">${fmtCOP(m.valor)}</td></tr>`;
-        }).join('')}</tbody>
-      </table>
-    </div>` : ''}`;
-
-  document.getElementById('ger-detalle-overlay').style.display = 'flex';
-}
-
-function renderDetalleSubordenGer(orden, opp){
-  const pedidoLineas = DB.pedidos.filter(p => p.opp === opp);
-  const prodLineas = DB.produccion.filter(r => r.opp === opp).sort((a,b) => (a.fecha||'').localeCompare(b.fecha||''));
-  const tercerosLineas = DB.costos_movimientos.filter(m => m.opp === opp);
-  const costoTotal = prodLineas.reduce((s,r)=>s+(r.valorActividad||0), 0);
-  const horasTotal = prodLineas.reduce((s,r)=>s+(r.tiempoHr||0), 0);
-  const ingresoTotal = pedidoLineas.reduce((s,p)=>s+(p.total||0), 0);
-  const tercerosTotal = tercerosLineas.reduce((s,m)=>s+(m.valor||0), 0);
-
-  document.getElementById('ger-detalle-titulo').textContent = `Suborden ${opp}`;
-  document.getElementById('ger-detalle-cuerpo').innerHTML = `
-    <a href="#" class="ger-detalle-volver" data-orden="${orden}">← Volver a la orden ${orden}</a>
-    <div class="kpi-row" style="margin:14px 0">
-      <div class="kpi"><div class="lbl">Ingreso</div><div class="val">${fmtCOP(ingresoTotal)}</div></div>
-      <div class="kpi"><div class="lbl">Costo mano de obra</div><div class="val">${fmtCOP(costoTotal)}</div></div>
-      <div class="kpi"><div class="lbl">Tercerizado</div><div class="val">${fmtCOP(tercerosTotal)}</div></div>
-      <div class="kpi"><div class="lbl">Horas registradas</div><div class="val">${fmtHr(horasTotal)}</div></div>
-    </div>
-    <div class="card-hint" style="margin-bottom:6px">Pedido</div>
-    <div class="table-wrap" style="margin-bottom:16px">
-      <table>
-        <thead><tr><th>Fecha</th><th>Cliente</th><th>Producto</th><th>Trabajo</th><th class="num">Cant.</th><th class="num">Valor unit.</th><th class="num">Total</th></tr></thead>
-        <tbody>${pedidoLineas.map(p => `<tr><td>${(p.fecha||'').slice(0,10)}</td><td>${p.cliente||'—'}</td><td>${p.producto||'—'}</td><td>${(p.trabajo||'—').toString().trim()}</td><td class="num">${fmtNum(p.pedido,0)}</td><td class="num">${fmtCOP(p.valor)}</td><td class="num">${fmtCOP(p.total)}</td></tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint)">Sin línea de pedido</td></tr>'}</tbody>
-      </table>
-    </div>
-    <div class="card-hint" style="margin-bottom:6px">Registros de producción (bitácora)</div>
-    <div class="table-wrap" style="margin-bottom:16px">
-      <table>
-        <thead><tr><th>Fecha</th><th>Operario</th><th>Actividad</th><th class="num">Cantidad</th><th class="num">Tiempo</th><th class="num">Valor</th></tr></thead>
-        <tbody>${prodLineas.map(r => `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.operario||'—'}</td><td>${r.actividad||'—'}</td><td class="num">${fmtNum(r.cantidad,0)}</td><td class="num">${fmtHr(r.tiempoHr)}</td><td class="num">${fmtCOP(r.valorActividad)}</td></tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin registros de producción para esta suborden</td></tr>'}</tbody>
-      </table>
-    </div>
-    ${tercerosLineas.length ? `
-    <div class="card-hint" style="margin-bottom:6px">Tercerización de esta pieza</div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Fecha</th><th>Concepto</th><th>Proveedor</th><th>Comentario</th><th class="num">Valor</th></tr></thead>
-        <tbody>${tercerosLineas.map(m => {
-          const conc = DB.costos_conceptos.find(c=>c.id===m.concepto_id);
-          return `<tr><td>${(m.fecha||'').slice(0,10)}</td><td>${conc?conc.nombre:'—'}</td><td>${m.proveedor||'—'}</td><td>${m.comentario||'—'}</td><td class="num">${fmtCOP(m.valor)}</td></tr>`;
-        }).join('')}</tbody>
-      </table>
-    </div>` : ''}`;
-}
-
-function wireDetalleOrdenGer(){
-  document.addEventListener('click', (e) => {
-    const linkOrden = e.target.closest('.orden-link');
-    if(linkOrden){
-      e.preventDefault();
-      renderDetalleOrdenGer(parseInt(linkOrden.dataset.orden, 10));
-      return;
-    }
-    const linkSuborden = e.target.closest('.suborden-link');
-    if(linkSuborden){
-      e.preventDefault();
-      if(linkSuborden.dataset.opp) renderDetalleSubordenGer(parseInt(linkSuborden.dataset.orden, 10), linkSuborden.dataset.opp);
-      return;
-    }
-    const volver = e.target.closest('.ger-detalle-volver');
-    if(volver){
-      e.preventDefault();
-      renderDetalleOrdenGer(parseInt(volver.dataset.orden, 10));
-      return;
-    }
-  });
-  const cerrar = document.getElementById('ger-detalle-cerrar');
-  if(cerrar) cerrar.addEventListener('click', () => { document.getElementById('ger-detalle-overlay').style.display = 'none'; });
-  const overlay = document.getElementById('ger-detalle-overlay');
-  if(overlay) overlay.addEventListener('click', (e) => { if(e.target === overlay) overlay.style.display = 'none'; });
 }
 
 function wireExportButtons(){
