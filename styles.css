@@ -199,6 +199,8 @@ select, input, textarea{ font-family:inherit; font-size:13px; padding:7px 9px; b
 .ficha-val{ font-weight:600; text-align:right; }
 .detalle-orden-obs{ font-size:12px; color:var(--ink-soft); margin-bottom:12px; padding:8px 10px; background:rgba(0,0,0,0.03); border-radius:8px; }
 .campo-requerido-error{ border:1.5px solid #d64545 !important; box-shadow:0 0 0 2px rgba(214,69,69,0.15); border-radius:6px; }
+.fila-clicable{ cursor:pointer; }
+.fila-clicable:hover{ background:var(--brand-soft,rgba(24,95,165,0.06)); }
 
 /* Formulario de Órdenes: alterna entre la ficha completa de Litografía y la
    ficha simplificada de los demás tipos de trabajo (Gran Formato, Impresión
