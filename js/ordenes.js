@@ -1140,6 +1140,21 @@ async function importarOrdenExcel(file){
     .filter(b => Math.round(parseFloat(b.orden)) === ordenElegida)
     .sort((a, b) => (parseFloat(a.suborden) || 0) - (parseFloat(b.suborden) || 0));
 
+  const existente = DB.opp_ordenes.find(o => o.orden === ordenElegida);
+  if(existente){
+    const piezasActuales = DB.opp_piezas.filter(p => p.orden === ordenElegida).length;
+    const reemplazar = confirm(
+      `La orden ${ordenElegida} ya existe en el sistema (${existente.cliente || 'sin cliente'} — ${piezasActuales} pieza(s) guardadas actualmente).\n\n` +
+      `¿Qué quieres hacer?\n\n` +
+      `Aceptar = REEMPLAZAR la orden guardada con los datos de este Excel (se pierden los datos actuales de esa orden).\n` +
+      `Cancelar = CONSERVAR la orden como está — no se importa nada.`
+    );
+    if(!reemplazar){
+      toast(`Se conservó la orden ${ordenElegida} tal como estaba — no se importó nada`);
+      return;
+    }
+  }
+
   aplicarImportacion(ordenElegida, piezas);
 }
 
