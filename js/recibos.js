@@ -65,10 +65,10 @@ function parsePct(str){
 // de Planchas / CTP - OP5955-2") para sugerir a qué orden asociarlo — la
 // persona igual puede cambiarlo si la sugerencia no es la correcta.
 function detectarOrdenEnTexto(texto){
-  if(!texto) return null;
-  const m = String(texto).match(/OP\s?-?\s?(\d{3,6})/i);
-  if(!m) return null;
-  return parseInt(m[1], 10);
+  if(!texto) return { orden: null, suborden: null };
+  const m = String(texto).match(/OP\s?-?\s?(\d{3,6})\s?-\s?(\d{1,3})?/i);
+  if(!m) return { orden: null, suborden: null };
+  return { orden: parseInt(m[1], 10), suborden: m[2] ? parseInt(m[2], 10) : null };
 }
 
 // Intenta reconocer el formato "Compra" que genera Siigo. Si algo no
@@ -113,6 +113,7 @@ function parseCompraTexto(texto){
     const m = linea.trim().match(filaRegex);
     if(!m) return;
     const descripcion = m[6].trim();
+    const detectado = detectarOrdenEnTexto(descripcion);
     items.push({
       codigo: m[1],
       descripcion,
@@ -122,8 +123,9 @@ function parseCompraTexto(texto){
       cantidad: parseMoneyUS(m[7]),
       valor_credito: parseMoneyUS(m[8]), // se usa esta columna como "Vr. Total" del ítem
       valor_debito: 0,
-      orden: detectarOrdenEnTexto(descripcion),
-      observacion: ''
+      orden: detectado.orden,
+      suborden: detectado.suborden,
+      observacion: detectado.suborden ? `Pieza sugerida: ${detectado.orden}-${detectado.suborden}` : ''
     });
   });
 
@@ -152,9 +154,10 @@ function renderTablaItems(){
       <td><input type="number" class="ri-reten num" value="${it.retencion_pct||0}" style="width:55px"></td>
       <td><input type="number" class="ri-credito num" value="${it.valor_credito||0}" style="width:100px"></td>
       <td><select class="ri-orden">${opcionesOrden(it.orden)}</select></td>
+      <td><input type="number" class="ri-suborden" value="${it.suborden||''}" placeholder="sub." title="Suborden / pieza (ej. el 2 de OP5955-2)" style="width:55px"></td>
       <td><input type="text" class="ri-obs" value="${it.observacion||''}" placeholder="opcional" style="width:100%;min-width:120px"></td>
       <td><button type="button" class="row-btn row-btn-danger ri-del">✕</button></td>
-    </tr>`).join('') || '<tr><td colspan="10" style="text-align:center;color:var(--ink-faint)">Sin líneas todavía — agrega una manualmente</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="11" style="text-align:center;color:var(--ink-faint)">Sin líneas todavía — agrega una manualmente</td></tr>';
 
   tbody.querySelectorAll('tr').forEach(tr => {
     const i = parseInt(tr.dataset.i, 10);
@@ -167,6 +170,7 @@ function renderTablaItems(){
     tr.querySelector('.ri-reten').addEventListener('input', e => { itemsActuales[i].retencion_pct = parseFloat(e.target.value)||0; actualizarResumen(); });
     tr.querySelector('.ri-credito').addEventListener('input', e => { itemsActuales[i].valor_credito = parseFloat(e.target.value)||0; actualizarResumen(); });
     tr.querySelector('.ri-orden').addEventListener('change', e => itemsActuales[i].orden = e.target.value ? parseInt(e.target.value,10) : null);
+    tr.querySelector('.ri-suborden').addEventListener('input', e => itemsActuales[i].suborden = e.target.value ? parseInt(e.target.value,10) : null);
     tr.querySelector('.ri-obs').addEventListener('input', e => itemsActuales[i].observacion = e.target.value);
     tr.querySelector('.ri-del').addEventListener('click', () => { itemsActuales.splice(i,1); renderTablaItems(); actualizarResumen(); });
   });
@@ -221,6 +225,22 @@ async function manejarArchivo(file){
   actualizarResumen();
 }
 
+// Limpia el formulario completo (archivo, cabecera y tabla de líneas) para
+// empezar de cero con el próximo documento — igual que "Nueva orden" en
+// Órdenes. También sirve para descartar un intento si algo salió mal.
+function limpiarFormularioRecibo(){
+  document.getElementById('recibo-file').value = '';
+  document.getElementById('recibo-numero').value = '';
+  document.getElementById('recibo-fecha').value = '';
+  document.getElementById('recibo-nit').value = '';
+  document.getElementById('recibo-tercero').value = '';
+  itemsActuales = [];
+  cabeceraTotalesActuales = {};
+  renderTablaItems();
+  actualizarResumen();
+  document.getElementById('recibo-review').style.display = 'none';
+}
+
 async function guardarRecibo(){
   const btn = document.getElementById('recibo-guardar');
   const numero = document.getElementById('recibo-numero').value.trim();
@@ -269,25 +289,14 @@ async function guardarRecibo(){
       cantidad: it.cantidad || null, valor_unitario: it.valor_unitario || null,
       iva_pct: it.iva_pct || null, retencion_pct: it.retencion_pct || null,
       valor_debito: it.valor_debito || 0, valor_credito: it.valor_credito || 0,
-      orden: it.orden || null, observacion: it.observacion || null
+      orden: it.orden || null, suborden: it.suborden || null, observacion: it.observacion || null
     }));
     const { error: errItems } = await sb.from('recibos_caja_items').insert(payloadItems);
     if(errItems) throw errItems;
 
     toast('Documento ' + (numero || reciboId) + ' guardado con ' + payloadItems.length + ' línea(s)');
     DB.recibos_caja.unshift(recibo[0]);
-
-    // limpia el formulario para el próximo documento
-    document.getElementById('recibo-file').value = '';
-    document.getElementById('recibo-numero').value = '';
-    document.getElementById('recibo-fecha').value = '';
-    document.getElementById('recibo-nit').value = '';
-    document.getElementById('recibo-tercero').value = '';
-    itemsActuales = [];
-    cabeceraTotalesActuales = {};
-    renderTablaItems();
-    actualizarResumen();
-    document.getElementById('recibo-review').style.display = 'none';
+    limpiarFormularioRecibo();
   }catch(err){
     console.error(err);
     toast('Error al guardar el documento — revisa la consola');
@@ -304,10 +313,14 @@ export function initRecibosCaja(){
     if(file) manejarArchivo(file);
   });
   document.getElementById('recibo-add-item').addEventListener('click', () => {
-    itemsActuales.push({ codigo:'', descripcion:'', cantidad:0, valor_unitario:0, iva_pct:0, retencion_pct:0, valor_credito:0, valor_debito:0, orden:null, observacion:'' });
+    itemsActuales.push({ codigo:'', descripcion:'', cantidad:0, valor_unitario:0, iva_pct:0, retencion_pct:0, valor_credito:0, valor_debito:0, orden:null, suborden:null, observacion:'' });
     document.getElementById('recibo-review').style.display = '';
     renderTablaItems();
     actualizarResumen();
   });
   document.getElementById('recibo-guardar').addEventListener('click', guardarRecibo);
+  document.getElementById('recibo-limpiar').addEventListener('click', () => {
+    if(itemsActuales.length && !confirm('¿Limpiar el formulario? Se perderá lo que hayas leído o escrito sin guardar.')) return;
+    limpiarFormularioRecibo();
+  });
 }

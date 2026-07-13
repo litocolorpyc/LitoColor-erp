@@ -15,7 +15,7 @@ function renderRecentReg(){
   const nombre = document.getElementById('r-operario').value;
   const hint = document.getElementById('reg-recent-hint');
   if(!nombre){
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--ink-faint)">Elige tu nombre arriba para ver tu historial</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--ink-faint)">Elige tu nombre arriba para ver tu historial</td></tr>';
     if(hint) hint.textContent = 'elige tu nombre arriba';
     return;
   }
@@ -23,8 +23,9 @@ function renderRecentReg(){
   const recent = DB.produccion.filter(r => r.operario === nombre).slice(0,12);
   tbody.innerHTML = recent.map(r=>{
     const estado = r.horaFin ? '<span class="estado-chip done">✓ Completo</span>' : '<span class="estado-chip estado-chip-warn">⏱ En curso</span>';
-    return `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td>${r.orden??'—'}</td><td>${estado}</td></tr>`;
-  }).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--ink-faint)">Sin registros todavía</td></tr>';
+    const pieza = r.op ? r.op : (r.orden ? '<span style="color:var(--ink-faint)">sin pieza</span>' : '—');
+    return `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td>${r.orden??'—'}</td><td>${pieza}</td><td>${estado}</td></tr>`;
+  }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--ink-faint)">Sin registros todavía</td></tr>';
 }
 
 function populateOrdenSelect(){

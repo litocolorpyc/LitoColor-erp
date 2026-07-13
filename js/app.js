@@ -70,7 +70,7 @@ async function arrancarApp(){
   pasoSeguro('Operario', renderOperario);
 
   pasoSeguro('Registrar', () => initRegistrar(onRegistrarChange));
-  pasoSeguro('Órdenes (formulario)', initOppForm);
+  pasoSeguro('Órdenes (formulario)', () => initOppForm(populateReg));
   pasoSeguro('Órdenes (tablas)', renderOppRecent);
   pasoSeguro('Maestros', () => initMaestros(onMaestrosChange));
   pasoSeguro('Usuarios', initUsuarios);

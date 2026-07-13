@@ -155,7 +155,8 @@ function fillPiezaCard(node, p){
   }
   node.querySelector('.f-tintas-frente').value = p.tintas_frente ?? 4;
   node.querySelector('.f-tintas-atras').value = p.tintas_atras ?? 0;
-  const tintasDet = node.querySelector('.f-tintas-detalle'); if(tintasDet) tintasDet.value = p.tintas_detalle || '';
+  const tintasDetTiro = node.querySelector('.f-tintas-detalle-tiro'); if(tintasDetTiro) tintasDetTiro.value = p.tintas_detalle_tiro || '';
+  const tintasDetRetiro = node.querySelector('.f-tintas-detalle-retiro'); if(tintasDetRetiro) tintasDetRetiro.value = p.tintas_detalle_retiro || '';
   node.querySelector('.f-ctp').value = p.ctp || 'Convencional';
   node.querySelector('.f-tira').value = p.tira_retira || 'Tira y retira';
   node.querySelector('.f-laminado').value = p.laminado || '';
@@ -719,7 +720,8 @@ export function mostrarDetalleOrden(orden){
       filaFicha('Papel', p.papel),
       filaFicha('Pliego', (p.pliego_ancho && p.pliego_alto) ? `${p.pliego_ancho} x ${p.pliego_alto} cm` : ''),
       filaFicha('Tintas frente/atrás', p.tintas_frente != null ? `${p.tintas_frente} x ${p.tintas_atras || 0}` : ''),
-      filaFicha('Detalle de tintas', p.tintas_detalle),
+      filaFicha('Detalle tintas — Tiro', p.tintas_detalle_tiro),
+      filaFicha('Detalle tintas — Retiro', p.tintas_detalle_retiro),
       filaFicha('CTP', p.ctp),
       filaFicha('Impresión', p.tira_retira),
       filaFicha('Laminado', p.laminado ? `${p.laminado}${p.laminado_lados ? ' · ' + p.laminado_lados + ' lado(s)' : ''}` : ''),
@@ -848,7 +850,8 @@ export function imprimirDetalleOrden(orden){
       ['Papel', p.papel],
       ['Pliego', (p.pliego_ancho && p.pliego_alto) ? `${p.pliego_ancho} x ${p.pliego_alto} cm` : ''],
       ['Tintas frente/atrás', p.tintas_frente != null ? `${p.tintas_frente} x ${p.tintas_atras || 0}` : ''],
-      ['Detalle de tintas', p.tintas_detalle],
+      ['Detalle tintas — Tiro', p.tintas_detalle_tiro],
+      ['Detalle tintas — Retiro', p.tintas_detalle_retiro],
       ['CTP', p.ctp],
       ['Impresión', p.tira_retira],
       ['Laminado', p.laminado ? `${p.laminado}${p.laminado_lados ? ' · ' + p.laminado_lados + ' lado(s)' : ''}` : ''],
@@ -1037,7 +1040,8 @@ function extraerPiezasDelGrid(grid){
       papel: valorCelda(grid, filaPapel, c),
       tintas_frente: tintasLimpias ? parseFloat(tintasFrenteRaw) : null,
       tintas_atras: tintasLimpias ? parseFloat(tintasAtrasRaw) : null,
-      tintas_detalle: tintasLimpias ? null : `Según Excel — frente: ${tintasFrenteRaw ?? '—'}, atrás: ${tintasAtrasRaw ?? '—'}`,
+      tintas_detalle_tiro: tintasLimpias ? null : `Según Excel: ${tintasFrenteRaw ?? '—'}`,
+      tintas_detalle_retiro: tintasLimpias ? null : `Según Excel: ${tintasAtrasRaw ?? '—'}`,
       ctp: valorCelda(grid, filaCtp, c) || 'Convencional',
       laminado: valorCelda(grid, filaLaminados, c),
       laminado_lados: valorCelda(grid, filaLaminados, c + 2),
@@ -1094,7 +1098,8 @@ function aplicarImportacion(ordenNum, piezas){
     papel: p.papel ? String(p.papel).trim() : '',
     tintas_frente: p.tintas_frente,
     tintas_atras: p.tintas_atras,
-    tintas_detalle: p.tintas_detalle,
+    tintas_detalle_tiro: p.tintas_detalle_tiro,
+    tintas_detalle_retiro: p.tintas_detalle_retiro,
     ctp: p.ctp,
     laminado: p.laminado,
     laminado_lados: p.laminado_lados,
@@ -1253,6 +1258,7 @@ async function cancelarOrden(orden){
   if(o) o.estado = 'Cancelada';
   toast('Orden ' + orden + ' cancelada');
   renderOppRecent();
+  if(onOrdenesChangeCallback) onOrdenesChangeCallback();
 }
 
 async function saveOpp(){
@@ -1321,7 +1327,8 @@ async function saveOpp(){
         pliego_ancho: pliego[0] || null, pliego_alto: pliego[1] || null,
         tintas_frente: parseInt(node.querySelector('.f-tintas-frente').value) || 0,
         tintas_atras: parseInt(node.querySelector('.f-tintas-atras').value) || 0,
-        tintas_detalle: node.querySelector('.f-tintas-detalle')?.value.trim() || null,
+        tintas_detalle_tiro: node.querySelector('.f-tintas-detalle-tiro')?.value.trim() || null,
+        tintas_detalle_retiro: node.querySelector('.f-tintas-detalle-retiro')?.value.trim() || null,
         ctp: node.querySelector('.f-ctp').value,
         tira_retira: node.querySelector('.f-tira').value,
         laminado: node.querySelector('.f-laminado').value || null,
@@ -1383,6 +1390,7 @@ async function saveOpp(){
 
     resetOppForm(suggestNextOrden());
     renderOppRecent();
+    if(onOrdenesChangeCallback) onOrdenesChangeCallback();
   }catch(err){
     console.error(err);
     const detalle = (err && (err.message || err.details || err.hint)) || 'revisa la consola';
@@ -1486,7 +1494,10 @@ function setValSafe(id, valor){
   if(el) el.value = valor;
 }
 
-export function initOppForm(){
+let onOrdenesChangeCallback = null;
+
+export function initOppForm(onChange){
+  onOrdenesChangeCallback = onChange || null;
   populateClienteSelect();
   populateProductoSelect();
   poblarDatalistProveedores();
