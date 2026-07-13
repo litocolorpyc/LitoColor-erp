@@ -345,7 +345,8 @@
             <div class="field"><label>Tintas atrás</label><input type="number" class="f-tintas-atras" min="0" max="6" value="0"></div>
           </div>
           <div class="form-row">
-            <div class="field full"><label>Detalle de tintas <span class="card-hint">(cuáles colores específicos — ej. Negro, Pantone 286, Amarillo)</span></label><input type="text" class="f-tintas-detalle" placeholder="opcional, para cuando no es solo CMYK"></div>
+            <div class="field"><label>Detalle tintas — Tiro (frente) <span class="card-hint">(colores específicos)</span></label><input type="text" class="f-tintas-detalle-tiro" placeholder="ej. Negro, Pantone 286"></div>
+            <div class="field"><label>Detalle tintas — Retiro (atrás) <span class="card-hint">(colores específicos)</span></label><input type="text" class="f-tintas-detalle-retiro" placeholder="ej. Negro"></div>
           </div>
           <div class="form-row">
             <div class="field"><label>CTP</label>
@@ -386,7 +387,6 @@
         <div class="opp-calc-divider">Procesos que requiere esta pieza</div>
         <div class="form-row opp-checks opp-procesos-grid">
           <label><input type="checkbox" class="f-proc" value="Diseño" checked> Diseño</label>
-          <label class="litografia-only-check"><input type="checkbox" class="f-proc" value="Corte inicial" checked> Corte inicial</label>
           <label class="litografia-only-check"><input type="checkbox" class="f-proc" value="Litografia" checked> Litografía</label>
           <label><input type="checkbox" class="f-proc" value="Impresión Digital"> Impresión Digital</label>
           <label><input type="checkbox" class="f-proc" value="Gran Formato"> Gran Formato</label>
@@ -489,7 +489,7 @@
           <div class="card-head"><h3>Tus registros recientes</h3><span class="card-hint" id="reg-recent-hint">elige tu nombre arriba</span></div>
           <div class="table-wrap">
             <table id="tbl-reg-recent">
-              <thead><tr><th>Fecha</th><th>Actividad</th><th>Orden</th><th>Estado</th></tr></thead>
+              <thead><tr><th>Fecha</th><th>Actividad</th><th>Orden</th><th>Pieza / OP</th><th>Estado</th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
@@ -908,12 +908,13 @@
           </div>
           <div class="table-wrap">
             <table id="tbl-recibo-items">
-              <thead><tr><th>Ítem</th><th>Descripción</th><th class="num">Cant.</th><th class="num">Vr. Unit.</th><th class="num">IVA %</th><th class="num">Reten. %</th><th class="num">Vr. Total</th><th>Orden asociada</th><th>Observación</th><th></th></tr></thead>
+              <thead><tr><th>Ítem</th><th>Descripción</th><th class="num">Cant.</th><th class="num">Vr. Unit.</th><th class="num">IVA %</th><th class="num">Reten. %</th><th class="num">Vr. Total</th><th>Orden asociada</th><th>Sub.</th><th>Observación</th><th></th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
           <div class="form-foot">
             <button type="button" class="row-btn" id="recibo-add-item">+ Agregar línea</button>
+            <button type="button" class="btn-secondary" id="recibo-limpiar">Limpiar</button>
             <span class="card-hint" id="recibo-total-hint"></span>
             <button type="button" class="btn-primary" id="recibo-guardar">Guardar recibo</button>
           </div>
