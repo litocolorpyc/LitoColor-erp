@@ -352,9 +352,19 @@
             <div class="field"><label>CTP</label>
               <select class="f-ctp"><option>Convencional</option><option>Digital</option></select>
             </div>
-            <div class="field"><label>Impresión</label>
-              <select class="f-tira"><option value="Tira y retira">Tira y retira</option><option value="Solo tiro">Solo tiro</option></select>
+            <div class="field"><label class="f-tira-label">Impresión</label>
+              <select class="f-tira"><option value="Solo Tiro">Solo Tiro</option></select>
             </div>
+          </div>
+          <div class="form-row f-giro-wrap" style="display:none">
+            <div class="field"><label>Giro</label>
+              <select class="f-giro">
+                <option value="">Selecciona…</option>
+                <option value="Escuadra">Giro de Escuadra</option>
+                <option value="Pinza">Giro de Pinza</option>
+              </select>
+            </div>
+            <div class="field"><label>&nbsp;</label><span class="card-hint f-montaje-nota" style="display:none;color:#b5651d;font-weight:600">⚠ Diferentes Planchas</span></div>
           </div>
           <div class="form-row">
             <div class="field"><label>Laminado</label>
@@ -387,6 +397,7 @@
         <div class="opp-calc-divider">Procesos que requiere esta pieza</div>
         <div class="form-row opp-checks opp-procesos-grid">
           <label><input type="checkbox" class="f-proc" value="Diseño" checked> Diseño</label>
+          <label class="litografia-only-check"><input type="checkbox" class="f-proc" value="Corte inicial" checked> Corte inicial</label>
           <label class="litografia-only-check"><input type="checkbox" class="f-proc" value="Litografia" checked> Litografía</label>
           <label><input type="checkbox" class="f-proc" value="Impresión Digital"> Impresión Digital</label>
           <label><input type="checkbox" class="f-proc" value="Gran Formato"> Gran Formato</label>
@@ -908,7 +919,7 @@
           </div>
           <div class="table-wrap">
             <table id="tbl-recibo-items">
-              <thead><tr><th>Ítem</th><th>Descripción</th><th class="num">Cant.</th><th class="num">Vr. Unit.</th><th class="num">IVA %</th><th class="num">Reten. %</th><th class="num">Vr. Total</th><th>Orden asociada</th><th>Sub.</th><th>Observación</th><th></th></tr></thead>
+              <thead><tr><th>Ítem</th><th>Descripción</th><th class="num">Cant.</th><th class="num">Vr. Unit.</th><th class="num">IVA %</th><th class="num">Reten. %</th><th class="num">Vr. Total</th><th>Orden asociada</th><th>Sub.</th><th>Concepto</th><th>Tipo</th><th>Observación</th><th></th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
