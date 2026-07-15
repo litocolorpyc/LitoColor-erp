@@ -158,7 +158,13 @@ function fillPiezaCard(node, p){
   const tintasDetTiro = node.querySelector('.f-tintas-detalle-tiro'); if(tintasDetTiro) tintasDetTiro.value = p.tintas_detalle_tiro || '';
   const tintasDetRetiro = node.querySelector('.f-tintas-detalle-retiro'); if(tintasDetRetiro) tintasDetRetiro.value = p.tintas_detalle_retiro || '';
   node.querySelector('.f-ctp').value = p.ctp || 'Convencional';
-  node.querySelector('.f-tira').value = p.tira_retira || 'Tira y retira';
+  // Prepara las opciones correctas de Impresión/Tipo de Montaje según si
+  // tiene tinta atrás, ANTES de fijar el valor guardado (si no, el select
+  // todavía no tendría esa opción disponible para elegirla).
+  actualizarMontaje(node);
+  node.querySelector('.f-tira').value = p.tira_retira || '';
+  const giroSel = node.querySelector('.f-giro'); if(giroSel) giroSel.value = p.giro || '';
+  actualizarMontaje(node); // vuelve a correr para mostrar/ocultar Giro y la nota según lo que quedó cargado
   node.querySelector('.f-laminado').value = p.laminado || '';
   node.querySelector('.f-laminado-lados').value = p.laminado_lados || 0;
   node.querySelector('.f-barniz').checked = !!p.barniz_uv;
@@ -193,7 +199,65 @@ function fillPiezaCard(node, p){
   }
 }
 
+// Cuando la pieza no tiene tinta en el retiro, "Impresión" queda fija en
+// "Solo Tiro". En cuanto se le pone alguna tinta atrás, ese mismo campo se
+// convierte en "Tipo de Montaje" (T/R · T Y R) — con Giro (Escuadra/Pinza)
+// visible solo si eligen T/R, y la nota "Diferentes Planchas" — que se
+// guarda en Otros acabados y también se avisa en pantalla — si eligen T Y R.
+function actualizarMontaje(node){
+  const tintasAtras = parseFloat(node.querySelector('.f-tintas-atras').value) || 0;
+  const sel = node.querySelector('.f-tira');
+  const label = node.querySelector('.f-tira-label');
+  const giroWrap = node.querySelector('.f-giro-wrap');
+  const notaSpan = node.querySelector('.f-montaje-nota');
+  const otrosInput = node.querySelector('.f-otros');
+
+  if(tintasAtras <= 0){
+    label.textContent = 'Impresión';
+    if(sel.value !== 'Solo Tiro' || sel.options.length !== 1){
+      sel.innerHTML = '<option value="Solo Tiro">Solo Tiro</option>';
+      sel.value = 'Solo Tiro';
+    }
+    sel.disabled = true;
+    giroWrap.style.display = 'none';
+    quitarNotaDiferentesPlanchas(otrosInput);
+    return;
+  }
+
+  label.textContent = 'Tipo de Montaje';
+  sel.disabled = false;
+  if(!['T/R', 'T Y R'].includes(sel.value)){
+    sel.innerHTML = '<option value="">Selecciona…</option><option value="T/R">T/R</option><option value="T Y R">T Y R</option>';
+  }
+
+  if(sel.value === 'T/R'){
+    giroWrap.style.display = '';
+    notaSpan.style.display = 'none';
+    quitarNotaDiferentesPlanchas(otrosInput);
+  } else if(sel.value === 'T Y R'){
+    giroWrap.style.display = '';
+    node.querySelector('.f-giro').value = '';
+    notaSpan.style.display = '';
+    agregarNotaDiferentesPlanchas(otrosInput);
+  } else {
+    giroWrap.style.display = 'none';
+    notaSpan.style.display = 'none';
+  }
+}
+
+function agregarNotaDiferentesPlanchas(otrosInput){
+  if(!otrosInput || otrosInput.value.includes('Diferentes Planchas')) return;
+  otrosInput.value = otrosInput.value.trim() ? otrosInput.value.trim() + ', Diferentes Planchas' : 'Diferentes Planchas';
+}
+
+function quitarNotaDiferentesPlanchas(otrosInput){
+  if(!otrosInput || !otrosInput.value.includes('Diferentes Planchas')) return;
+  otrosInput.value = otrosInput.value
+    .split(',').map(s => s.trim()).filter(s => s && s !== 'Diferentes Planchas').join(', ');
+}
+
 function recalcPieza(node){
+  actualizarMontaje(node);
   const cantidad = parseFloat(node.querySelector('.f-cantidad').value) || 0;
   const unidadesMontaje = parseFloat(node.querySelector('.f-unidades-montaje').value) || 1;
   const tamAncho = parseFloat(node.querySelector('.f-tam-ancho').value) || 0;
@@ -387,6 +451,13 @@ export function getOrdenesSeleccionables(){
 // ---------- costo acumulado de una orden ----------
 function costoAcumulado(orden){
   return DB.produccion.filter(r => r.orden === orden).reduce((s,r)=>s+(r.valorActividad||0),0);
+}
+
+// Costo de materiales/compras asociado a la orden (de los recibos de
+// compra importados con Concepto asignado) — es ADICIONAL al costo de
+// mano de obra de costoAcumulado(), no lo reemplaza.
+function costoMaterialesDeOrden(orden){
+  return DB.costos_movimientos.filter(m => m.orden === orden).reduce((s,m)=>s+(m.valor||0),0);
 }
 
 // ---------- render: tablas y tableros ----------
@@ -628,25 +699,30 @@ let chartDetalle = null;
 let ordenDetalleActual = null; // recuerda qué orden está abierta en el detalle, para el botón de imprimir
 
 // ---------- presupuesto vs. real, por orden ----------
-function comparativoPresupuestoHTML(pres, costoReal, ingresoReal){
+function comparativoPresupuestoHTML(pres, costoReal, ingresoReal, costoMateriales){
   const totalCosto = (pres.total_costo != null) ? pres.total_costo : ((pres.costo || 0) + (pres.imprevistos || 0));
   const desviacion = totalCosto ? costoReal - totalCosto : null;
   const desviacionPct = totalCosto ? (desviacion / totalCosto * 100) : null;
   const margenEsperado = (pres.precio_venta_antes_iva != null && totalCosto != null) ? pres.precio_venta_antes_iva - totalCosto : null;
   const margenReal = (pres.precio_venta_antes_iva != null) ? pres.precio_venta_antes_iva - costoReal : null;
+  const costoRealTotal = costoReal + (costoMateriales || 0);
+  const margenRealTotal = (pres.precio_venta_antes_iva != null) ? pres.precio_venta_antes_iva - costoRealTotal : null;
 
   return [
     filaFicha('Costo total presupuestado', totalCosto ? fmtCOPlocal(totalCosto) : ''),
     filaFicha('Costo real (mano de obra)', fmtCOPlocal(costoReal)),
+    filaFicha('Costo de materiales/compras', costoMateriales ? fmtCOPlocal(costoMateriales) : ''),
+    filaFicha('Costo real total (mano de obra + materiales)', costoMateriales ? fmtCOPlocal(costoRealTotal) : ''),
     filaFicha('Desviación de costo', desviacion != null ? `${fmtCOPlocal(desviacion)} (${fmtNum(desviacionPct,1)}%)` : ''),
     filaFicha('Ingreso facturado real', ingresoReal ? fmtCOPlocal(ingresoReal) : ''),
     filaFicha('Rentabilidad esperada', pres.rentabilidad_esperada_pct != null ? fmtNum(pres.rentabilidad_esperada_pct,1) + '%' : ''),
     filaFicha('Margen esperado (presupuesto)', margenEsperado != null ? fmtCOPlocal(margenEsperado) : ''),
-    filaFicha('Margen real estimado (vs. costo real)', margenReal != null ? fmtCOPlocal(margenReal) : '')
+    filaFicha('Margen real estimado (vs. costo real)', margenReal != null ? fmtCOPlocal(margenReal) : ''),
+    filaFicha('Margen real total (con materiales)', (costoMateriales && margenRealTotal != null) ? fmtCOPlocal(margenRealTotal) : '')
   ].join('') || '<p class="card-hint">Sin presupuesto cargado todavía para esta orden.</p>';
 }
 
-function wirePresupuestoOrden(orden, costoReal, ingresoReal){
+function wirePresupuestoOrden(orden, costoReal, ingresoReal, costoMateriales){
   const btn = document.getElementById('pres-guardar');
   if(!btn) return; // usuario sin permiso de edición — solo lectura
   btn.addEventListener('click', async () => {
@@ -669,7 +745,7 @@ function wirePresupuestoOrden(orden, costoReal, ingresoReal){
       if(error) throw error;
       const idx = DB.presupuesto_orden.findIndex(p => p.orden === orden);
       if(idx >= 0) DB.presupuesto_orden[idx] = payload; else DB.presupuesto_orden.push(payload);
-      document.getElementById('pres-comparativo').innerHTML = comparativoPresupuestoHTML(payload, costoReal, ingresoReal);
+      document.getElementById('pres-comparativo').innerHTML = comparativoPresupuestoHTML(payload, costoReal, ingresoReal, costoMateriales);
       const hint = document.getElementById('pres-guardado-hint');
       if(hint) hint.textContent = 'Presupuesto guardado ✓';
       toast('Presupuesto de la orden ' + orden + ' guardado');
@@ -697,6 +773,7 @@ export function mostrarDetalleOrden(orden){
   const estado = estadoOrden(o);
   const ingreso = ingresoDeOrden(orden);
   const costo = registros.reduce((s,r)=>s+(r.valorActividad||0),0);
+  const costoMateriales = costoMaterialesDeOrden(orden);
 
   document.getElementById('opp-detalle-titulo').textContent = `Orden ${orden} — ${o.cliente || ''} · ${tipoTrabajoLabel(o)}`;
   ordenDetalleActual = orden;
@@ -723,7 +800,8 @@ export function mostrarDetalleOrden(orden){
       filaFicha('Detalle tintas — Tiro', p.tintas_detalle_tiro),
       filaFicha('Detalle tintas — Retiro', p.tintas_detalle_retiro),
       filaFicha('CTP', p.ctp),
-      filaFicha('Impresión', p.tira_retira),
+      filaFicha('Impresión / Tipo de montaje', p.tira_retira),
+      filaFicha('Giro', p.giro),
       filaFicha('Laminado', p.laminado ? `${p.laminado}${p.laminado_lados ? ' · ' + p.laminado_lados + ' lado(s)' : ''}` : ''),
       filaFicha('Barniz UV', p.barniz_uv ? 'Sí' : ''),
       filaFicha('Troquelado', p.troquelado ? (p.troquel_detalle || 'Sí') : ''),
@@ -793,13 +871,13 @@ export function mostrarDetalleOrden(orden){
         <div class="field"><label>Precio con IVA</label><input type="number" id="pres-precio-con-iva" min="0" ${dis} value="${pres.precio_con_iva ?? ''}"></div>
       </div>
       ${puedeEditar ? `<div class="form-foot"><span id="pres-guardado-hint" class="card-hint"></span><button type="button" class="btn-primary" id="pres-guardar">Guardar presupuesto</button></div>` : ''}
-      <div class="detalle-ficha-grid" id="pres-comparativo" style="margin-top:12px">${comparativoPresupuestoHTML(pres, costo, ingreso)}</div>
+      <div class="detalle-ficha-grid" id="pres-comparativo" style="margin-top:12px">${comparativoPresupuestoHTML(pres, costo, ingreso, costoMateriales)}</div>
     </div>
 
     <div class="detalle-piezas-grid">${piezasHTML}</div>
   `;
 
-  wirePresupuestoOrden(orden, costo, ingreso);
+  wirePresupuestoOrden(orden, costo, ingreso, costoMateriales);
 
   if(areas.length){
     const el = document.getElementById('chart-detalle-area');
@@ -853,7 +931,8 @@ export function imprimirDetalleOrden(orden){
       ['Detalle tintas — Tiro', p.tintas_detalle_tiro],
       ['Detalle tintas — Retiro', p.tintas_detalle_retiro],
       ['CTP', p.ctp],
-      ['Impresión', p.tira_retira],
+      ['Impresión / Tipo de montaje', p.tira_retira],
+      ['Giro', p.giro],
       ['Laminado', p.laminado ? `${p.laminado}${p.laminado_lados ? ' · ' + p.laminado_lados + ' lado(s)' : ''}` : ''],
       ['Barniz UV', p.barniz_uv ? 'Sí' : ''],
       ['Troquelado', p.troquelado ? (p.troquel_detalle || 'Sí') : ''],
@@ -1331,6 +1410,7 @@ async function saveOpp(){
         tintas_detalle_retiro: node.querySelector('.f-tintas-detalle-retiro')?.value.trim() || null,
         ctp: node.querySelector('.f-ctp').value,
         tira_retira: node.querySelector('.f-tira').value,
+        giro: node.querySelector('.f-giro')?.value.trim() || null,
         laminado: node.querySelector('.f-laminado').value || null,
         laminado_lados: parseInt(node.querySelector('.f-laminado-lados').value) || 0,
         barniz_uv: node.querySelector('.f-barniz').checked,

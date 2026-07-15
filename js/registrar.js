@@ -96,13 +96,19 @@ export function populateReg(){
 
 // Arma el <select> de insumos disponibles para el área de esta actividad,
 // con una opción "Otro" para cuando el insumo no está en el maestro todavía.
-function materialSelectOptionsHTML(area, valorActual){
+function materialSelectOptionsHTML(area, valorActual, papelSugerido){
   const opciones = DB.insumos_area.filter(m => m.area === area && m.activo !== false);
-  const coincide = opciones.some(m => m.nombre === valorActual);
+  const yaListado = opciones.some(m => m.nombre === papelSugerido);
+  // En Guillotina/Corte inicial, el papel que ya quedó definido en la
+  // orden para esa pieza es el insumo más probable — se sugiere de
+  // primero aunque todavía no esté cargado como insumo en el maestro.
+  const sugerido = (papelSugerido && ['Guillotina', 'Corte inicial'].includes(area) && !yaListado) ? papelSugerido : null;
+  const coincide = opciones.some(m => m.nombre === valorActual) || valorActual === sugerido;
   const otroSeleccionado = !!valorActual && !coincide;
-  const opts = ['<option value="">— Sin insumo registrado —</option>']
-    .concat(opciones.map(m => `<option value="${m.nombre}"${m.nombre===valorActual?' selected':''}>${m.nombre}${m.unidad?' ('+m.unidad+')':''}</option>`))
-    .concat([`<option value="__otro__"${otroSeleccionado?' selected':''}>Otro / no está en la lista…</option>`]);
+  const opts = ['<option value="">— Sin insumo registrado —</option>'];
+  if(sugerido) opts.push(`<option value="${sugerido}"${sugerido===valorActual?' selected':''}>${sugerido} (papel de esta orden)</option>`);
+  opts.push(...opciones.map(m => `<option value="${m.nombre}"${m.nombre===valorActual?' selected':''}>${m.nombre}${m.unidad?' ('+m.unidad+')':''}</option>`));
+  opts.push(`<option value="__otro__"${otroSeleccionado?' selected':''}>Otro / no está en la lista…</option>`);
   return opts.join('');
 }
 
@@ -116,6 +122,8 @@ function runningCardHTML(row){
   const otroSeleccionado = !!row.materia_prima && !DB.insumos_area.some(m => m.area === row.area && m.nombre === row.materia_prima);
   const insumoActual = DB.insumos_area.find(m => m.area === row.area && m.nombre === row.materia_prima);
   const unidadActual = insumoActual ? insumoActual.unidad : null;
+  const piezaDeEsteRegistro = row.op ? DB.opp_piezas.find(p => p.op === row.op) : null;
+  const papelSugerido = piezaDeEsteRegistro ? piezaDeEsteRegistro.papel : null;
   return `<div class="reg-running-card" data-id="${row.id}" data-area="${row.area || ''}">
     <div class="reg-running-row"><span>Orden / Pieza</span><b>${row.orden || '—'}${row.op ? ' / ' + row.op : ''}</b></div>
     <div class="reg-running-row"><span>Actividad</span><b>${row.actividad || '—'}</b></div>
@@ -129,7 +137,7 @@ function runningCardHTML(row){
     <div class="form-row">
       <div class="field">
         <label>Insumo consumido <span class="card-hint">(del área ${row.area || '—'})</span></label>
-        <select class="rc-materia-select">${materialSelectOptionsHTML(row.area, row.materia_prima)}</select>
+        <select class="rc-materia-select">${materialSelectOptionsHTML(row.area, row.materia_prima, papelSugerido)}</select>
         <input type="text" class="rc-materia-otro" placeholder="especifica el insumo" style="display:${otroSeleccionado?'block':'none'};margin-top:5px" value="${otroSeleccionado ? row.materia_prima : ''}">
       </div>
       <div class="field">
