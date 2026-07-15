@@ -137,6 +137,10 @@ function addPiezaCard(prefill){
     recalcPieza(node);
   });
 
+  // Si el papel ya viene definido (ej. una orden importada), el campo
+  // arranca colapsado con un resumen — "Editar" lo despliega de nuevo.
+  node.querySelector('.f-papel-editar-btn').addEventListener('click', () => expandirPapel(node));
+
   if(prefill) fillPiezaCard(node, prefill);
   recalcPieza(node);
   updateOppPreview();
@@ -153,6 +157,7 @@ function fillPiezaCard(node, p){
     const pliegoGuardado = p.pliego_ancho + 'x' + p.pliego_alto;
     node.querySelector('.f-pliego').value = PLIEGOS_PERMITIDOS.includes(pliegoGuardado) ? pliegoGuardado : '70x100';
   }
+  if(p.papel) colapsarPapel(node);
   node.querySelector('.f-tintas-frente').value = p.tintas_frente ?? 4;
   node.querySelector('.f-tintas-atras').value = p.tintas_atras ?? 0;
   const tintasDetTiro = node.querySelector('.f-tintas-detalle-tiro'); if(tintasDetTiro) tintasDetTiro.value = p.tintas_detalle_tiro || '';
@@ -204,6 +209,24 @@ function fillPiezaCard(node, p){
 // convierte en "Tipo de Montaje" (T/R · T Y R) — con Giro (Escuadra/Pinza)
 // visible solo si eligen T/R, y la nota "Diferentes Planchas" — que se
 // guarda en Otros acabados y también se avisa en pantalla — si eligen T Y R.
+// Cuando el papel ya viene definido (típicamente al importar desde Excel,
+// donde casi siempre es el mismo — ej. "Propalcote 115gr 60x90"), se
+// colapsa en una línea de resumen para no repetir esa info visualmente.
+// "Editar" lo despliega de nuevo sin perder nada.
+function colapsarPapel(node){
+  const papel = node.querySelector('.f-papel').value;
+  const pliego = node.querySelector('.f-pliego').value;
+  const resumen = node.querySelector('.f-papel-resumen-texto');
+  if(resumen) resumen.textContent = 'Papel: ' + (papel || '—') + (pliego ? ' · Pliego ' + pliego.replace('x',' x ') + ' cm' : '');
+  node.querySelector('.f-papel-resumen-linea').style.display = '';
+  node.querySelector('.f-papel-pliego-fields').style.display = 'none';
+}
+
+function expandirPapel(node){
+  node.querySelector('.f-papel-resumen-linea').style.display = 'none';
+  node.querySelector('.f-papel-pliego-fields').style.display = '';
+}
+
 function actualizarMontaje(node){
   const tintasAtras = parseFloat(node.querySelector('.f-tintas-atras').value) || 0;
   const sel = node.querySelector('.f-tira');
