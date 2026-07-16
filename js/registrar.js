@@ -2,7 +2,7 @@
 // así que cualquier corrección aquí aplica a las dos pantallas a la vez.
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
-import { toast, fmtNum } from './helpers.js';
+import { toast, fmtNum, fechaHoyLocal } from './helpers.js';
 import { getOrdenesSeleccionables } from './ordenes.js';
 
 const timerIntervals = new Map();
@@ -197,7 +197,7 @@ async function refreshRunningSessions(){
     document.getElementById('reg-hint').textContent = 'elige tu nombre';
     return;
   }
-  const hoy = new Date().toISOString().slice(0,10);
+  const hoy = fechaHoyLocal();
   const { data, error } = await sb.from('produccion').select('*')
     .eq('operario', nombre).eq('fecha', hoy).is('hora_fin', null)
     .order('id', { ascending: true });
@@ -258,7 +258,7 @@ async function startActivity(){
   btn.disabled = true; btn.textContent = 'Iniciando…';
   try{
     const now = new Date();
-    const fecha = now.toISOString().slice(0,10);
+    const fecha = fechaHoyLocal(now);
     const horaIni = now.toTimeString().slice(0,5);
     const ordenRaw = sinOrden ? '' : ordenSel.value;
     const orden = ordenRaw ? (isNaN(Number(ordenRaw)) ? null : Number(ordenRaw)) : null;

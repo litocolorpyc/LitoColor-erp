@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
-import { toast, fmtNum, exportarExcel } from './helpers.js';
+import { toast, fmtNum, exportarExcel, fechaHoyLocal } from './helpers.js';
 import { getCurrentUser } from './auth.js';
 import { poblarDatalistProveedores } from './costos.js';
 
@@ -215,9 +215,8 @@ function fillPiezaCard(node, p){
 // "Editar" lo despliega de nuevo sin perder nada.
 function colapsarPapel(node){
   const papel = node.querySelector('.f-papel').value;
-  const pliego = node.querySelector('.f-pliego').value;
   const resumen = node.querySelector('.f-papel-resumen-texto');
-  if(resumen) resumen.textContent = 'Papel: ' + (papel || '—') + (pliego ? ' · Pliego ' + pliego.replace('x',' x ') + ' cm' : '');
+  if(resumen) resumen.textContent = 'Papel: ' + (papel || '—');
   node.querySelector('.f-papel-resumen-linea').style.display = '';
   node.querySelector('.f-papel-pliego-fields').style.display = 'none';
 }
@@ -1178,7 +1177,7 @@ function aplicarImportacion(ordenNum, piezas){
     : 'Importado desde Excel — revisa los datos antes de guardar';
   document.getElementById('opp-orden').value = ordenNum;
   document.getElementById('opp-orden').disabled = false;
-  document.getElementById('opp-fecha').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('opp-fecha').value = fechaHoyLocal();
   setValSafe('opp-tipo-trabajo', 'Litografia');
   aplicarTipoTrabajo();
 
@@ -1297,7 +1296,7 @@ function resetOppForm(nextOrden){
   document.getElementById('opp-producto-ref').style.display = 'none';
   document.getElementById('opp-orden').value = nextOrden != null ? nextOrden : suggestNextOrden();
   document.getElementById('opp-orden').disabled = false;
-  document.getElementById('opp-fecha').value = new Date().toISOString().slice(0,10);
+  document.getElementById('opp-fecha').value = fechaHoyLocal();
   setValSafe('opp-tipo-trabajo', 'Litografia');
   aplicarTipoTrabajo();
   addPiezaCard();
@@ -1312,7 +1311,7 @@ function loadOrdenParaEditar(orden){
   document.getElementById('opp-orden').disabled = true;
   ensureOptionExists(document.getElementById('opp-cliente'), o.cliente || '');
   ensureOptionExists(document.getElementById('opp-producto'), o.producto || '');
-  document.getElementById('opp-fecha').value = (o.fecha || '').slice(0,10) || new Date().toISOString().slice(0,10);
+  document.getElementById('opp-fecha').value = (o.fecha || '').slice(0,10) || fechaHoyLocal();
   setValSafe('opp-tipo-trabajo', o.tipo_trabajo || 'Litografia');
   aplicarTipoTrabajo();
   renderProductoRef();
@@ -1337,7 +1336,7 @@ function duplicarOrden(orden){
   document.getElementById('opp-orden').disabled = false;
   ensureOptionExists(document.getElementById('opp-cliente'), o.cliente || '');
   ensureOptionExists(document.getElementById('opp-producto'), o.producto || '');
-  document.getElementById('opp-fecha').value = new Date().toISOString().slice(0,10);
+  document.getElementById('opp-fecha').value = fechaHoyLocal();
   setValSafe('opp-tipo-trabajo', o.tipo_trabajo || 'Litografia');
   aplicarTipoTrabajo();
   renderProductoRef();

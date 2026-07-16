@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
-import { toast, fmtCOP } from './helpers.js';
+import { toast, fmtCOP, fechaHoyLocal } from './helpers.js';
 import { getCurrentUser } from './auth.js';
 import { renderMovimientosRecientes, renderResumenCostosMes } from './costos.js';
 
@@ -340,7 +340,7 @@ async function guardarRecibo(){
       const payloadCostos = conCosto.map(it => ({
         concepto_id: it.concepto_id,
         tipo: it.tipo_costo || tipoDeConcepto(it.concepto_id) || 'Variable',
-        fecha: fecha || new Date().toISOString().slice(0,10),
+        fecha: fecha || fechaHoyLocal(),
         valor: it.valor_credito || 0,
         proveedor: tercero,
         comentario: (numero ? numero + ' — ' : '') + (it.descripcion || ''),

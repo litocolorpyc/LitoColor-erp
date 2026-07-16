@@ -1,6 +1,20 @@
 // Utilidades compartidas por todos los módulos: formato de números,
 // mensajes de confirmación (toast), y el indicador de conexión.
 
+// "YYYY-MM-DD" según el reloj LOCAL del navegador — NO usar
+// `new Date().toISOString().slice(0,10)` para esto: esa función da la
+// fecha en UTC, que en Colombia (UTC-5) ya cambia de día desde las
+// 7:00pm hora local. Si esa fecha se combina con una hora local (como el
+// contador de actividades en curso), el resultado queda 24 horas
+// adelantado y el contador se congela en 00:00:00 hasta el día siguiente.
+export function fechaHoyLocal(fecha){
+  const d = fecha || new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function fmtCOP(n){ if(n==null||isNaN(n)) return '—'; return '$' + Math.round(n).toLocaleString('es-CO'); }
 export function fmtNum(n,d){ if(n==null||isNaN(n)) return '—'; return Number(n).toLocaleString('es-CO',{maximumFractionDigits:d==null?1:d}); }
 
@@ -17,28 +31,6 @@ export function setNote(msg, isError){
   if(!el) return;
   el.textContent = msg;
   el.style.color = isError ? 'var(--bad)' : '';
-}
-
-// Ayuda: un botón flotante visible en cualquier pantalla, más el botón
-// "❓ Ayuda" del menú -- los dos abren el mismo modal con el manual.
-export function initAyudaGlobal(){
-  const overlay = document.getElementById('ayuda-overlay');
-  if(!overlay) return;
-  const abrir = () => { overlay.style.display = 'flex'; overlay.scrollTop = 0; };
-  const cerrar = () => { overlay.style.display = 'none'; };
-  document.getElementById('ayuda-fab')?.addEventListener('click', abrir);
-  document.getElementById('ayuda-nav-btn')?.addEventListener('click', abrir);
-  document.getElementById('ayuda-cerrar')?.addEventListener('click', cerrar);
-  overlay.addEventListener('click', (e) => { if(e.target === overlay) cerrar(); });
-  document.addEventListener('keydown', (e) => { if(e.key === 'Escape') cerrar(); });
-  // los links de la tabla de contenido hacen scroll suave dentro del modal
-  overlay.querySelectorAll('.help-toc a').forEach(a => {
-    a.addEventListener('click', (e) => {
-      e.preventDefault();
-      const el = document.querySelector(a.getAttribute('href'));
-      if(el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-  });
 }
 
 export const AREA_COLORS = {

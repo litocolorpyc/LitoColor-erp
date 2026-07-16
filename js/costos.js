@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
-import { toast, fmtCOP } from './helpers.js';
+import { toast, fmtCOP, fechaHoyLocal } from './helpers.js';
 
 // ---------- Maestro: Conceptos de costo ----------
 let editingConceptoId = null;
@@ -175,7 +175,7 @@ export function initCostos(){
   document.getElementById('cc-save').addEventListener('click', guardarConcepto);
   renderConceptos();
 
-  document.getElementById('rc-fecha').value = new Date().toISOString().slice(0,10);
+  document.getElementById('rc-fecha').value = fechaHoyLocal();
   poblarSelectConcepto();
   poblarDatalistProveedores();
   document.getElementById('rc-save').addEventListener('click', guardarMovimiento);
