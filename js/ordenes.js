@@ -457,7 +457,7 @@ export function estadoOrden(o){
   return { label: 'Pendiente', pct: 0 };
 }
 
-function estadoBadgeHTML(estado){
+export function estadoBadgeHTML(estado){
   const cls = { 'Completada':'done', 'Cerrada':'done', 'En proceso':'estado-chip-warn', 'Pendiente':'pending', 'Cancelada':'pending' }[estado.label] || 'pending';
   const pct = estado.pct != null ? ` (${estado.pct}%)` : '';
   return `<span class="estado-chip ${cls}">${estado.label}${pct}</span>`;
@@ -491,7 +491,7 @@ export function renderOppRecent(){
   renderRadarHistorico();
 }
 
-function tipoTrabajoLabel(o){
+export function tipoTrabajoLabel(o){
   return o.tipo_trabajo === 'Litografia' ? 'Litografía' : (o.tipo_trabajo || 'Litografía');
 }
 
@@ -624,7 +624,7 @@ async function persistirPrioridad(){
 }
 
 // par etiqueta/valor para la ficha técnica del detalle de orden — se omite si no hay valor
-function filaFicha(label, value){
+export function filaFicha(label, value){
   if(value === null || value === undefined || value === '' || value === false) return '';
   return `<div class="ficha-item"><span class="ficha-lbl">${label}</span><span class="ficha-val">${value}</span></div>`;
 }
@@ -1668,4 +1668,101 @@ export function initOppForm(onChange){
       })
     }]);
   });
+}
+
+// ============================================================
+// PARA LA PANTALLA DE OPERARIO (registro.html)
+// Funciones nuevas e independientes — no modifican nada de lo que ya
+// existía en Órdenes ni en Registrar.
+// ============================================================
+
+// Órdenes activas (ni Cerrada ni Cancelada) en el mismo orden de
+// prioridad que define Gerente/Jefe de Producción en el panel de
+// Órdenes — el operario solo las ve, no las puede reordenar aquí.
+export function getOrdenesPendientesPorPrioridad(){
+  return DB.opp_ordenes
+    .filter(o => o.estado !== 'Cerrada' && o.estado !== 'Cancelada')
+    .sort((a,b) => (a.prioridad ?? 999999) - (b.prioridad ?? 999999));
+}
+
+// Ficha de solo lectura con la misma información que trae la orden
+// impresa (OP, tamaño, papel, tintas, procesos, materiales, horas) —
+// para cuando el operario no tiene la hoja física a la mano. No incluye
+// nada de costos/presupuesto, eso no es para esta pantalla.
+export function fichaOrdenParaOperarioHTML(orden){
+  const o = DB.opp_ordenes.find(x => x.orden === orden);
+  if(!o) return '<p class="card-hint">Esta orden es histórica (viene del Excel migrado) y no tiene ficha de detalle en OPP.</p>';
+
+  const piezas = DB.opp_piezas.filter(p => p.orden === orden).sort((a,b)=>a.suborden-b.suborden);
+  const registros = DB.produccion.filter(r => r.orden === orden);
+  const estado = estadoOrden(o);
+
+  const piezasHTML = piezas.map(p => {
+    const recsPieza = registros.filter(r => r.op === p.op || (r.suborden === p.suborden));
+    const requeridos = Array.isArray(p.procesos_requeridos) ? p.procesos_requeridos : [];
+    const completados = areasCompletadasPorPieza(p);
+    const chips = requeridos.map(a => `<span class="estado-chip ${completados.has(a)?'done':'pending'}">${completados.has(a)?'✓':'·'} ${a}</span>`).join('') || '<span class="card-hint">sin procesos definidos</span>';
+
+    const materiales = [...new Set(recsPieza.map(r => [r.materiaPrima, r.consumoMP].filter(Boolean).join(' — ')).filter(Boolean))];
+
+    const ficha = [
+      filaFicha('OP', p.op),
+      filaFicha('Tamaño terminado', (p.tamano_ancho || p.tamano_alto) ? `${fmtNum(p.tamano_ancho,1)} x ${fmtNum(p.tamano_alto,1)} cm` : ''),
+      filaFicha('Papel', p.papel),
+      filaFicha('Tintas frente/atrás', p.tintas_frente != null ? `${p.tintas_frente} x ${p.tintas_atras || 0}` : ''),
+      filaFicha('Detalle tintas — Tiro', p.tintas_detalle_tiro),
+      filaFicha('Detalle tintas — Retiro', p.tintas_detalle_retiro),
+      filaFicha('CTP', p.ctp),
+      filaFicha('Impresión / Tipo de montaje', p.tira_retira),
+      filaFicha('Giro', p.giro),
+      filaFicha('Laminado', p.laminado ? `${p.laminado}${p.laminado_lados ? ' · ' + p.laminado_lados + ' lado(s)' : ''}` : ''),
+      filaFicha('Barniz UV', p.barniz_uv ? 'Sí' : ''),
+      filaFicha('Troquelado', p.troquelado ? (p.troquel_detalle || 'Sí') : ''),
+      filaFicha('Talonarios', p.talonarios ? 'Sí' : ''),
+      filaFicha('Otros acabados', p.otros_acabados),
+      filaFicha('Diagrama de corte', p.diagrama_corte),
+      filaFicha('Unidades por montaje', p.unidades_por_montaje),
+      filaFicha('Tamaños solicitados', p.tamanos_solicitados != null ? fmtNum(p.tamanos_solicitados,0) : ''),
+      filaFicha('Tamaños programados', p.tamanos_programados != null ? fmtNum(p.tamanos_programados,0) : ''),
+      filaFicha('Medida con margen', (p.medida_tamano_ancho || p.medida_tamano_alto) ? `${fmtNum(p.medida_tamano_ancho,1)} x ${fmtNum(p.medida_tamano_alto,1)} cm` : ''),
+      filaFicha('Tamaños por pliego', p.tamanos_por_pliego != null ? fmtNum(p.tamanos_por_pliego,0) : ''),
+      filaFicha('Pliegos necesarios', p.pliegos != null ? fmtNum(p.pliegos,0) : ''),
+      filaFicha('Proveedor / quién lo realiza', p.proveedor),
+      filaFicha('Fecha de entrega estimada', p.fecha_entrega_estimada ? (p.fecha_entrega_estimada||'').slice(0,10) : ''),
+      filaFicha('Notas', p.notas)
+    ].join('');
+
+    const porOperarioMaquina = {};
+    recsPieza.forEach(r => {
+      const k = (r.operario||'—') + ' · ' + (r.maquina || 'Manual');
+      porOperarioMaquina[k] = porOperarioMaquina[k] || { horas:0, cantidad:0 };
+      porOperarioMaquina[k].horas += (r.tiempoHr||0);
+      porOperarioMaquina[k].cantidad += (r.cantidad||0);
+    });
+    const filasOM = Object.entries(porOperarioMaquina).map(([k,v]) =>
+      `<tr><td>${k}</td><td class="num">${fmtNum(v.horas,2)}</td><td class="num">${fmtNum(v.cantidad,0)}</td></tr>`
+    ).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--ink-faint)">Sin registros de producción aún</td></tr>';
+
+    return `<div class="detalle-pieza-card">
+      <div class="detalle-pieza-head">
+        <b>${p.pieza || ('Pieza ' + p.suborden)}</b>
+        <span class="card-hint">${p.cantidad ? fmtNum(p.cantidad,0)+' uds solicitadas' : ''}</span>
+      </div>
+      <div class="detalle-ficha-grid">${ficha}</div>
+      <div class="detalle-pieza-chips">${chips}</div>
+      ${materiales.length ? `<div class="detalle-pieza-materiales"><b>Materiales consumidos:</b> ${materiales.join(' · ')}</div>` : ''}
+      <table class="detalle-mini-table">
+        <thead><tr><th>Operario · Máquina</th><th class="num">Horas</th><th class="num">Cantidad</th></tr></thead>
+        <tbody>${filasOM}</tbody>
+      </table>
+    </div>`;
+  }).join('') || '<p class="card-hint">Esta orden no tiene piezas registradas.</p>';
+
+  return `
+    <div class="detalle-orden-obs" style="margin-bottom:12px">
+      <b>Orden ${orden} — ${o.cliente || ''}</b> · ${tipoTrabajoLabel(o)} · ${(o.fecha||'').slice(0,10)} ${estadoBadgeHTML(estado)}
+    </div>
+    ${o.observaciones ? `<div class="detalle-orden-obs"><b>Observaciones:</b> ${o.observaciones}</div>` : ''}
+    <div class="detalle-piezas-grid">${piezasHTML}</div>
+  `;
 }
