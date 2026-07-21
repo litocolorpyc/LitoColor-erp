@@ -252,12 +252,19 @@ function actualizarMontaje(node){
     sel.innerHTML = '<option value="">Selecciona…</option><option value="T/R">T/R</option><option value="T Y R">T Y R</option>';
   }
 
+  const giroFieldWrap = node.querySelector('.f-giro').closest('.field');
+
   if(sel.value === 'T/R'){
     giroWrap.style.display = '';
+    giroFieldWrap.style.display = '';
     notaSpan.style.display = 'none';
     quitarNotaDiferentesPlanchas(otrosInput);
   } else if(sel.value === 'T Y R'){
+    // "T Y R" no usa Giro (Escuadra/Pinza) — solo aplica a "T/R". Se oculta
+    // únicamente el campo Giro (no toda la fila), porque la nota
+    // "Diferentes Planchas" vive en la misma fila y sí debe seguir visible.
     giroWrap.style.display = '';
+    giroFieldWrap.style.display = 'none';
     node.querySelector('.f-giro').value = '';
     notaSpan.style.display = '';
     agregarNotaDiferentesPlanchas(otrosInput);
