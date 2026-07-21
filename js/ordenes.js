@@ -784,6 +784,40 @@ function ingresoDeOrden(orden){
   return DB.pedidos.filter(p => p.orden === orden).reduce((s,p)=>s+(p.total||0),0);
 }
 
+// Agrupa registros de producción por Área + Operario + Máquina. Antes se
+// agrupaba solo por operario+máquina, pero la máquina física "Guillotina"
+// está duplicada a propósito en dos áreas distintas (Corte inicial y
+// Guillotina/corte final) — sin el área, un operario que trabajó en las dos
+// quedaba mezclado en una sola fila, sumando horas/cantidad de dos procesos
+// distintos.
+function agruparAreaOpMaqRows(recs){
+  const grupos = {};
+  recs.forEach(r => {
+    const area = r.area || 'General';
+    const operario = r.operario || '—';
+    const maquina = r.maquina || 'Manual';
+    const k = area + '|' + operario + '|' + maquina;
+    grupos[k] = grupos[k] || { area, operario, maquina, horas:0, cantidad:0 };
+    grupos[k].horas += (r.tiempoHr||0);
+    grupos[k].cantidad += (r.cantidad||0);
+  });
+  return Object.values(grupos).sort((a,b) =>
+    a.area.localeCompare(b.area) || a.operario.localeCompare(b.operario) || a.maquina.localeCompare(b.maquina)
+  );
+}
+
+function agruparPorAreaOperarioMaquina(recs){
+  return agruparAreaOpMaqRows(recs)
+    .map(v => `<tr><td>${v.area}</td><td>${v.operario} · ${v.maquina}</td><td class="num">${fmtNum(v.horas,2)}</td><td class="num">${fmtNum(v.cantidad,0)}</td></tr>`)
+    .join('') || '<tr><td colspan="4" style="text-align:center;color:var(--ink-faint)">Sin registros de producción aún</td></tr>';
+}
+
+function agruparPorAreaOperarioMaquinaPrint(recs){
+  return agruparAreaOpMaqRows(recs)
+    .map(v => `<tr><td>${v.area}</td><td>${v.operario} · ${v.maquina}</td><td>${fmtNum(v.horas,2)}</td><td>${fmtNum(v.cantidad,0)}</td></tr>`)
+    .join('') || '<tr><td colspan="4">Sin registros de producción aún</td></tr>';
+}
+
 export function mostrarDetalleOrden(orden){
   const o = DB.opp_ordenes.find(x => x.orden === orden);
   if(!o){
@@ -841,16 +875,7 @@ export function mostrarDetalleOrden(orden){
       filaFicha('Notas', p.notas)
     ].join('');
 
-    const porOperarioMaquina = {};
-    recsPieza.forEach(r => {
-      const k = (r.operario||'—') + ' · ' + (r.maquina || 'Manual');
-      porOperarioMaquina[k] = porOperarioMaquina[k] || { horas:0, cantidad:0 };
-      porOperarioMaquina[k].horas += (r.tiempoHr||0);
-      porOperarioMaquina[k].cantidad += (r.cantidad||0);
-    });
-    const filasOM = Object.entries(porOperarioMaquina).map(([k,v]) =>
-      `<tr><td>${k}</td><td class="num">${fmtNum(v.horas,2)}</td><td class="num">${fmtNum(v.cantidad,0)}</td></tr>`
-    ).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--ink-faint)">Sin registros de producción aún</td></tr>';
+    const filasOM = agruparPorAreaOperarioMaquina(recsPieza);
 
     return `<div class="detalle-pieza-card">
       <div class="detalle-pieza-head">
@@ -861,7 +886,7 @@ export function mostrarDetalleOrden(orden){
       <div class="detalle-pieza-chips">${chips}</div>
       ${materiales.length ? `<div class="detalle-pieza-materiales"><b>Materiales consumidos:</b> ${materiales.join(' · ')}</div>` : ''}
       <table class="detalle-mini-table">
-        <thead><tr><th>Operario · Máquina</th><th class="num">Horas</th><th class="num">Cantidad</th></tr></thead>
+        <thead><tr><th>Área</th><th>Operario · Máquina</th><th class="num">Horas</th><th class="num">Cantidad</th></tr></thead>
         <tbody>${filasOM}</tbody>
       </table>
     </div>`;
@@ -870,13 +895,16 @@ export function mostrarDetalleOrden(orden){
   const pres = DB.presupuesto_orden.find(p => p.orden === orden) || {};
   const puedeEditar = puedeEditarPresupuesto();
   const dis = puedeEditar ? '' : 'disabled';
+  const ingresoPresupuestado = pres.precio_venta_antes_iva != null ? pres.precio_venta_antes_iva : null;
+  const margen = ingreso ? (ingreso - costo) : null;
 
   document.getElementById('opp-detalle-body').innerHTML = `
     <div class="kpi-row" style="margin-bottom:16px">
       <div class="kpi"><div class="lbl">Estado</div><div class="val" style="font-size:16px">${o.cliente||'—'}</div><div class="sub">${o.producto||''} · ${(o.fecha||'').slice(0,10)}</div></div>
-      <div class="kpi"><div class="lbl">Ingreso</div><div class="val">${fmtCOPlocal(ingreso)}</div><div class="sub">según pedidos</div></div>
+      <div class="kpi"><div class="lbl">Ingreso facturado</div><div class="val">${fmtCOPlocal(ingreso)}</div><div class="sub">según pedidos</div></div>
+      <div class="kpi"><div class="lbl">Ingreso presupuestado</div><div class="val">${ingresoPresupuestado!=null ? fmtCOPlocal(ingresoPresupuestado) : '—'}</div><div class="sub">precio venta antes de IVA</div></div>
       <div class="kpi"><div class="lbl">Costo mano de obra</div><div class="val">${fmtCOPlocal(costo)}</div><div class="sub">${registros.length} registros de producción</div></div>
-      <div class="kpi"><div class="lbl">Margen</div><div class="val ${ingreso-costo>=0?'pos':'neg'}">${fmtCOPlocal(ingreso-costo)}</div><div class="sub">${estadoBadgeHTML(estado)}</div></div>
+      <div class="kpi"><div class="lbl">Margen</div><div class="val ${margen==null?'':(margen>=0?'pos':'neg')}">${margen==null?'—':fmtCOPlocal(margen)}</div><div class="sub">${estadoBadgeHTML(estado)}</div></div>
     </div>
     ${areas.length ? '<canvas id="chart-detalle-area" height="90" style="margin-bottom:16px"></canvas>' : ''}
     ${o.observaciones ? `<div class="detalle-orden-obs"><b>Observaciones de la orden:</b> ${o.observaciones}</div>` : ''}
@@ -932,16 +960,7 @@ export function imprimirDetalleOrden(orden){
     const procesosTxt = requeridos.map(a => `${completados.has(a) ? '✓' : '☐'} ${a}`).join('&nbsp;&nbsp;&nbsp;') || 'sin procesos definidos';
     const materiales = [...new Set(recsPieza.map(r => [r.materiaPrima, r.consumoMP].filter(Boolean).join(' — ')).filter(Boolean))];
 
-    const porOM = {};
-    recsPieza.forEach(r => {
-      const k = (r.operario||'—') + ' · ' + (r.maquina || 'Manual');
-      porOM[k] = porOM[k] || { horas:0, cantidad:0 };
-      porOM[k].horas += (r.tiempoHr||0);
-      porOM[k].cantidad += (r.cantidad||0);
-    });
-    const filasOM = Object.entries(porOM).map(([k,v]) =>
-      `<tr><td>${k}</td><td>${fmtNum(v.horas,2)}</td><td>${fmtNum(v.cantidad,0)}</td></tr>`
-    ).join('') || '<tr><td colspan="3">Sin registros de producción aún</td></tr>';
+    const filasOM = agruparPorAreaOperarioMaquinaPrint(recsPieza);
 
     const ficha = [
       ['OP', p.op],
@@ -978,7 +997,7 @@ export function imprimirDetalleOrden(orden){
       <p class="procesos-print"><b>Procesos:</b> ${procesosTxt}</p>
       ${materiales.length ? `<p class="materiales-print"><b>Materiales consumidos:</b> ${materiales.join(' · ')}</p>` : ''}
       <table class="om-print">
-        <thead><tr><th>Operario · Máquina</th><th>Horas</th><th>Cantidad</th></tr></thead>
+        <thead><tr><th>Área</th><th>Operario · Máquina</th><th>Horas</th><th>Cantidad</th></tr></thead>
         <tbody>${filasOM}</tbody>
       </table>
     </div>`;
@@ -1732,16 +1751,7 @@ export function fichaOrdenParaOperarioHTML(orden){
       filaFicha('Notas', p.notas)
     ].join('');
 
-    const porOperarioMaquina = {};
-    recsPieza.forEach(r => {
-      const k = (r.operario||'—') + ' · ' + (r.maquina || 'Manual');
-      porOperarioMaquina[k] = porOperarioMaquina[k] || { horas:0, cantidad:0 };
-      porOperarioMaquina[k].horas += (r.tiempoHr||0);
-      porOperarioMaquina[k].cantidad += (r.cantidad||0);
-    });
-    const filasOM = Object.entries(porOperarioMaquina).map(([k,v]) =>
-      `<tr><td>${k}</td><td class="num">${fmtNum(v.horas,2)}</td><td class="num">${fmtNum(v.cantidad,0)}</td></tr>`
-    ).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--ink-faint)">Sin registros de producción aún</td></tr>';
+    const filasOM = agruparPorAreaOperarioMaquina(recsPieza);
 
     return `<div class="detalle-pieza-card">
       <div class="detalle-pieza-head">
@@ -1752,7 +1762,7 @@ export function fichaOrdenParaOperarioHTML(orden){
       <div class="detalle-pieza-chips">${chips}</div>
       ${materiales.length ? `<div class="detalle-pieza-materiales"><b>Materiales consumidos:</b> ${materiales.join(' · ')}</div>` : ''}
       <table class="detalle-mini-table">
-        <thead><tr><th>Operario · Máquina</th><th class="num">Horas</th><th class="num">Cantidad</th></tr></thead>
+        <thead><tr><th>Área</th><th>Operario · Máquina</th><th class="num">Horas</th><th class="num">Cantidad</th></tr></thead>
         <tbody>${filasOM}</tbody>
       </table>
     </div>`;

@@ -1,6 +1,6 @@
 import { DB } from './store.js';
 import { fmtCOP, fmtNum, areaColor, rangoFechas, rangoAnterior, deltaBadge, exportarExcel } from './helpers.js';
-import { mostrarDetalleOrden } from './ordenes.js';
+import { mostrarDetalleOrden, tipoTrabajoLabel } from './ordenes.js';
 
 // Cambia a la pestaña de Órdenes y abre el detalle completo de una orden —
 // se usa desde las tablas del Gerencial donde se puede hacer click en una
@@ -58,7 +58,16 @@ function calcularGerencial(desde, hasta){
   const costosFijos = costosMov.filter(m=>m.tipo==='Fijo').reduce((s,m)=>s+(m.valor||0),0);
   const costosVariables = costosMov.filter(m=>m.tipo==='Variable').reduce((s,m)=>s+(m.valor||0),0);
   const otrosCostos = costosFijos + costosVariables;
-  return { ingresos, costoMO, otrosCostos, costosFijos, costosVariables,
+
+  // Ingreso presupuestado (precio_venta_antes_iva de presupuesto_orden) — SIEMPRE
+  // separado del ingreso facturado. presupuesto_orden no tiene fecha propia, así
+  // que se filtra por la fecha de la orden (opp_ordenes) a la que pertenece.
+  const ordenesEnRango = new Set(DB.opp_ordenes.filter(o => enRango(o.fecha, desde, hasta)).map(o => o.orden));
+  const ingresosPresupuestados = DB.presupuesto_orden
+    .filter(p => ordenesEnRango.has(p.orden))
+    .reduce((s,p)=>s+(p.precio_venta_antes_iva||0),0);
+
+  return { ingresos, ingresosPresupuestados, costoMO, otrosCostos, costosFijos, costosVariables,
     margen: ingresos - costoMO - otrosCostos,
     ordenes: new Set(pedidos.map(p=>p.orden)).size, pedidos, produccion };
 }
@@ -69,11 +78,12 @@ export function renderGerencial(){
   const actual = calcularGerencial(desde, hasta);
   const ant = rangoAnterior(desde, hasta);
   const anterior = esTodo
-    ? { ingresos:null, costoMO:null, otrosCostos:null, margen:null, ordenes:null }
+    ? { ingresos:null, ingresosPresupuestados:null, costoMO:null, otrosCostos:null, margen:null, ordenes:null }
     : calcularGerencial(ant.desde, ant.hasta);
 
   document.getElementById('ger-kpis').innerHTML = `
     <div class="kpi"><div class="lbl">Ingresos facturados</div><div class="val">${fmtCOP(actual.ingresos)} ${deltaBadge(actual.ingresos, anterior.ingresos)}</div><div class="sub">según pedidos con valor</div></div>
+    <div class="kpi"><div class="lbl">Ingresos presupuestados</div><div class="val">${fmtCOP(actual.ingresosPresupuestados)} ${deltaBadge(actual.ingresosPresupuestados, anterior.ingresosPresupuestados)}</div><div class="sub">precio venta antes de IVA de órdenes con presupuesto</div></div>
     <div class="kpi"><div class="lbl">Costo mano de obra</div><div class="val">${fmtCOP(actual.costoMO)} ${deltaBadge(actual.costoMO, anterior.costoMO)}</div><div class="sub">según bitácora de producción</div></div>
     <div class="kpi"><div class="lbl">Otros costos (fijos + variables)</div><div class="val">${fmtCOP(actual.otrosCostos)} ${deltaBadge(actual.otrosCostos, anterior.otrosCostos)}</div><div class="sub">arriendo, nómina, materia prima, impuestos…</div></div>
     <div class="kpi"><div class="lbl">Margen estimado</div><div class="val ${actual.margen>=0?'pos':'neg'}">${fmtCOP(actual.margen)} ${deltaBadge(actual.margen, anterior.margen)}</div><div class="sub">ingresos − mano de obra − otros costos</div></div>
@@ -107,16 +117,37 @@ export function renderGerencial(){
   // que facturó. La mano de obra nunca entra aquí, ya está exacta por orden.
   const tasaOtros = actual.ingresos > 0 ? (actual.otrosCostos / actual.ingresos) : 0;
 
+  // Ingreso presupuestado por orden — SIEMPRE separado del ingreso facturado.
+  // presupuesto_orden no tiene fecha propia, así que se filtra por la fecha
+  // de la orden (opp_ordenes) dueña de ese presupuesto.
+  const ordIngPresupuestado = {};
+  DB.presupuesto_orden.forEach(p => {
+    const ordenOpp = DB.opp_ordenes.find(x => x.orden === p.orden);
+    if(!ordenOpp || !enRango(ordenOpp.fecha, desde, hasta)) return;
+    ordIngPresupuestado[p.orden] = p.precio_venta_antes_iva || 0;
+    if(!ordCliente[p.orden]) ordCliente[p.orden] = ordenOpp.cliente;
+    if(!ordTrabajo[p.orden]) ordTrabajo[p.orden] = ordenOpp.producto || tipoTrabajoLabel(ordenOpp);
+  });
+
   const rows = Object.keys(ordIng).map(o=>({
       orden:o, cliente:ordCliente[o], trabajo:ordTrabajo[o], ing:ordIng[o], cost:ordCost[o]||0,
-      otros: ordIng[o]*tasaOtros
+      otros: ordIng[o]*tasaOtros, ingPres: ordIngPresupuestado[o] != null ? ordIngPresupuestado[o] : null
     }))
     .sort((a,b)=>b.ing-a.ing).slice(0,15);
+
+  // Órdenes que tienen presupuesto pero todavía no tienen pedido (ingreso
+  // facturado) — antes no aparecían en esta tabla en absoluto. Se agregan
+  // aparte, sin contar contra el tope de las 15 con más ingreso facturado.
+  const ordenesPresupuestoSinPedido = Object.keys(ordIngPresupuestado).filter(o => !(o in ordIng));
+  ordenesPresupuestoSinPedido.forEach(o => rows.push({
+    orden:o, cliente:ordCliente[o], trabajo:ordTrabajo[o], ing:0, cost:ordCost[o]||0, otros:0, ingPres:ordIngPresupuestado[o]
+  }));
+
   ultimaRentabilidad = rows;
   document.querySelector('#tbl-ger-ordenes tbody').innerHTML = rows.map(r=>{
     const m=r.ing-r.cost-r.otros;
-    return `<tr class="fila-clicable" data-orden="${r.orden}"><td>${r.orden}</td><td>${r.cliente||'—'}</td><td>${(r.trabajo||'—').toString().trim()}</td><td class="num">${fmtCOP(r.ing)}</td><td class="num">${fmtCOP(r.cost)}</td><td class="num">${fmtCOP(r.otros)}</td><td class="num" style="color:${m>=0?'var(--good)':'var(--bad)'}">${fmtCOP(m)}</td></tr>`;
-  }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint)">Sin datos en este rango</td></tr>';
+    return `<tr class="fila-clicable" data-orden="${r.orden}"><td>${r.orden}</td><td>${r.cliente||'—'}</td><td>${(r.trabajo||'—').toString().trim()}</td><td class="num">${fmtCOP(r.ing)}</td><td class="num">${r.ingPres!=null?fmtCOP(r.ingPres):'—'}</td><td class="num">${fmtCOP(r.cost)}</td><td class="num">${fmtCOP(r.otros)}</td><td class="num" style="color:${m>=0?'var(--good)':'var(--bad)'}">${fmtCOP(m)}</td></tr>`;
+  }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--ink-faint)">Sin datos en este rango</td></tr>';
   document.querySelectorAll('#tbl-ger-ordenes tbody tr[data-orden]').forEach(tr => {
     tr.addEventListener('click', () => irAOrdenYVerDetalle(parseInt(tr.dataset.orden, 10)));
   });
@@ -299,7 +330,7 @@ function wireExportButtons(){
   if(btnRent) btnRent.addEventListener('click', () => {
     exportarExcel('LitoColor_rentabilidad_por_orden.xlsx', [{
       nombre: 'Rentabilidad',
-      filas: ultimaRentabilidad.map(r => ({ Orden: r.orden, Cliente: r.cliente, Trabajo: r.trabajo, Ingreso: r.ing, 'Costo M.O.': r.cost, 'Otros costos (prorrateado)': Math.round(r.otros), Margen: Math.round(r.ing - r.cost - r.otros) }))
+      filas: ultimaRentabilidad.map(r => ({ Orden: r.orden, Cliente: r.cliente, Trabajo: r.trabajo, Ingreso: r.ing, 'Ingreso presupuestado': r.ingPres != null ? r.ingPres : '', 'Costo M.O.': r.cost, 'Otros costos (prorrateado)': Math.round(r.otros), Margen: Math.round(r.ing - r.cost - r.otros) }))
     }]);
   });
 
