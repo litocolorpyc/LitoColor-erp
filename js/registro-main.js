@@ -1,6 +1,6 @@
 import { loadAll } from './store.js';
 import { initRegistrar } from './registrar.js';
-import { getOrdenesPendientesPorPrioridad, fichaOrdenParaOperarioHTML, tipoTrabajoLabel, estadoOrden, estadoBadgeHTML } from './ordenes.js';
+import { getOrdenesPendientesPorPrioridad, fichaOrdenParaOperarioHTML, tipoTrabajoLabel, estadoOrden, estadoBadgeHTML, imprimirDetalleOrden } from './ordenes.js';
 
 document.getElementById('ayuda-toggle').addEventListener('click', () => {
   const box = document.getElementById('ayuda-box');
@@ -30,7 +30,10 @@ function renderPrioridadOperario(){
   });
 }
 
+let ordenDetalleOperarioActual = null;
+
 function mostrarDetalleOperario(orden){
+  ordenDetalleOperarioActual = orden;
   document.getElementById('reg-detalle-titulo').textContent = `Orden ${orden}`;
   document.getElementById('reg-detalle-body').innerHTML = fichaOrdenParaOperarioHTML(orden);
   const card = document.getElementById('reg-detalle-card');
@@ -42,6 +45,13 @@ const btnCerrarDetalle = document.getElementById('reg-detalle-cerrar');
 if(btnCerrarDetalle){
   btnCerrarDetalle.addEventListener('click', () => {
     document.getElementById('reg-detalle-card').style.display = 'none';
+  });
+}
+
+const btnImprimirDetalle = document.getElementById('reg-detalle-imprimir');
+if(btnImprimirDetalle){
+  btnImprimirDetalle.addEventListener('click', () => {
+    if(ordenDetalleOperarioActual != null) imprimirDetalleOrden(ordenDetalleOperarioActual);
   });
 }
 

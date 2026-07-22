@@ -1708,6 +1708,7 @@ export function initOppForm(onChange){
 export function getOrdenesPendientesPorPrioridad(){
   return DB.opp_ordenes
     .filter(o => o.estado !== 'Cerrada' && o.estado !== 'Cancelada')
+    .filter(o => estadoOrden(o).pct !== 100) // ya ejecutada al 100% aunque el gerente no la haya cerrado — no debe seguir en la lista del operario
     .sort((a,b) => (a.prioridad ?? 999999) - (b.prioridad ?? 999999));
 }
 
