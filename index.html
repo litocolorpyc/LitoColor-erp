@@ -122,18 +122,22 @@
         </div>
       </div>
       <div class="card">
-        <div class="card-head"><h3>Rentabilidad por orden</h3><span class="card-hint">* otros costos prorrateados por ingreso, no incluyen mano de obra</span></div>
+        <div class="card-head"><h3>Rentabilidad por orden</h3><span class="card-hint">el margen usa el ingreso facturado, o el presupuestado si aún no hay factura — ver notas abajo</span></div>
         <div class="form-foot" style="margin-top:0;margin-bottom:10px"><span></span><button type="button" class="btn-secondary" id="export-rentabilidad" style="margin:0">⬇ Exportar a Excel</button></div>
         <div class="table-wrap">
           <table id="tbl-ger-ordenes">
-            <thead><tr><th>Orden</th><th>Cliente</th><th>Trabajo</th><th class="num">Ingreso</th><th class="num">Ingreso presupuestado</th><th class="num">Costo M.O.</th><th class="num">Otros costos *</th><th class="num">Margen</th></tr></thead>
+            <thead><tr><th>Orden</th><th>Cliente</th><th>Trabajo</th><th class="num">Ingreso</th><th class="num">Ingreso presupuestado</th><th class="num">Costo M.O.</th><th class="num">Otros costos *</th><th class="num">Margen **</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
+        <p class="card-hint" style="margin-top:10px;line-height:1.5">
+          * "Otros costos" = costos fijos y variables (arriendo, nómina, servicios, impuestos, compras de materia prima, etc. — sin mano de obra). Si el costo ya se registró con esta orden asociada (ej. una compra de papel para este trabajo), se carga 100% aquí; el resto (arriendo, nómina, y demás sin orden asociada) se reparte proporcional al ingreso de cada orden. Pasa el mouse sobre el valor para ver el detalle.<br>
+          ** "Margen" = Ingreso − Costo M.O. − Otros costos. Usa el ingreso <b>facturado</b> (columna Ingreso); si esa orden todavía no tiene factura cargada (queda en 0 porque viene de un sistema histórico que no se sigue llenando), usa el ingreso <b>presupuestado</b> en su lugar, para no mostrar un margen negativo falso en órdenes que ni siquiera se han facturado todavía.
+        </p>
       </div>
 
       <div class="card">
-        <div class="card-head"><h3>Rentabilidad por tipo de producto</h3><span class="card-hint">* otros costos prorrateados por ingreso, no incluyen mano de obra</span></div>
+        <div class="card-head"><h3>Rentabilidad por tipo de producto</h3><span class="card-hint">mismo criterio de ingreso y otros costos que la tabla de arriba</span></div>
         <div class="form-foot" style="margin-top:0;margin-bottom:10px"><span></span><button type="button" class="btn-secondary" id="export-rentabilidad-producto" style="margin:0">⬇ Exportar a Excel</button></div>
         <canvas id="chart-ger-productos" height="360" style="margin-bottom:16px"></canvas>
         <div class="table-wrap">
@@ -170,14 +174,19 @@
         </div>
       </div>
       <div class="card">
-        <div class="card-head"><h3>Producción por área</h3><span class="card-hint">horas, piezas y costo acumulado</span></div>
+        <div class="card-head"><h3>Producción por área</h3><span class="card-hint">una fila por cada área — no sumar la columna "Piezas" entre filas, ver nota abajo</span></div>
         <div class="form-foot" style="margin-top:0;margin-bottom:10px"><span></span><button type="button" class="btn-secondary" id="export-produccion" style="margin:0">⬇ Exportar a Excel</button></div>
         <div class="table-wrap">
           <table id="tbl-prod-area">
-            <thead><tr><th>Área</th><th class="num">Horas</th><th class="num">Piezas producidas</th><th class="num">Costo M.O.</th><th class="num">Registros</th></tr></thead>
+            <thead><tr><th>Área</th><th class="num">Horas</th><th class="num">Piezas *</th><th class="num">Costo M.O. **</th><th class="num">Registros ***</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
+        <p class="card-hint" style="margin-top:10px;line-height:1.5">
+          * "Piezas" es la cantidad que el operario reportó en esa área — pero cada área cuenta una unidad distinta de la misma orden (ej. pliegos cortados en Corte inicial, pliegos impresos en Litografía, piezas ya cortadas en Guillotina, unidades terminadas en Terminado). Por eso esta columna sirve para ver el volumen dentro de UN área, no para sumarla entre áreas.<br>
+          ** "Costo M.O." es el costo de mano de obra (horas × tarifa del operario) acumulado en esa área.<br>
+          *** "Registros" es cuántas veces se registró una actividad en esa área (una persona puede registrar varias veces el mismo día) — mide frecuencia de uso, no volumen de piezas.
+        </p>
       </div>
     </section>
 
@@ -287,6 +296,11 @@
           </div>
         </div>
         <div id="opp-producto-ref" style="display:none;margin-bottom:14px"></div>
+
+        <div class="field full" style="margin-bottom:14px">
+          <label>Observaciones <span class="card-hint">(solicitudes especiales, ej. "repartir 600und en 3 sedes de 200und")</span></label>
+          <textarea id="opp-observaciones" rows="2" placeholder="opcional"></textarea>
+        </div>
 
         <div id="opp-piezas-list"></div>
         <datalist id="opp-piezas-datalist"></datalist>
@@ -919,6 +933,13 @@
             <datalist id="rc-proveedor-list"></datalist>
           </div>
         </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Orden asociada <span class="card-hint">(opcional)</span></label>
+            <select id="rc-orden"><option value="">— Sin orden asociada (se reparte entre todas) —</option></select>
+          </div>
+          <div class="field"><label>Suborden <span class="card-hint">(opcional)</span></label><input type="number" id="rc-suborden" min="1" placeholder="ej. 2"></div>
+        </div>
         <div class="field full"><label>Comentario</label><input type="text" id="rc-comentario" placeholder="opcional"></div>
         <div class="form-foot"><span></span><button type="button" class="btn-primary" id="rc-save">Guardar costo</button></div>
       </div>
@@ -959,7 +980,7 @@
         <div class="card-head"><h3>Últimos costos registrados</h3></div>
         <div class="table-wrap">
           <table id="tbl-costos-recientes">
-            <thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Proveedor</th><th class="num">Valor</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Proveedor</th><th>Orden</th><th class="num">Valor</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>

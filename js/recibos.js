@@ -344,7 +344,8 @@ async function guardarRecibo(){
         valor: it.valor_credito || 0,
         proveedor: tercero,
         comentario: (numero ? numero + ' — ' : '') + (it.descripcion || ''),
-        orden: it.orden || null
+        orden: it.orden || null,
+        suborden: it.suborden || null
       }));
       const { data: costosData, error: errCostos } = await sb.from('costos_movimientos').insert(payloadCostos).select();
       if(errCostos){

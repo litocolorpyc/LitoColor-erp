@@ -72,7 +72,7 @@ function calcularGerencial(desde, hasta){
 
   return { ingresos, ingresosPresupuestados, costoMO, otrosCostos, costosFijos, costosVariables,
     margen: ingresos - costoMO - otrosCostos,
-    ordenes: new Set(pedidos.map(p=>p.orden)).size, pedidos, produccion };
+    ordenes: new Set(pedidos.map(p=>p.orden)).size, pedidos, produccion, costosMov };
 }
 
 export function renderGerencial(){
@@ -115,10 +115,20 @@ export function renderGerencial(){
   const ordCost = {};
   actual.produccion.forEach(r=>{ if(r.orden==null) return; ordCost[r.orden]=(ordCost[r.orden]||0)+(r.valorActividad||0); });
 
-  // tasa de prorrateo: otros costos (fijos+variables, SIN mano de obra) como
-  // % del ingreso del periodo — se reparte a cada orden/producto según lo
-  // que facturó. La mano de obra nunca entra aquí, ya está exacta por orden.
-  const tasaOtros = actual.ingresos > 0 ? (actual.otrosCostos / actual.ingresos) : 0;
+  // Costos (fijos+variables) que ya tienen una orden asociada (ej. una
+  // compra de materia prima cargada desde Costos o desde un recibo
+  // importado con el número de OP) van 100% a ESA orden, en vez de
+  // prorratearse entre todas como antes — antes esta tabla ignoraba por
+  // completo el campo "orden" de costos_movimientos (ver punto 10 de
+  // AjustesERP). Solo el resto (arriendo, nómina, servicios — sin orden
+  // asociada) se reparte proporcional al ingreso, como se hacía antes.
+  const ordCostoDirecto = {};
+  let costosMovSinOrden = 0;
+  actual.costosMov.forEach(m => {
+    if(m.orden != null) ordCostoDirecto[m.orden] = (ordCostoDirecto[m.orden] || 0) + (m.valor || 0);
+    else costosMovSinOrden += (m.valor || 0);
+  });
+  const tasaOtros = actual.ingresos > 0 ? (costosMovSinOrden / actual.ingresos) : 0;
 
   // Ingreso presupuestado por orden — SIEMPRE separado del ingreso facturado.
   // presupuesto_orden no tiene fecha propia, así que se filtra por la fecha
@@ -132,24 +142,49 @@ export function renderGerencial(){
     if(!ordTrabajo[p.orden]) ordTrabajo[p.orden] = ordenOpp.producto || tipoTrabajoLabel(ordenOpp);
   });
 
-  const rows = Object.keys(ordIng).map(o=>({
-      orden:o, cliente:ordCliente[o], trabajo:ordTrabajo[o], ing:ordIng[o], cost:ordCost[o]||0,
-      otros: ordIng[o]*tasaOtros, ingPres: ordIngPresupuestado[o] != null ? ordIngPresupuestado[o] : null
-    }))
-    .sort((a,b)=>b.ing-a.ing).slice(0,15);
+  // El ingreso "facturado" (tabla pedidos, solo viene del Excel histórico
+  // migrado) se queda en 0 para siempre en cualquier orden nueva creada
+  // desde OPP — nada la vuelve a llenar. Antes el margen de esas órdenes
+  // salía negativo por esto, aunque el ingreso presupuestado sí estuviera
+  // bien cargado (ver punto 3 de AjustesERP). Ahora, si no hay ingreso
+  // facturado, se usa el presupuestado como mejor estimación disponible.
+  function filaOrden(o){
+    const ing = ordIng[o] || 0;
+    const ingPres = ordIngPresupuestado[o] != null ? ordIngPresupuestado[o] : null;
+    const ingresoBase = ing > 0 ? ing : (ingPres || 0);
+    const otrosDirecto = ordCostoDirecto[o] || 0;
+    const otros = otrosDirecto + ingresoBase * tasaOtros;
+    return { orden:o, cliente:ordCliente[o], trabajo:ordTrabajo[o], ing, ingPres, cost: ordCost[o]||0, otros, otrosDirecto };
+  }
+
+  const rows = Object.keys(ordIng).map(filaOrden).sort((a,b)=>b.ing-a.ing).slice(0,15);
 
   // Órdenes que tienen presupuesto pero todavía no tienen pedido (ingreso
   // facturado) — antes no aparecían en esta tabla en absoluto. Se agregan
   // aparte, sin contar contra el tope de las 15 con más ingreso facturado.
   const ordenesPresupuestoSinPedido = Object.keys(ordIngPresupuestado).filter(o => !(o in ordIng));
-  ordenesPresupuestoSinPedido.forEach(o => rows.push({
-    orden:o, cliente:ordCliente[o], trabajo:ordTrabajo[o], ing:0, cost:ordCost[o]||0, otros:0, ingPres:ordIngPresupuestado[o]
-  }));
+  ordenesPresupuestoSinPedido.forEach(o => rows.push(filaOrden(o)));
+
+  // Órdenes que solo tienen un costo con orden asociada (sin pedido ni
+  // presupuesto) — sin esto, ese costo desaparecía de la tabla aunque sí
+  // contaba en el total de "otros costos" del periodo.
+  const ordenesSoloConCostoDirecto = Object.keys(ordCostoDirecto).filter(o => !(o in ordIng) && !(o in ordIngPresupuestado));
+  ordenesSoloConCostoDirecto.forEach(o => {
+    if(!ordCliente[o]){
+      const ordenOpp = DB.opp_ordenes.find(x => String(x.orden) === String(o));
+      if(ordenOpp){ ordCliente[o] = ordenOpp.cliente; ordTrabajo[o] = ordenOpp.producto || tipoTrabajoLabel(ordenOpp); }
+    }
+    rows.push(filaOrden(o));
+  });
 
   ultimaRentabilidad = rows;
   document.querySelector('#tbl-ger-ordenes tbody').innerHTML = rows.map(r=>{
-    const m=r.ing-r.cost-r.otros;
-    return `<tr class="fila-clicable" data-orden="${r.orden}"><td>${r.orden}</td><td>${r.cliente||'—'}</td><td>${(r.trabajo||'—').toString().trim()}</td><td class="num">${fmtCOP(r.ing)}</td><td class="num">${r.ingPres!=null?fmtCOP(r.ingPres):'—'}</td><td class="num">${fmtCOP(r.cost)}</td><td class="num">${fmtCOP(r.otros)}</td><td class="num" style="color:${m>=0?'var(--good)':'var(--bad)'}">${fmtCOP(m)}</td></tr>`;
+    const ingresoBase = r.ing > 0 ? r.ing : (r.ingPres || 0);
+    const m = ingresoBase - r.cost - r.otros;
+    const otrosTitle = r.otrosDirecto > 0
+      ? `Incluye ${fmtCOP(r.otrosDirecto)} de costos con esta orden asociada directamente`
+      : 'Prorrateado según el ingreso de esta orden';
+    return `<tr class="fila-clicable" data-orden="${r.orden}"><td>${r.orden}</td><td>${r.cliente||'—'}</td><td>${(r.trabajo||'—').toString().trim()}</td><td class="num">${fmtCOP(r.ing)}</td><td class="num">${r.ingPres!=null?fmtCOP(r.ingPres):'—'}</td><td class="num">${fmtCOP(r.cost)}</td><td class="num" title="${otrosTitle}">${fmtCOP(r.otros)}</td><td class="num" style="color:${m>=0?'var(--good)':'var(--bad)'}">${fmtCOP(m)}</td></tr>`;
   }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--ink-faint)">Sin datos en este rango</td></tr>';
   document.querySelectorAll('#tbl-ger-ordenes tbody tr[data-orden]').forEach(tr => {
     tr.addEventListener('click', () => irAOrdenYVerDetalle(parseInt(tr.dataset.orden, 10)));
@@ -158,18 +193,31 @@ export function renderGerencial(){
   // ---- rentabilidad por tipo de producto ----
   const ordProducto = {};
   actual.pedidos.forEach(p => { if(!ordProducto[p.orden]) ordProducto[p.orden] = p.producto || 'Sin producto'; });
+  // Completa con el producto de la orden (OPP) para las que no vienen del
+  // Excel histórico — mismo criterio que la tabla de rentabilidad por orden:
+  // sin esto, toda orden nueva quedaba fuera de este reporte por completo.
+  Object.keys(ordIngPresupuestado).forEach(o => {
+    if(ordProducto[o]) return;
+    const ordenOpp = DB.opp_ordenes.find(x => String(x.orden) === String(o));
+    if(ordenOpp) ordProducto[o] = ordenOpp.producto || tipoTrabajoLabel(ordenOpp);
+  });
 
+  const ordenesConValor = new Set([...Object.keys(ordIng), ...Object.keys(ordIngPresupuestado)]);
   const prodMap = {};
-  Object.keys(ordIng).forEach(o => {
+  ordenesConValor.forEach(o => {
     const prod = ordProducto[o] || 'Sin producto';
-    prodMap[prod] = prodMap[prod] || { ing:0, cost:0, ordenes:new Set() };
-    prodMap[prod].ing += ordIng[o];
+    const ing = ordIng[o] || 0;
+    const ingPres = ordIngPresupuestado[o] != null ? ordIngPresupuestado[o] : null;
+    const ingresoBase = ing > 0 ? ing : (ingPres || 0);
+    prodMap[prod] = prodMap[prod] || { ing:0, cost:0, otrosDirecto:0, ordenes:new Set() };
+    prodMap[prod].ing += ingresoBase;
     prodMap[prod].cost += (ordCost[o] || 0);
+    prodMap[prod].otrosDirecto += (ordCostoDirecto[o] || 0);
     prodMap[prod].ordenes.add(o);
   });
   const filasProducto = Object.entries(prodMap)
     .map(([prod, v]) => {
-      const otros = v.ing * tasaOtros;
+      const otros = v.otrosDirecto + v.ing * tasaOtros;
       const margen = v.ing - v.cost - otros;
       return { producto: prod, ordenes: v.ordenes.size, ing: v.ing, cost: v.cost, otros, margen, margenPct: v.ing>0 ? (margen/v.ing*100) : 0 };
     })
@@ -256,16 +304,22 @@ export function renderProduccion(){
   const ant = rangoAnterior(desde, hasta);
   const produccionAnt = esTodo ? [] : DB.produccion.filter(r => enRango(r.fecha, ant.desde, ant.hasta));
   const horasAntBase = esTodo ? null : produccionAnt.reduce((s,r)=>s+(r.tiempoHr||0),0);
-  const piezasAntBase = esTodo ? null : produccionAnt.reduce((s,r)=>s+(r.cantidad||0),0);
+  const ordenesAntBase = esTodo ? null : new Set(produccionAnt.filter(r=>r.orden!=null).map(r=>r.orden)).size;
 
   const horasTot = produccion.reduce((s,r)=>s+(r.tiempoHr||0),0);
-  const piezasTot = produccion.reduce((s,r)=>s+(r.cantidad||0),0);
+  // Antes había un KPI de "Piezas producidas" que sumaba la cantidad de TODOS
+  // los registros sin importar el área — eso mezclaba papel inicial, pliegos
+  // impresos y piezas ya cortadas/terminadas (unidades distintas de una misma
+  // orden en cada etapa), dando un total sin sentido (ver punto 4 de
+  // AjustesERP). Se reemplaza por "Órdenes con movimiento", que sí es un
+  // conteo correcto y útil para este rango de fechas.
+  const ordenesConMovimiento = new Set(produccion.filter(r=>r.orden!=null).map(r=>r.orden)).size;
   const directaHrs = produccion.reduce((s,r)=>{ const c=codeMap[codeFromLabel(r.actividad)]; return s + ((c&&c.categoria==='Directa')?(r.tiempoHr||0):0); },0);
   const eficiencia = horasTot>0 ? (directaHrs/horasTot*100) : 0;
 
   document.getElementById('prod-kpis').innerHTML = `
     <div class="kpi"><div class="lbl">Horas registradas</div><div class="val">${fmtNum(horasTot)} ${deltaBadge(horasTot, horasAntBase)}</div><div class="sub">${produccion.length} registros</div></div>
-    <div class="kpi"><div class="lbl">Piezas producidas</div><div class="val">${fmtNum(piezasTot,0)} ${deltaBadge(piezasTot, piezasAntBase)}</div><div class="sub">suma de cantidad producida</div></div>
+    <div class="kpi"><div class="lbl">Órdenes con movimiento</div><div class="val">${ordenesConMovimiento} ${deltaBadge(ordenesConMovimiento, ordenesAntBase)}</div><div class="sub">órdenes con al menos un registro en el rango</div></div>
     <div class="kpi"><div class="lbl">% tiempo directo</div><div class="val">${fmtNum(eficiencia,0)}%</div><div class="sub">horas directas / horas totales</div></div>`;
 
   const areaMap = {};
@@ -458,7 +512,7 @@ function wireExportButtons(){
   if(btnRent) btnRent.addEventListener('click', () => {
     exportarExcel('LitoColor_rentabilidad_por_orden.xlsx', [{
       nombre: 'Rentabilidad',
-      filas: ultimaRentabilidad.map(r => ({ Orden: r.orden, Cliente: r.cliente, Trabajo: r.trabajo, Ingreso: r.ing, 'Ingreso presupuestado': r.ingPres != null ? r.ingPres : '', 'Costo M.O.': r.cost, 'Otros costos (prorrateado)': Math.round(r.otros), Margen: Math.round(r.ing - r.cost - r.otros) }))
+      filas: ultimaRentabilidad.map(r => { const base = r.ing > 0 ? r.ing : (r.ingPres || 0); return { Orden: r.orden, Cliente: r.cliente, Trabajo: r.trabajo, Ingreso: r.ing, 'Ingreso presupuestado': r.ingPres != null ? r.ingPres : '', 'Costo M.O.': r.cost, 'Otros costos (directos + prorrateado)': Math.round(r.otros), Margen: Math.round(base - r.cost - r.otros) }; })
     }]);
   });
 

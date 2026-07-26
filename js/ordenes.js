@@ -1338,6 +1338,7 @@ function resetOppForm(nextOrden){
   document.getElementById('opp-orden').value = nextOrden != null ? nextOrden : suggestNextOrden();
   document.getElementById('opp-orden').disabled = false;
   document.getElementById('opp-fecha').value = fechaHoyLocal();
+  document.getElementById('opp-observaciones').value = '';
   setValSafe('opp-tipo-trabajo', 'Litografia');
   aplicarTipoTrabajo();
   addPiezaCard();
@@ -1350,6 +1351,7 @@ function loadOrdenParaEditar(orden){
   document.getElementById('opp-form-mode').textContent = `Editando la orden ${orden} — al guardar se sobrescribe`;
   document.getElementById('opp-orden').value = orden;
   document.getElementById('opp-orden').disabled = true;
+  document.getElementById('opp-observaciones').value = o.observaciones || '';
   ensureOptionExists(document.getElementById('opp-cliente'), o.cliente || '');
   ensureOptionExists(document.getElementById('opp-producto'), o.producto || '');
   document.getElementById('opp-fecha').value = (o.fecha || '').slice(0,10) || fechaHoyLocal();
@@ -1378,6 +1380,7 @@ function duplicarOrden(orden){
   ensureOptionExists(document.getElementById('opp-cliente'), o.cliente || '');
   ensureOptionExists(document.getElementById('opp-producto'), o.producto || '');
   document.getElementById('opp-fecha').value = fechaHoyLocal();
+  document.getElementById('opp-observaciones').value = ''; // observación es de la orden original, no aplica igual a la copia
   setValSafe('opp-tipo-trabajo', o.tipo_trabajo || 'Litografia');
   aplicarTipoTrabajo();
   renderProductoRef();
@@ -1422,7 +1425,8 @@ async function saveOpp(){
       orden, cliente,
       producto: document.getElementById('opp-producto').value.trim() || null,
       fecha: document.getElementById('opp-fecha').value,
-      tipo_trabajo: tipoTrabajo
+      tipo_trabajo: tipoTrabajo,
+      observaciones: document.getElementById('opp-observaciones').value.trim() || null
     };
 
     if(editingOrden === orden){

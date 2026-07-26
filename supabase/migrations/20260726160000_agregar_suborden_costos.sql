@@ -1,0 +1,11 @@
+-- LitoColor ERP — punto 10 del doc AjustesERP: "Estos costos ya tienen una
+-- orden y suborden asociada. Pero no lo veo reflejado en Rentabilidad por
+-- Orden".
+--
+-- costos_movimientos ya tenía la columna "orden" (se usa desde
+-- costoMaterialesDeOrden() en js/ordenes.js y ahora también en la tabla de
+-- Rentabilidad por Orden del Gerencial), pero le faltaba "suborden" — la
+-- importación de recibos (js/recibos.js) ya detecta y guarda el suborden
+-- por línea en recibos_caja_items, pero se perdía al crear el movimiento de
+-- costo real. Se agrega para no perder ese detalle.
+alter table costos_movimientos add column if not exists suborden int;
