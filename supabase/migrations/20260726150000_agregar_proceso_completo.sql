@@ -1,0 +1,14 @@
+-- LitoColor ERP — bug 8 del doc AjustesERP: un operario podía finalizar su
+-- jornada sin haber terminado un proceso (ej. troquelado) y el sistema lo
+-- marcaba igual como área completada ("chuleado"), porque bastaba con que
+-- existiera CUALQUIER registro con hora_fin para esa área.
+--
+-- Esta columna guarda si el operario, al finalizar su sesión de trabajo,
+-- confirmó que el proceso quedó terminado por completo ("Sí") o que va a
+-- continuar después ("No", ej. mañana). Ver js/registrar.js (pregunta al
+-- finalizar) y js/ordenes.js areasCompletadasPorPieza() (solo cuenta como
+-- área completada si proceso_completo no es false).
+--
+-- Default true: todos los registros existentes (antes de este cambio) se
+-- siguen contando como terminados, para no romper el historial ya cargado.
+alter table produccion add column if not exists proceso_completo boolean default true;

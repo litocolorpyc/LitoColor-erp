@@ -438,7 +438,24 @@ function wireNuevoInline(selectId, wrapId, inputId, btnId, table, onCreated){
 }
 
 // ---------- estado / avance de una orden ----------
+// Áreas que YA se dieron por terminadas para esta pieza: la sesión de
+// trabajo debe estar finalizada (horaFin) Y el operario no haber marcado
+// "voy a continuar después" (procesoCompleto === false). Antes bastaba con
+// que existiera CUALQUIER registro (hasta uno todavía en curso) para que el
+// área contara como completada — eso hacía que una orden apareciera como
+// 100% aunque el proceso siguiera a medias (ver punto 8 de AjustesERP).
 export function areasCompletadasPorPieza(pieza){
+  const recs = DB.produccion.filter(r =>
+    (r.op === pieza.op || (r.orden === pieza.orden && r.suborden === pieza.suborden)) &&
+    r.horaFin && r.procesoCompleto !== false
+  );
+  return new Set(recs.map(r => r.area).filter(Boolean));
+}
+
+// Áreas que tienen CUALQUIER actividad (en curso o terminada) — se usa solo
+// para mostrar "En proceso" mientras se trabaja, sin exigir que ya cuente
+// como área completada.
+export function areasConActividadPorPieza(pieza){
   const recs = DB.produccion.filter(r => r.op === pieza.op || (r.orden === pieza.orden && r.suborden === pieza.suborden));
   return new Set(recs.map(r => r.area).filter(Boolean));
 }
@@ -452,10 +469,10 @@ export function estadoOrden(o){
   piezas.forEach(p => {
     const req = Array.isArray(p.procesos_requeridos) ? p.procesos_requeridos : [];
     const done = areasCompletadasPorPieza(p);
+    const tocado = areasConActividadPorPieza(p);
     totalReq += req.length;
-    const doneCount = req.filter(a => done.has(a)).length;
-    totalDone += doneCount;
-    if(doneCount > 0) algunoEmpezado = true;
+    totalDone += req.filter(a => done.has(a)).length;
+    if(req.some(a => tocado.has(a))) algunoEmpezado = true;
   });
   if(totalReq === 0) return { label: 'Pendiente', pct: 0 };
   const pct = Math.round((totalDone / totalReq) * 100);

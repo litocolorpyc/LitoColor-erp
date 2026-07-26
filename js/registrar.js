@@ -139,6 +139,16 @@ function runningCardHTML(row){
       <div class="field"><label>¿Reproceso?</label><select class="rc-reproceso"><option value="No"${row.reproceso!=='Si'?' selected':''}>No</option><option value="Si"${row.reproceso==='Si'?' selected':''}>Sí</option></select></div>
     </div>
     <div class="form-row">
+      <div class="field full">
+        <label>¿Quedó terminado este proceso (${row.area || '—'})?</label>
+        <select class="rc-proceso-completo">
+          <option value="Si" selected>Sí, quedó terminado por completo</option>
+          <option value="No">No, voy a continuar después (ej. mañana)</option>
+        </select>
+        <span class="card-hint">Si eliges "No", esta orden NO va a contar este proceso como terminado hasta que lo finalices de verdad</span>
+      </div>
+    </div>
+    <div class="form-row">
       <div class="field">
         <label>Insumo consumido <span class="card-hint">(del área ${row.area || '—'})</span></label>
         <select class="rc-materia-select">${materialSelectOptionsHTML(row.area, row.materia_prima, papelSugerido)}</select>
@@ -328,6 +338,7 @@ async function finishActivity(id, horaIni, fecha){
       consumo_mp: consumoMp,
       comentario: card.querySelector('.rc-comentario').value || null,
       reproceso: card.querySelector('.rc-reproceso').value,
+      proceso_completo: card.querySelector('.rc-proceso-completo').value !== 'No',
       tiempo_hr: hrs,
       valor_actividad: hrs * rate
     };

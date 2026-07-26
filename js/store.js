@@ -18,7 +18,12 @@ export function normProd(r){
     cliente: r.cliente, trabajo: r.trabajo, materiaPrima: r.materia_prima,
     consumoMP: r.consumo_mp, comentario: r.comentario, tiempoHr: r.tiempo_hr,
     valorActividad: r.valor_actividad, despachado: r.despachado, inventario: r.inventario,
-    reproceso: r.reproceso, opp: r.opp
+    reproceso: r.reproceso, opp: r.opp,
+    // true/null = el operario dio por terminado el proceso en esta sesión;
+    // false = "voy a continuar después" (ej. troquelado que sigue mañana).
+    // Ver areasCompletadasPorPieza() en ordenes.js — solo esas cuentan como
+    // área completada para el avance de la orden.
+    procesoCompleto: r.proceso_completo
   };
 }
 

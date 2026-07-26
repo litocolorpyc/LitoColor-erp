@@ -63,6 +63,7 @@ create table if not exists produccion (
   inventario numeric,
   reproceso text,
   opp text,
+  proceso_completo boolean default true,
   created_at timestamptz default now()
 );
 
