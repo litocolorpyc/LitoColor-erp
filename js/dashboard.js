@@ -103,13 +103,6 @@ export function renderGerencial(){
       {label:'Costos totales (M.O. + otros)', data: meses.map(m=>mesesMap[m].cost), backgroundColor:'#D8854A'}
     ]}, options: baseBarOpts(true) });
 
-  const clMap = {};
-  actual.pedidos.forEach(p=>{ clMap[p.cliente]=(clMap[p.cliente]||0)+(p.total||0); });
-  const topCl = Object.entries(clMap).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  makeChart('chart-ger-clientes', { type:'bar', data:{ labels: topCl.map(c=>c[0]),
-    datasets:[{label:'Ingreso', data: topCl.map(c=>c[1]), backgroundColor:'#C24A1F'}]},
-    options: baseBarOpts(false, true) });
-
   const ordIng = {}, ordCliente = {}, ordTrabajo = {};
   actual.pedidos.forEach(p=>{ ordIng[p.orden]=(ordIng[p.orden]||0)+(p.total||0); ordCliente[p.orden]=p.cliente; ordTrabajo[p.orden]=ordTrabajo[p.orden]||p.trabajo; });
   const ordCost = {};
@@ -141,6 +134,23 @@ export function renderGerencial(){
     if(!ordCliente[p.orden]) ordCliente[p.orden] = ordenOpp.cliente;
     if(!ordTrabajo[p.orden]) ordTrabajo[p.orden] = ordenOpp.producto || tipoTrabajoLabel(ordenOpp);
   });
+
+  // Clientes principales por ingreso — mismo criterio que Rentabilidad por
+  // Orden: si la orden todavía no tiene ingreso facturado, se usa el
+  // presupuestado, para no dejar fuera a los clientes cuyas órdenes son
+  // nuevas (creadas por OPP, sin pedido en el Excel histórico).
+  const clMap = {};
+  new Set([...Object.keys(ordIng), ...Object.keys(ordIngPresupuestado)]).forEach(o => {
+    const ing = ordIng[o] || 0;
+    const ingPres = ordIngPresupuestado[o] != null ? ordIngPresupuestado[o] : null;
+    const ingresoBase = ing > 0 ? ing : (ingPres || 0);
+    const cliente = ordCliente[o] || 'Sin cliente';
+    clMap[cliente] = (clMap[cliente] || 0) + ingresoBase;
+  });
+  const topCl = Object.entries(clMap).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  makeChart('chart-ger-clientes', { type:'bar', data:{ labels: topCl.map(c=>c[0]),
+    datasets:[{label:'Ingreso', data: topCl.map(c=>c[1]), backgroundColor:'#C24A1F'}]},
+    options: baseBarOpts(false, true) });
 
   // El ingreso "facturado" (tabla pedidos, solo viene del Excel histórico
   // migrado) se queda en 0 para siempre en cualquier orden nueva creada
