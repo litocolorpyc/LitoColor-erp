@@ -16,7 +16,10 @@ function calcularAlertas(){
   const alertas = [];
 
   // A) órdenes activas sin movimiento en 3+ días
-  DB.opp_ordenes.filter(o => o.estado === 'Activa').forEach(o => {
+  // Si la orden ya tiene el 100% de sus procesos completados, no está
+  // "sin movimiento" — está terminada y solo falta que Gerencia la cierre
+  // (ver caso real: orden 5968, ya finalizada, generaba esta alerta igual).
+  DB.opp_ordenes.filter(o => o.estado === 'Activa' && estadoOrden(o).pct !== 100).forEach(o => {
     const recs = DB.produccion.filter(r => r.orden === o.orden);
     const ultimaFecha = recs.reduce((max, r) => (!max || (r.fecha && r.fecha > max)) ? r.fecha : max, o.fecha);
     const dias = diasDesde(ultimaFecha);
