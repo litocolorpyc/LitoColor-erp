@@ -1406,6 +1406,33 @@ async function cancelarOrden(orden){
   if(onOrdenesChangeCallback) onOrdenesChangeCallback();
 }
 
+// Punto 13 de AjustesERP: al ingresar la orden, avisa si el papel que se
+// necesita no alcanza con el stock que hay cargado en Materias primas.
+// Es una alerta, no bloquea el guardado — la orden se guarda igual, esto
+// es solo para que se note a tiempo que hay que comprar.
+//
+// Solo se compara contra materiales "en seguimiento" (con stock_actual o
+// stock_minimo mayor a 0 ya configurado en Maestros) — de lo contrario los
+// 226 papeles precargados en 0/0 dispararían la alerta en cada orden.
+function alertarStockPapelInsuficiente(piezasPayload){
+  const necesidad = {};
+  piezasPayload.forEach(p => {
+    if(!p.papel || !p.pliegos) return;
+    necesidad[p.papel] = (necesidad[p.papel] || 0) + p.pliegos;
+  });
+  const faltantes = Object.entries(necesidad).map(([papel, pliegosNecesarios]) => {
+    const mat = DB.materias_primas.find(m => m.nombre === papel);
+    if(!mat || !((mat.stock_actual||0) > 0 || (mat.stock_minimo||0) > 0)) return null; // no está en seguimiento
+    const stock = mat.stock_actual || 0;
+    return { papel, pliegosNecesarios, stock, unidad: mat.unidad || 'pliegos', falta: pliegosNecesarios - stock };
+  }).filter(f => f && f.falta > 0);
+
+  if(faltantes.length){
+    const detalle = faltantes.map(f => `• ${f.papel}: hay ${fmtNum(f.stock,0)}, se necesitan ${fmtNum(f.pliegosNecesarios,0)} ${f.unidad} (faltan ${fmtNum(f.falta,0)})`).join('\n');
+    alert(`⚠️ Stock insuficiente para esta orden — considera comprar:\n\n${detalle}`);
+  }
+}
+
 async function saveOpp(){
   const btn = document.getElementById('opp-save');
   const orden = parseInt(document.getElementById('opp-orden').value, 10);
@@ -1499,6 +1526,7 @@ async function saveOpp(){
     if(errPiezas) throw errPiezas;
 
     toast((editingOrden===orden ? 'Orden actualizada: ' : 'Orden guardada: ') + orden + ' con ' + piezasPayload.length + ' pieza(s)');
+    alertarStockPapelInsuficiente(piezasPayload);
 
     const { data: o1 } = await sb.from('opp_ordenes').select('*').order('orden', { ascending: false });
     const { data: o2 } = await sb.from('opp_piezas').select('*');

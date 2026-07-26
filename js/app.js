@@ -8,6 +8,7 @@ import { initCalendario, renderCalendario } from './calendario.js';
 import { initAlertas, renderAlertas } from './alertas.js';
 import { initCostos, poblarDatalistProveedores } from './costos.js';
 import { initRecibosCaja } from './recibos.js';
+import { initInventario, renderInventario } from './inventario.js';
 import { restaurarSesion, iniciarSesion, cerrarSesion, cambiarContrasena, crearCuentaPropia, getCurrentUser, aplicarPermisos } from './auth.js';
 
 // ---------- pestañas ----------
@@ -27,6 +28,7 @@ function onRegistrarChange(){
   pasoSeguro('refrescar Órdenes', renderOppRecent);
   pasoSeguro('refrescar Calendario', renderCalendario);
   pasoSeguro('refrescar Alertas', renderAlertas);
+  pasoSeguro('refrescar Inventario', renderInventario);
 }
 
 function onMaestrosChange(){
@@ -36,6 +38,7 @@ function onMaestrosChange(){
   pasoSeguro('refrescar select Producto', populateProductoSelect);
   pasoSeguro('refrescar Papel/Pliego', refreshPapelPliegoSelects);
   pasoSeguro('refrescar Proveedores', poblarDatalistProveedores);
+  pasoSeguro('refrescar Inventario', renderInventario);
 }
 
 // Corre cada paso de arranque de forma aislada: si uno falla (por ejemplo,
@@ -78,6 +81,7 @@ async function arrancarApp(){
   pasoSeguro('Alertas', initAlertas);
   pasoSeguro('Costos', initCostos);
   pasoSeguro('Recibos de caja', initRecibosCaja);
+  pasoSeguro('Inventario', initInventario);
 
   pasoSeguro('Permisos', aplicarPermisos);
 }

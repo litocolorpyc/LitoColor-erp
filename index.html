@@ -53,6 +53,7 @@
         <button class="tab-btn" data-tab="alertas" role="tab">Alertas</button>
         <button class="tab-btn" data-tab="registrar" role="tab">Registrar</button>
         <button class="tab-btn" data-tab="registrar-costo" role="tab">Registrar costo</button>
+        <button class="tab-btn" data-tab="inventario" role="tab">Inventario</button>
       </div>
       <div class="sidebar-group">
         <div class="sidebar-group-label">Maestros</div>
@@ -610,10 +611,17 @@
             </div>
           </div>
         </div>
+        <div class="form-row">
+          <div class="field"><label>Unidad de stock</label><input type="text" id="m-mp-unidad" placeholder="pliegos"></div>
+          <div class="field"><label>Stock actual <span class="card-hint">(inventario)</span></label><input type="number" id="m-mp-stock" min="0" placeholder="0"></div>
+          <div class="field"><label>Stock mínimo <span class="card-hint">(para alertar)</span></label><input type="number" id="m-mp-minimo" min="0" placeholder="0"></div>
+          <div class="field"><label>Costo por unidad</label><input type="number" id="m-mp-costo" min="0" placeholder="ej. 850"></div>
+        </div>
+        <span class="card-hint">Deja Stock/Mínimo en 0 si todavía no vas a llevar inventario de este papel — así no sale como alerta.</span>
         <div class="form-foot"><span id="m-mp-mode"></span><button type="button" class="btn-primary" id="m-mp-save">Agregar materia prima</button></div>
         <div class="table-wrap" style="margin-top:12px;max-height:420px;overflow-y:auto">
           <table id="tbl-m-materias">
-            <thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Pliego</th><th></th></tr></thead>
+            <thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Pliego</th><th>Stock</th><th>Costo/unidad</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -630,6 +638,12 @@
         <div class="form-row">
           <div class="field"><label>Unidad (opcional)</label><input type="text" id="m-ins-unidad" placeholder="ej. kg, rollo, caja, unidad"></div>
         </div>
+        <div class="form-row">
+          <div class="field"><label>Stock actual <span class="card-hint">(inventario)</span></label><input type="number" id="m-ins-stock" min="0" placeholder="0"></div>
+          <div class="field"><label>Stock mínimo <span class="card-hint">(para alertar)</span></label><input type="number" id="m-ins-minimo" min="0" placeholder="0"></div>
+          <div class="field"><label>Costo por unidad</label><input type="number" id="m-ins-costo" min="0" placeholder="ej. 12000"></div>
+        </div>
+        <span class="card-hint">Deja Stock/Mínimo en 0 si todavía no vas a llevar inventario de este insumo — así no sale como alerta.</span>
         <datalist id="m-ins-area-list">
           <option value="Diseño"></option>
           <option value="Litografia"></option>
@@ -646,7 +660,7 @@
         <div class="form-foot"><span id="m-ins-mode"></span><button type="button" class="btn-primary" id="m-ins-save">Agregar insumo</button></div>
         <div class="table-wrap" style="margin-top:12px">
           <table id="tbl-m-insumos">
-            <thead><tr><th>Nombre</th><th>Área</th><th>Unidad</th><th></th></tr></thead>
+            <thead><tr><th>Nombre</th><th>Área</th><th>Unidad</th><th>Stock</th><th>Costo/unidad</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -984,6 +998,23 @@
             <tbody></tbody>
           </table>
         </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-inventario">
+      <div class="card">
+        <div class="card-head"><h3>Inventario de materia prima</h3><span class="card-hint">papel (Materias primas) e insumos por área — el consumo del operario descuenta solo, y crear una orden avisa si falta stock</span></div>
+        <div class="kpi-row" id="inv-kpis"></div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table id="tbl-inventario">
+            <thead><tr><th>Tipo</th><th>Nombre</th><th>Categoría / área</th><th class="num">Stock actual</th><th class="num">Mínimo</th><th class="num">Costo/unidad</th><th>Estado</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="card-hint" style="margin-top:10px;line-height:1.5">
+          Solo aparecen aquí los materiales a los que ya les pusiste un stock actual o un mínimo desde "Materias primas" o "Materiales por área" — así los 226 papeles precargados no salen todos como alerta desde el día uno.<br>
+          Para registrar una compra (entrada de stock), edita el material desde esa misma pantalla y súmale la cantidad comprada al "Stock actual".
+        </p>
       </div>
     </section>
 

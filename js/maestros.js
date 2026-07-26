@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
-import { toast } from './helpers.js';
+import { toast, fmtNum } from './helpers.js';
 
 function fmtCOP(n){ if(n==null||isNaN(n)) return '—'; return '$' + Math.round(n).toLocaleString('es-CO'); }
 
@@ -171,9 +171,18 @@ export function initMaestros(onChange){
       { id:'m-mp-nombre', col:'nombre', required:true },
       { id:'m-mp-categoria', col:'categoria' },
       { id:'m-mp-ancho', col:'pliego_ancho', type:'number' },
-      { id:'m-mp-alto', col:'pliego_alto', type:'number' }
+      { id:'m-mp-alto', col:'pliego_alto', type:'number' },
+      { id:'m-mp-unidad', col:'unidad' },
+      { id:'m-mp-stock', col:'stock_actual', type:'number' },
+      { id:'m-mp-minimo', col:'stock_minimo', type:'number' },
+      { id:'m-mp-costo', col:'costo_unitario', type:'number' }
     ],
-    renderCols: r => [r.codigo, r.nombre, r.categoria||'—', r.pliego_ancho?r.pliego_ancho+'x'+r.pliego_alto:'—'],
+    renderCols: r => {
+      const bajo = (r.stock_minimo||0) > 0 && (r.stock_actual||0) < r.stock_minimo;
+      return [r.codigo, r.nombre, r.categoria||'—', r.pliego_ancho?r.pliego_ancho+'x'+r.pliego_alto:'—',
+        `<span style="${bajo?'color:var(--bad);font-weight:600':''}">${fmtNum(r.stock_actual)} ${r.unidad||'pliegos'}</span>${bajo?' ⚠':''}`,
+        r.costo_unitario!=null?fmtCOP(r.costo_unitario):'—'];
+    },
     onChange
   });
 
@@ -183,9 +192,17 @@ export function initMaestros(onChange){
     fields: [
       { id:'m-ins-nombre', col:'nombre', required:true },
       { id:'m-ins-area', col:'area', required:true },
-      { id:'m-ins-unidad', col:'unidad' }
+      { id:'m-ins-unidad', col:'unidad' },
+      { id:'m-ins-stock', col:'stock_actual', type:'number' },
+      { id:'m-ins-minimo', col:'stock_minimo', type:'number' },
+      { id:'m-ins-costo', col:'costo_unitario', type:'number' }
     ],
-    renderCols: r => [r.nombre, r.area, r.unidad||'—'],
+    renderCols: r => {
+      const bajo = (r.stock_minimo||0) > 0 && (r.stock_actual||0) < r.stock_minimo;
+      return [r.nombre, r.area, r.unidad||'—',
+        `<span style="${bajo?'color:var(--bad);font-weight:600':''}">${fmtNum(r.stock_actual)}</span>${bajo?' ⚠':''}`,
+        r.costo_unitario!=null?fmtCOP(r.costo_unitario):'—'];
+    },
     onChange
   });
 

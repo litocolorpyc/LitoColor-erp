@@ -122,10 +122,22 @@ function parseCantidadConsumo(consumoMp){
   return m ? m[1].replace(',', '.') : '';
 }
 
+// Unidad para pedir el consumo como NÚMERO (en vez de texto libre) — se
+// necesita un número limpio para poder descontar del inventario (punto 13
+// de AjustesERP). Mismo criterio de siempre para insumos_area (solo si
+// tiene "unidad" configurada); se agrega el papel de "Materias primas"
+// como fuente nueva, siempre con unidad (pliegos por defecto), porque ahí
+// sí queremos llevar inventario sin depender de que alguien lo configure.
+function unidadNumericaDelMaterial(area, nombre){
+  const insumo = DB.insumos_area.find(m => m.area === area && m.nombre === nombre);
+  if(insumo) return insumo.unidad || null;
+  const papel = DB.materias_primas.find(m => m.nombre === nombre);
+  return papel ? (papel.unidad || 'pliegos') : null;
+}
+
 function runningCardHTML(row){
   const otroSeleccionado = !!row.materia_prima && !DB.insumos_area.some(m => m.area === row.area && m.nombre === row.materia_prima);
-  const insumoActual = DB.insumos_area.find(m => m.area === row.area && m.nombre === row.materia_prima);
-  const unidadActual = insumoActual ? insumoActual.unidad : null;
+  const unidadActual = row.materia_prima ? unidadNumericaDelMaterial(row.area, row.materia_prima) : null;
   const piezaDeEsteRegistro = row.op ? DB.opp_piezas.find(p => p.op === row.op) : null;
   const papelSugerido = piezaDeEsteRegistro ? piezaDeEsteRegistro.papel : null;
   return `<div class="reg-running-card" data-id="${row.id}" data-area="${row.area || ''}">
@@ -175,8 +187,7 @@ function wireMaterialSelect(card){
   sel.addEventListener('change', () => {
     otro.style.display = sel.value === '__otro__' ? 'block' : 'none';
     if(sel.value === '__otro__') otro.focus();
-    const insumo = DB.insumos_area.find(m => m.area === area && m.nombre === sel.value);
-    const unidad = insumo ? insumo.unidad : null;
+    const unidad = sel.value ? unidadNumericaDelMaterial(area, sel.value) : null;
     consumoNum.dataset.unidad = unidad || '';
     consumoNum.style.display = unidad ? 'block' : 'none';
     consumoTxt.style.display = unidad ? 'none' : 'block';
@@ -312,6 +323,49 @@ async function startActivity(){
   }
 }
 
+// Punto 13 de AjustesERP: cuando el consumo se capturó como número (papel
+// de "Materias primas" o un insumo de "Materiales por área" con unidad
+// configurada), se descuenta del inventario y se carga automáticamente
+// como costo de la orden — así Rentabilidad por Orden refleja el costo
+// real de material, no solo mano de obra (mismo mecanismo de orden/
+// suborden asociada del punto 10). Si el material no tiene costo_unitario
+// cargado, igual se descuenta el stock, solo no se genera el costo.
+async function descontarInventarioYCargarCosto({ nombre, area, cantidad, orden, suborden, fecha }){
+  if(!nombre || !cantidad || cantidad <= 0) return;
+  const insumo = DB.insumos_area.find(m => m.area === area && m.nombre === nombre);
+  const tabla = insumo ? 'insumos_area' : (DB.materias_primas.find(m => m.nombre === nombre) ? 'materias_primas' : null);
+  if(!tabla) return; // "Otro" escrito a mano, sin catálogo — no hay de dónde descontar
+  const mat = insumo || DB.materias_primas.find(m => m.nombre === nombre);
+  const key = tabla === 'materias_primas' ? 'codigo' : 'id';
+
+  try{
+    const nuevoStock = (mat.stock_actual || 0) - cantidad;
+    const { data, error } = await sb.from(tabla).update({ stock_actual: nuevoStock }).eq(key, mat[key]).select();
+    if(error) throw error;
+    Object.assign(mat, data[0]);
+  }catch(err){
+    console.error('No se pudo descontar del inventario:', err);
+    return;
+  }
+
+  if(!mat.costo_unitario) return;
+  const concepto = DB.costos_conceptos.find(c => c.nombre === 'Consumo de materia prima (automático)');
+  if(!concepto) return; // migración no aplicada todavía — no bloquea el resto
+  try{
+    const row = {
+      concepto_id: concepto.id, tipo: 'Variable', fecha: fecha || fechaHoyLocal(),
+      valor: cantidad * mat.costo_unitario, proveedor: null,
+      comentario: `Consumo automático — ${nombre} (${fmtNum(cantidad,2)})`,
+      orden: orden ?? null, suborden: suborden ?? null
+    };
+    const { data, error } = await sb.from('costos_movimientos').insert([row]).select();
+    if(error) throw error;
+    DB.costos_movimientos.unshift(data[0]);
+  }catch(err){
+    console.error('No se pudo cargar el costo del material consumido:', err);
+  }
+}
+
 async function finishActivity(id, horaIni, fecha){
   const card = document.querySelector(`.reg-running-card[data-id="${id}"]`);
   const btn = card.querySelector('.rc-finish');
@@ -349,6 +403,16 @@ async function finishActivity(id, horaIni, fecha){
     const idx = DB.produccion.findIndex(r => r.id === id);
     if(idx >= 0) DB.produccion[idx] = normProd(data[0]);
     toast('Actividad finalizada · ' + fmtNum(hrs,2) + ' h registradas');
+
+    if(usaConsumoNumerico && materiaPrima){
+      const cantidadConsumida = parseFloat(consumoNum.value);
+      if(cantidadConsumida > 0){
+        await descontarInventarioYCargarCosto({
+          nombre: materiaPrima, area: card.dataset.area, cantidad: cantidadConsumida,
+          orden: data[0].orden, suborden: data[0].suborden, fecha: data[0].fecha
+        });
+      }
+    }
 
     clearInterval(timerIntervals.get(id));
     timerIntervals.delete(id);
