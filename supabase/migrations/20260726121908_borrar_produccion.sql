@@ -1,0 +1,13 @@
+-- LitoColor ERP — permite borrar registros de producción
+--
+-- La tabla "produccion" ya tenía políticas RLS de SELECT/INSERT/UPDATE
+-- (ver supabase/schema.sql y supabase/ajustes_v3_correcciones.sql), pero
+-- nunca de DELETE. Sin esto, el botón "Eliminar" del panel Operario
+-- (solo visible para Admin/Gerente/Jefe de Producción, ver
+-- js/auth.js puedeEditarProduccion) fallaría al intentar borrar un
+-- registro duplicado o erróneo.
+--
+-- El control de QUIÉN ve ese botón se hace en el frontend, igual que ya
+-- pasa hoy con la edición del presupuesto de una orden — esta política
+-- solo habilita la operación a nivel de base de datos.
+create policy "borrar produccion" on produccion for delete using (true);
