@@ -1723,14 +1723,42 @@ export function initOppForm(onChange){
 // existía en Órdenes ni en Registrar.
 // ============================================================
 
-// Órdenes activas (ni Cerrada ni Cancelada) en el mismo orden de
-// prioridad que define Gerente/Jefe de Producción en el panel de
+// Globos/chips de todos los procesos requeridos de una pieza, con su
+// estado (✓ terminado / · pendiente) — el mismo estilo que ya se usaba en
+// la ficha de detalle, ahora reutilizado también en la lista de prioridad
+// (ver punto 11 de AjustesERP: antes esta lista no mostraba ningún globo).
+export function chipsProcesosHTML(pieza){
+  const requeridos = Array.isArray(pieza.procesos_requeridos) ? pieza.procesos_requeridos : [];
+  const completados = areasCompletadasPorPieza(pieza);
+  return requeridos.map(a => `<span class="estado-chip ${completados.has(a)?'done':'pending'}">${completados.has(a)?'✓':'·'} ${a}</span>`).join('')
+    || '<span class="card-hint">sin procesos definidos</span>';
+}
+
+// Piezas/subórdenes pendientes (les falta terminar al menos un proceso
+// requerido) de órdenes activas (ni Cerrada ni Cancelada), en el mismo
+// orden de prioridad que define Gerente/Jefe de Producción en el panel de
 // Órdenes — el operario solo las ve, no las puede reordenar aquí.
-export function getOrdenesPendientesPorPrioridad(){
-  return DB.opp_ordenes
+//
+// Antes esto trabajaba por ORDEN completa: una orden con 2 subórdenes
+// aparecía como una sola fila, así una ya estuviera lista y la otra no.
+// Ahora cada suborden es su propia fila, priorizada primero por la
+// prioridad de su orden y luego por número de suborden — así 2 órdenes
+// con 5 subórdenes en total se ven y se priorizan como 5 ítems (ver punto
+// 11 de AjustesERP).
+export function getPiezasPendientesPorPrioridad(){
+  const filas = [];
+  DB.opp_ordenes
     .filter(o => o.estado !== 'Cerrada' && o.estado !== 'Cancelada')
-    .filter(o => estadoOrden(o).pct !== 100) // ya ejecutada al 100% aunque el gerente no la haya cerrado — no debe seguir en la lista del operario
-    .sort((a,b) => (a.prioridad ?? 999999) - (b.prioridad ?? 999999));
+    .forEach(o => {
+      const piezas = DB.opp_piezas.filter(p => p.orden === o.orden).sort((a,b)=>a.suborden-b.suborden);
+      piezas.forEach(p => {
+        const requeridos = Array.isArray(p.procesos_requeridos) ? p.procesos_requeridos : [];
+        const completados = areasCompletadasPorPieza(p);
+        const completa = requeridos.length > 0 && requeridos.every(a => completados.has(a));
+        if(!completa) filas.push({ o, p });
+      });
+    });
+  return filas.sort((a,b) => (a.o.prioridad ?? 999999) - (b.o.prioridad ?? 999999) || a.p.suborden - b.p.suborden);
 }
 
 // Ficha de solo lectura con la misma información que trae la orden
@@ -1747,9 +1775,7 @@ export function fichaOrdenParaOperarioHTML(orden){
 
   const piezasHTML = piezas.map(p => {
     const recsPieza = registros.filter(r => r.op === p.op || (r.suborden === p.suborden));
-    const requeridos = Array.isArray(p.procesos_requeridos) ? p.procesos_requeridos : [];
-    const completados = areasCompletadasPorPieza(p);
-    const chips = requeridos.map(a => `<span class="estado-chip ${completados.has(a)?'done':'pending'}">${completados.has(a)?'✓':'·'} ${a}</span>`).join('') || '<span class="card-hint">sin procesos definidos</span>';
+    const chips = chipsProcesosHTML(p);
 
     const materiales = [...new Set(recsPieza.map(r => [r.materiaPrima, r.consumoMP].filter(Boolean).join(' — ')).filter(Boolean))];
 
