@@ -76,15 +76,19 @@ function toggleSinOrden(){
 
 function limpiarErrorCampo(el){ el.classList.remove('campo-requerido-error'); }
 
+export function listaAreasDisponibles(){
+  return Array.from(new Set([
+    ...DB.maquinas.map(m=>m.area),
+    ...DB.actividades.map(a=>a.area)
+  ])).filter(Boolean).sort();
+}
+
 export function populateReg(){
   const opSel = document.getElementById('r-operario');
   opSel.innerHTML = '<option value="">Selecciona tu nombre…</option>' +
     DB.personal.filter(p=>p.activo).map(p=>`<option value="${p.nombre}" data-rate="${p.valor_hora||0}">${p.nombre} — ${p.cargo}</option>`).join('');
 
-  const areas = Array.from(new Set([
-    ...DB.maquinas.map(m=>m.area),
-    ...DB.actividades.map(a=>a.area)
-  ])).filter(Boolean).sort();
+  const areas = listaAreasDisponibles();
   const areaSel = document.getElementById('r-area');
   const areaPrevia = areaSel.value;
   areaSel.innerHTML = areas.map(a=>`<option value="${a}">${a}</option>`).join('');

@@ -1,6 +1,9 @@
-import { DB } from './store.js';
-import { fmtCOP, fmtNum, areaColor, rangoFechas, rangoAnterior, deltaBadge, exportarExcel } from './helpers.js';
-import { mostrarDetalleOrden, tipoTrabajoLabel } from './ordenes.js';
+import { sb } from './supabase-client.js';
+import { DB, normProd } from './store.js';
+import { fmtCOP, fmtNum, areaColor, rangoFechas, rangoAnterior, deltaBadge, exportarExcel, toast } from './helpers.js';
+import { mostrarDetalleOrden, tipoTrabajoLabel, renderOppRecent } from './ordenes.js';
+import { puedeEditarProduccion } from './auth.js';
+import { listaAreasDisponibles } from './registrar.js';
 
 // Cambia a la pestaña de Órdenes y abre el detalle completo de una orden —
 // se usa desde las tablas del Gerencial donde se puede hacer click en una
@@ -311,18 +314,143 @@ export function renderOperario(){
   makeChart('chart-op-area', { type:'bar', data:{ labels:areas, datasets:[{ label:'Horas', data:areas.map(a=>areaMap[a]), backgroundColor: areas.map(a=>areaColor(a)) }]},
     options: baseBarOpts(false,true) });
 
+  const puedeEditar = puedeEditarProduccion();
+  document.getElementById('op-log-th-acciones').style.display = puedeEditar ? '' : 'none';
+
   const recent = recs.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')).slice(0,15);
-  document.querySelector('#tbl-op-log tbody').innerHTML = recent.map(r=>`<tr class="${r.orden!=null?'fila-clicable':''}" data-orden="${r.orden??''}"><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td>${r.orden??'—'}</td><td class="num">${fmtNum(r.cantidad,0)}</td><td class="num">${fmtNum(r.tiempoHr,2)}</td><td class="num">${fmtCOP(r.valorActividad)}</td></tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin registros</td></tr>';
-  document.querySelectorAll('#tbl-op-log tbody tr[data-orden]').forEach(tr => {
-    if(!tr.dataset.orden) return;
-    tr.addEventListener('click', () => irAOrdenYVerDetalle(parseInt(tr.dataset.orden, 10)));
+  document.querySelector('#tbl-op-log tbody').innerHTML = recent.map(r=>{
+    const acciones = puedeEditar ? `<td><div class="row-actions">
+        <button type="button" class="row-btn" data-editar-reg="${r.id}">Editar</button>
+        <button type="button" class="row-btn row-btn-danger" data-eliminar-reg="${r.id}">Eliminar</button>
+      </div></td>` : '';
+    return `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td class="${r.orden!=null?'fila-clicable':''}" data-orden="${r.orden??''}">${r.orden??'—'}</td><td class="num">${fmtNum(r.cantidad,0)}</td><td class="num">${fmtNum(r.tiempoHr,2)}</td><td class="num">${fmtCOP(r.valorActividad)}</td>${acciones}</tr>`;
+  }).join('') || `<tr><td colspan="${puedeEditar?7:6}" style="text-align:center;color:var(--ink-faint)">Sin registros</td></tr>`;
+
+  document.querySelectorAll('#tbl-op-log tbody td[data-orden]').forEach(td => {
+    if(!td.dataset.orden) return;
+    td.addEventListener('click', () => irAOrdenYVerDetalle(parseInt(td.dataset.orden, 10)));
   });
+  if(puedeEditar){
+    document.querySelectorAll('#tbl-op-log [data-editar-reg]').forEach(b => b.addEventListener('click', () => abrirEdicionRegistro(parseInt(b.dataset.editarReg, 10))));
+    document.querySelectorAll('#tbl-op-log [data-eliminar-reg]').forEach(b => b.addEventListener('click', () => eliminarRegistroLog(parseInt(b.dataset.eliminarReg, 10))));
+  }
+}
+
+// ---------- corregir / borrar un registro de producción (solo Admin/Gerente/Jefe de Producción) ----------
+function poblarSelectActividadEdicion(area, valorActual){
+  const sel = document.getElementById('ole-actividad');
+  const acts = DB.actividades.filter(a=>a.area===area);
+  sel.innerHTML = acts.map(a=>`<option value="${a.etiqueta}"${a.etiqueta===valorActual?' selected':''}>${a.etiqueta}</option>`).join('') || `<option value="${valorActual||''}">${valorActual||'—'}</option>`;
+}
+function poblarSelectMaquinaEdicion(area, valorActual){
+  const sel = document.getElementById('ole-maquina');
+  const maqs = DB.maquinas.filter(m=>m.area===area && m.activo!==false);
+  sel.innerHTML = '<option value="">Trabajo manual (sin máquina)</option>' +
+    maqs.map(m=>`<option value="${m.nombre}"${m.nombre===valorActual?' selected':''}>${m.nombre}</option>`).join('');
+  if(valorActual && !maqs.some(m=>m.nombre===valorActual)) sel.value = '';
+}
+
+function abrirEdicionRegistro(id){
+  const row = DB.produccion.find(r => r.id === id);
+  if(!row){ toast('No se encontró ese registro'); return; }
+
+  const areaSel = document.getElementById('ole-area');
+  areaSel.innerHTML = listaAreasDisponibles().map(a=>`<option value="${a}"${a===row.area?' selected':''}>${a}</option>`).join('');
+  poblarSelectActividadEdicion(row.area, row.actividad);
+  poblarSelectMaquinaEdicion(row.area, row.maquina);
+  areaSel.onchange = () => { poblarSelectActividadEdicion(areaSel.value, null); poblarSelectMaquinaEdicion(areaSel.value, null); };
+
+  document.getElementById('ole-cantidad').value = row.cantidad ?? '';
+  document.getElementById('ole-horas').value = row.tiempoHr ?? '';
+  document.getElementById('ole-comentario').value = row.comentario || '';
+  document.getElementById('ole-reproceso').value = row.reproceso === 'Si' ? 'Si' : 'No';
+  document.getElementById('ole-guardar').dataset.id = id;
+  document.getElementById('op-log-editar-info').textContent = `Registro del ${(row.fecha||'').slice(0,10)} — ${row.operario || '—'} — Orden ${row.orden ?? '—'}`;
+
+  const card = document.getElementById('op-log-editar-card');
+  card.style.display = '';
+  card.scrollIntoView({ behavior:'smooth' });
+}
+
+function cerrarEdicionRegistro(){
+  document.getElementById('op-log-editar-card').style.display = 'none';
+}
+
+async function guardarEdicionRegistro(){
+  const btn = document.getElementById('ole-guardar');
+  const id = parseInt(btn.dataset.id, 10);
+  const row = DB.produccion.find(r => r.id === id);
+  if(!row) return;
+
+  const horas = parseFloat(document.getElementById('ole-horas').value || 0);
+  const persona = DB.personal.find(p => p.nombre === row.operario);
+  const rate = persona ? (persona.valor_hora || 0) : (row.tiempoHr ? (row.valorActividad || 0) / row.tiempoHr : 0);
+
+  const updates = {
+    area: document.getElementById('ole-area').value,
+    actividad: document.getElementById('ole-actividad').value,
+    maquina: document.getElementById('ole-maquina').value || null,
+    cantidad: parseFloat(document.getElementById('ole-cantidad').value || 0),
+    comentario: document.getElementById('ole-comentario').value || null,
+    reproceso: document.getElementById('ole-reproceso').value,
+    tiempo_hr: horas,
+    valor_actividad: horas * rate
+  };
+
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  try{
+    const { data, error } = await sb.from('produccion').update(updates).eq('id', id).select();
+    if(error) throw error;
+    if(!data || !data.length) throw new Error('Supabase no devolvió el registro actualizado (revisa permisos RLS de UPDATE en produccion)');
+    const idx = DB.produccion.findIndex(r => r.id === id);
+    if(idx >= 0) DB.produccion[idx] = normProd(data[0]);
+    toast('Registro corregido');
+    cerrarEdicionRegistro();
+    renderOperario();
+    renderProduccion();
+    renderGerencial();
+    renderOppRecent();
+  }catch(err){
+    console.error(err);
+    toast('Error al guardar la corrección — revisa la consola');
+  }finally{
+    btn.disabled = false; btn.textContent = 'Guardar cambios';
+  }
+}
+
+async function eliminarRegistroLog(id){
+  const row = DB.produccion.find(r => r.id === id);
+  if(!row) return;
+  const ok = confirm(`¿Eliminar este registro de ${row.operario || 'operario'} (${row.actividad || 'actividad'}, orden ${row.orden ?? '—'})? Esta acción no se puede deshacer.`);
+  if(!ok) return;
+  try{
+    const { error } = await sb.from('produccion').delete().eq('id', id);
+    if(error) throw error;
+    const idx = DB.produccion.findIndex(r => r.id === id);
+    if(idx >= 0) DB.produccion.splice(idx, 1);
+    toast('Registro eliminado');
+    renderOperario();
+    renderProduccion();
+    renderGerencial();
+    renderOppRecent();
+  }catch(err){
+    console.error(err);
+    toast('Error al eliminar — revisa la consola');
+  }
+}
+
+function wireEdicionRegistro(){
+  const btnCancelar = document.getElementById('ole-cancelar');
+  const btnGuardar = document.getElementById('ole-guardar');
+  if(btnCancelar) btnCancelar.addEventListener('click', cerrarEdicionRegistro);
+  if(btnGuardar) btnGuardar.addEventListener('click', guardarEdicionRegistro);
 }
 
 export function initDashboardFilters(){
   wireRangePresets('ger-presets', 'ger-desde', 'ger-hasta', () => rangoGer, r => rangoGer = r, renderGerencial);
   wireRangePresets('prod-presets', 'prod-desde', 'prod-hasta', () => rangoProd, r => rangoProd = r, renderProduccion);
   wireExportButtons();
+  wireEdicionRegistro();
 }
 
 function wireExportButtons(){

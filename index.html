@@ -196,10 +196,30 @@
           <div class="card-head"><h3>Bitácora reciente</h3><span class="card-hint">últimos 15 registros</span></div>
           <div class="table-wrap">
             <table id="tbl-op-log">
-              <thead><tr><th>Fecha</th><th>Actividad</th><th>Orden</th><th class="num">Cant.</th><th class="num">Hrs</th><th class="num">Valor</th></tr></thead>
+              <thead><tr><th>Fecha</th><th>Actividad</th><th>Orden</th><th class="num">Cant.</th><th class="num">Hrs</th><th class="num">Valor</th><th id="op-log-th-acciones" style="display:none">Acciones</th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      <div class="card" id="op-log-editar-card" style="display:none">
+        <div class="card-head"><h3>Corregir registro</h3><span class="card-hint">solo Jefe de Producción / Gerencia / Admin</span></div>
+        <div class="detalle-orden-obs" id="op-log-editar-info" style="margin-bottom:12px"></div>
+        <div class="form-row">
+          <div class="field"><label>Área</label><select id="ole-area"></select></div>
+          <div class="field"><label>Actividad</label><select id="ole-actividad"></select></div>
+          <div class="field"><label>Máquina</label><select id="ole-maquina"></select></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Cantidad producida</label><input type="number" id="ole-cantidad" min="0"></div>
+          <div class="field"><label>Horas trabajadas</label><input type="number" id="ole-horas" min="0" step="0.01"></div>
+          <div class="field"><label>¿Reproceso?</label><select id="ole-reproceso"><option value="No">No</option><option value="Si">Sí</option></select></div>
+        </div>
+        <div class="field full"><label>Comentario</label><textarea id="ole-comentario" rows="2"></textarea></div>
+        <div class="form-foot">
+          <button type="button" class="btn-secondary" id="ole-cancelar">Cancelar</button>
+          <button type="button" class="btn-primary" id="ole-guardar">Guardar cambios</button>
         </div>
       </div>
     </section>

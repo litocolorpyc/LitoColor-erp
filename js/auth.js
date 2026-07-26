@@ -14,6 +14,15 @@ let currentUser = null; // { email, nombre, rol, cargo }
 
 export function getCurrentUser(){ return currentUser; }
 
+// Solo un usuario superior (Admin/Gerente/Jefe de Producción) puede
+// corregir o borrar un registro de producción ya guardado — los
+// operarios pueden crear y finalizar los suyos, pero no modificarlos
+// después. Ver punto 1 de AjustesERP 24jul26.docx.
+const ROLES_EDITAN_PRODUCCION = ['admin', 'gerente', 'jefe_produccion'];
+export function puedeEditarProduccion(){
+  return !!currentUser && ROLES_EDITAN_PRODUCCION.includes(currentUser.rol);
+}
+
 export async function getSession(){
   const { data } = await sb.auth.getSession();
   return data.session;
