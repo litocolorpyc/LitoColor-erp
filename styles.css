@@ -192,8 +192,7 @@ select, input, textarea{ font-family:inherit; font-size:13px; padding:7px 9px; b
 .detalle-mini-table{ width:100%; font-size:11.5px; border-collapse:collapse; }
 .detalle-mini-table th{ text-align:left; color:var(--ink-faint); font-weight:600; padding:4px 6px; border-bottom:1px solid var(--line); }
 .detalle-mini-table td{ padding:4px 6px; border-bottom:1px solid var(--line); }
-.detalle-ficha-grid{ display:grid; grid-template-columns:1fr 1fr; gap:0 14px; margin-bottom:10px; }
-@media (max-width:520px){ .detalle-ficha-grid{ grid-template-columns:1fr; } }
+.detalle-ficha-grid{ display:grid; grid-template-columns:1fr; gap:0 14px; margin-bottom:10px; }
 .ficha-item{ display:flex; justify-content:space-between; gap:8px; padding:3px 0; border-bottom:1px dashed var(--line); font-size:12px; }
 .ficha-lbl{ color:var(--ink-faint); }
 .ficha-val{ font-weight:600; text-align:right; }
