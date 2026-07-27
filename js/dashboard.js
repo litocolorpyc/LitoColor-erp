@@ -538,7 +538,7 @@ function wireExportButtons(){
   if(btnProd) btnProd.addEventListener('click', () => {
     exportarExcel('LitoColor_produccion_por_area.xlsx', [{
       nombre: 'Producción por área',
-      filas: ultimaProduccionArea.map(r => ({ Área: r.area, Horas: r.horas, Piezas: r.piezas, 'Costo M.O.': r.costo, Registros: r.registros }))
+      filas: ultimaProduccionArea.map(r => ({ Área: r.area, Horas: r.horas, 'Cantidad reportada': r.piezas, 'Costo M.O.': r.costo, Registros: r.registros }))
     }]);
   });
 

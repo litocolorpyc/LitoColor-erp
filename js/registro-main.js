@@ -1,6 +1,6 @@
 import { loadAll } from './store.js';
 import { initRegistrar } from './registrar.js';
-import { getPiezasPendientesPorPrioridad, chipsProcesosHTML, fichaOrdenParaOperarioHTML, tipoTrabajoLabel, imprimirDetalleOrden } from './ordenes.js';
+import { getPiezasPendientesPorPrioridad, chipsProcesosHTML, fichaOrdenParaOperarioHTML, tipoTrabajoLabel, estadoOrden, estadoBadgeHTML, imprimirDetalleOrden } from './ordenes.js';
 
 document.getElementById('ayuda-toggle').addEventListener('click', () => {
   const box = document.getElementById('ayuda-box');
@@ -27,6 +27,7 @@ function renderPrioridadOperario(){
         <div><b>Orden ${o.orden}-${p.suborden}</b> — ${o.cliente || '—'} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span>${p.pieza ? ' · ' + p.pieza : ''}</div>
         <div class="detalle-pieza-chips" style="margin-top:4px;margin-bottom:0">${chipsProcesosHTML(p)}</div>
       </span>
+      ${estadoBadgeHTML(estadoOrden(o))}
     </div>`;
   }).join('');
 

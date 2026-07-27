@@ -175,16 +175,16 @@
         </div>
       </div>
       <div class="card">
-        <div class="card-head"><h3>Producción por área</h3><span class="card-hint">una fila por cada área — no sumar la columna "Piezas" entre filas, ver nota abajo</span></div>
+        <div class="card-head"><h3>Producción por área</h3><span class="card-hint">una fila por cada área — no sumar la columna "Cantidad reportada" entre filas, ver nota abajo</span></div>
         <div class="form-foot" style="margin-top:0;margin-bottom:10px"><span></span><button type="button" class="btn-secondary" id="export-produccion" style="margin:0">⬇ Exportar a Excel</button></div>
         <div class="table-wrap">
           <table id="tbl-prod-area">
-            <thead><tr><th>Área</th><th class="num">Horas</th><th class="num">Piezas *</th><th class="num">Costo M.O. **</th><th class="num">Registros ***</th></tr></thead>
+            <thead><tr><th>Área</th><th class="num">Horas</th><th class="num">Cantidad reportada *</th><th class="num">Costo M.O. **</th><th class="num">Registros ***</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
         <p class="card-hint" style="margin-top:10px;line-height:1.5">
-          * "Piezas" es la cantidad que el operario reportó en esa área — pero cada área cuenta una unidad distinta de la misma orden (ej. pliegos cortados en Corte inicial, pliegos impresos en Litografía, piezas ya cortadas en Guillotina, unidades terminadas en Terminado). Por eso esta columna sirve para ver el volumen dentro de UN área, no para sumarla entre áreas.<br>
+          * "Cantidad reportada" NO son piezas físicas terminadas — es el número que el operario escribió en "Cantidad producida" al finalizar su actividad en esa área, y cada área cuenta una unidad distinta de la misma orden (ej. pliegos cortados en Corte inicial, pliegos impresos en Litografía, piezas ya cortadas en Guillotina, unidades terminadas en Terminado). Por eso esta columna sirve para ver el volumen dentro de UN área, no para sumarla entre áreas ni para leerla como "piezas producidas".<br>
           ** "Costo M.O." es el costo de mano de obra (horas × tarifa del operario) acumulado en esa área.<br>
           *** "Registros" es cuántas veces se registró una actividad en esa área (una persona puede registrar varias veces el mismo día) — mide frecuencia de uso, no volumen de piezas.
         </p>

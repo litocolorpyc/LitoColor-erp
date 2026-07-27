@@ -60,6 +60,19 @@ function refreshProveedoresDatalist(){
   if(hint) hint.textContent = relevantes.length ? `sugerido primero: ${relevantes.join(' / ')}` : '';
 }
 
+// Los checkboxes de proceso marcados "solo Litografía" (Corte inicial,
+// Litografía, Guillotina) se ocultan por CSS para otros tipos de trabajo,
+// pero si se quedan marcados igual entran a procesos_requeridos: la pieza
+// nunca llega a 100% (nadie hace ese proceso) y en la pantalla de operario
+// aparece un globo de "Litografía" que no aplica (ver puntos 6 y 11 de
+// AjustesERP). Se sincroniza su estado "checked" con el tipo de trabajo
+// vigente cada vez que cambia, y también al agregar una pieza nueva.
+function sincronizarProcesosLitografia(node){
+  const tipoSel = document.getElementById('opp-tipo-trabajo');
+  const esLitografia = (tipoSel?.value || 'Litografia') === 'Litografia';
+  node.querySelectorAll('.litografia-only-check .f-proc').forEach(cb => { cb.checked = esLitografia; });
+}
+
 function aplicarTipoTrabajo(){
   const tipoSel = document.getElementById('opp-tipo-trabajo');
   const piezasList = document.getElementById('opp-piezas-list');
@@ -67,6 +80,10 @@ function aplicarTipoTrabajo(){
   const tipo = tipoSel.value;
   const esLitografia = tipo === 'Litografia';
   piezasList.classList.toggle('tipo-otros', !esLitografia);
+  piezasList.querySelectorAll('.opp-pieza-card').forEach(node => {
+    sincronizarProcesosLitografia(node);
+    recalcPieza(node);
+  });
   const hint = document.getElementById('opp-tipo-trabajo-hint');
   if(hint) hint.textContent = HINT_TIPO_TRABAJO[tipo] || '';
   refreshProveedoresDatalist();
@@ -141,6 +158,7 @@ function addPiezaCard(prefill){
   // arranca colapsado con un resumen — "Editar" lo despliega de nuevo.
   node.querySelector('.f-papel-editar-btn').addEventListener('click', () => expandirPapel(node));
 
+  sincronizarProcesosLitografia(node);
   if(prefill) fillPiezaCard(node, prefill);
   recalcPieza(node);
   updateOppPreview();
@@ -920,14 +938,22 @@ export function mostrarDetalleOrden(orden){
   const puedeEditar = puedeEditarPresupuesto();
   const dis = puedeEditar ? '' : 'disabled';
   const ingresoPresupuestado = pres.precio_venta_antes_iva != null ? pres.precio_venta_antes_iva : null;
-  const margen = ingreso ? (ingreso - costo) : null;
+  // Mismo criterio que la tabla "Rentabilidad por orden" del Gerencial (punto
+  // 3 de AjustesERP): si no hay ingreso facturado, se usa el presupuestado
+  // para no mostrar un margen negativo sin sentido. El margen también debe
+  // descontar el costo de materiales/compras con esta orden asociada (punto
+  // 10) — antes solo restaba mano de obra, así que una orden con compras de
+  // materia prima ya cargadas mostraba un margen que no las reflejaba.
+  const ingresoBase = ingreso > 0 ? ingreso : (ingresoPresupuestado || 0);
+  const margen = (ingresoBase || costo || costoMateriales) ? (ingresoBase - costo - costoMateriales) : null;
 
   document.getElementById('opp-detalle-body').innerHTML = `
     <div class="kpi-row" style="margin-bottom:16px">
       <div class="kpi"><div class="lbl">Estado</div><div class="val" style="font-size:16px">${o.cliente||'—'}</div><div class="sub">${o.producto||''} · ${(o.fecha||'').slice(0,10)}</div></div>
-      <div class="kpi"><div class="lbl">Ingreso facturado</div><div class="val">${fmtCOPlocal(ingreso)}</div><div class="sub">según pedidos</div></div>
+      <div class="kpi"><div class="lbl">Ingreso facturado</div><div class="val">${fmtCOPlocal(ingreso)}</div><div class="sub">${ingreso>0 ? 'según pedidos' : (ingresoPresupuestado ? 'en $0 — el margen usa el presupuestado' : 'según pedidos')}</div></div>
       <div class="kpi"><div class="lbl">Ingreso presupuestado</div><div class="val">${ingresoPresupuestado!=null ? fmtCOPlocal(ingresoPresupuestado) : '—'}</div><div class="sub">precio venta antes de IVA</div></div>
       <div class="kpi"><div class="lbl">Costo mano de obra</div><div class="val">${fmtCOPlocal(costo)}</div><div class="sub">${registros.length} registros de producción</div></div>
+      <div class="kpi"><div class="lbl">Otros costos</div><div class="val">${fmtCOPlocal(costoMateriales)}</div><div class="sub">materiales/compras con esta orden asociada</div></div>
       <div class="kpi"><div class="lbl">Margen</div><div class="val ${margen==null?'':(margen>=0?'pos':'neg')}">${margen==null?'—':fmtCOPlocal(margen)}</div><div class="sub">${estadoBadgeHTML(estado)}</div></div>
     </div>
     ${areas.length ? '<canvas id="chart-detalle-area" height="90" style="margin-bottom:16px"></canvas>' : ''}
