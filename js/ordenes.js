@@ -505,10 +505,22 @@ export function estadoBadgeHTML(estado){
   return `<span class="estado-chip ${cls}">${estado.label}${pct}</span>`;
 }
 
+// Una orden sigue "viva" (debe verse en los tableros de pendientes/en
+// proceso) mientras no esté cancelada ni ya haya llegado al 100%. Antes los
+// tableros solo excluían 'Cerrada'/'Cancelada' en el campo guardado en la
+// BD, pero nada en el sistema pone nunca 'Cerrada' — el 100% se calcula al
+// vuelo (ver estadoOrden) — así que una orden terminada se quedaba mezclada
+// con las pendientes para siempre. No se borra ni se toca nada en la BD:
+// la orden y su historial siguen existiendo, solo se saca de estos tableros.
+export function ordenEnCurso(o){
+  const label = estadoOrden(o).label;
+  return label !== 'Cerrada' && label !== 'Cancelada' && label !== 'Completada';
+}
+
 // Para el selector del operario: solo órdenes que siguen abiertas para trabajar.
 export function getOrdenesSeleccionables(){
   return DB.opp_ordenes
-    .filter(o => o.estado !== 'Cerrada' && o.estado !== 'Cancelada')
+    .filter(ordenEnCurso)
     .sort((a,b) => b.orden - a.orden);
 }
 
@@ -585,7 +597,7 @@ function renderPrioridadOrdenes(){
   const cont = document.getElementById('opp-prioridad-list');
   if(!cont) return;
   const activas = DB.opp_ordenes
-    .filter(o => o.estado !== 'Cerrada' && o.estado !== 'Cancelada')
+    .filter(ordenEnCurso)
     .sort((a,b) => (a.prioridad ?? 999999) - (b.prioridad ?? 999999));
 
   const puedeArrastrar = puedeReordenarPrioridad();
@@ -695,7 +707,7 @@ export function renderOrdenesVivas(){
 }
 
 export function renderEstadoOrdenes(){
-  const ordenes = DB.opp_ordenes.slice(0, 15);
+  const ordenes = DB.opp_ordenes.filter(ordenEnCurso).slice(0, 15);
   const cont = document.getElementById('opp-estado-list');
   if(!cont) return;
   if(!ordenes.length){
@@ -1802,7 +1814,7 @@ export function chipsProcesosHTML(pieza){
 export function getPiezasPendientesPorPrioridad(){
   const filas = [];
   DB.opp_ordenes
-    .filter(o => o.estado !== 'Cerrada' && o.estado !== 'Cancelada')
+    .filter(ordenEnCurso)
     .forEach(o => {
       const piezas = DB.opp_piezas.filter(p => p.orden === o.orden).sort((a,b)=>a.suborden-b.suborden);
       piezas.forEach(p => {
