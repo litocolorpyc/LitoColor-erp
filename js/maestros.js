@@ -24,7 +24,19 @@ function wireCatalog(opts){
     editingId = row[opts.key];
     opts.fields.forEach(f => {
       const el = document.getElementById(f.id);
-      if(el) el.value = row[f.col] ?? '';
+      if(!el) return;
+      const valor = row[f.col] ?? '';
+      // Si el campo es un desplegable de otro maestro (área, producto,
+      // etc.) y el valor guardado ya no está entre sus opciones (se
+      // retiró, se renombró, o el dato es viejo) — se agrega igual como
+      // opción de respaldo, para no perderlo de vista ni pisarlo sin
+      // querer con el primer valor de la lista al guardar.
+      if(el.tagName === 'SELECT' && valor && !Array.from(el.options).some(o => o.value === valor)){
+        const opt = document.createElement('option');
+        opt.value = valor; opt.textContent = valor + ' (no está en el maestro)';
+        el.appendChild(opt);
+      }
+      el.value = valor;
     });
     document.getElementById(opts.saveBtnId).textContent = 'Guardar cambios';
     document.getElementById(opts.modeId).textContent = 'Editando — los campos de arriba se sobrescriben al guardar';
@@ -131,8 +143,8 @@ export function renderMaestros(){
   proveedoresCtl.render();
   productosCtl.render();
   piezasProductoCtl.render();
-  poblarDatalistProductosMaestro();
-  poblarDatalistProcesosMaestro();
+  poblarSelectsAreasEnMaestros();
+  poblarSelectProductoMaestro();
   poblarSelectCategoriaMateriaPrima();
   poblarSelectMaterialAreas();
 }
@@ -234,21 +246,31 @@ async function guardarAreasMaterial(){
   }
 }
 
-// Sugerencias de "Proceso" para el maestro "Subprocesos" — las áreas que ya
-// se usan en Máquinas/Actividades, para no crear un área nueva por un
-// error de tipeo (tiene que calzar exacto con procesos_requeridos).
-function poblarDatalistProcesosMaestro(){
-  const dl = document.getElementById('m-sub-proceso-list');
-  if(!dl) return;
-  dl.innerHTML = listaAreasDisponibles().map(a => `<option value="${a}">`).join('');
+// Todo campo que hace referencia a otro maestro es un desplegable, nunca
+// texto libre — así no hay riesgo de que un error de tipeo desconecte,
+// por ejemplo, una máquina de su área real. Estos rellenan esos <select>
+// con lo que haya en el maestro correspondiente; se llaman de nuevo cada
+// vez que ese maestro cambia (agregar/editar/retirar), para que las
+// opciones queden al día en todos los formularios que lo usan.
+function poblarSelectArea(selectId){
+  const sel = document.getElementById(selectId);
+  if(!sel) return;
+  const valorPrevio = sel.value;
+  const areas = listaAreasDisponibles();
+  sel.innerHTML = '<option value="">— elige un área —</option>' + areas.map(a => `<option value="${a}">${a}</option>`).join('');
+  if(areas.includes(valorPrevio)) sel.value = valorPrevio;
+}
+function poblarSelectsAreasEnMaestros(){
+  ['m-maq-area', 'm-act-area', 'm-sub-proceso', 'm-ins-area'].forEach(poblarSelectArea);
 }
 
-// Sugerencias de producto para el maestro "Piezas por producto" — toma los
-// nombres ya existentes en el catálogo de Productos.
-function poblarDatalistProductosMaestro(){
-  const dl = document.getElementById('m-pp-producto-list');
-  if(!dl) return;
-  dl.innerHTML = DB.productos.filter(p=>p.activo!==false).map(p => `<option value="${p.nombre}">`).join('');
+function poblarSelectProductoMaestro(){
+  const sel = document.getElementById('m-pp-producto');
+  if(!sel) return;
+  const valorPrevio = sel.value;
+  const productos = DB.productos.filter(p=>p.activo!==false);
+  sel.innerHTML = '<option value="">— elige un producto —</option>' + productos.map(p => `<option value="${p.nombre}">${p.nombre}</option>`).join('');
+  if(productos.some(p=>p.nombre===valorPrevio)) sel.value = valorPrevio;
 }
 
 let empleadosCtl, maquinasCtl, areasCtl, actividadesCtl, motivosPausaCtl, subprocesosCtl, categoriasMateriaPrimaCtl, materiasCtl, insumosCtl, clientesCtl, proveedoresCtl, productosCtl, piezasProductoCtl;
@@ -279,7 +301,7 @@ export function initMaestros(onChange){
       { id:'m-area-orden', col:'orden', type:'number' }
     ],
     renderCols: r => [r.nombre, r.orden ?? '—'],
-    onChange: () => { if(onChange) onChange(); poblarDatalistProcesosMaestro(); }
+    onChange: () => { if(onChange) onChange(); poblarSelectsAreasEnMaestros(); }
   });
 
   maquinasCtl = wireCatalog({
@@ -430,7 +452,7 @@ export function initMaestros(onChange){
       { id:'m-prod-desc', col:'descripcion' }
     ],
     renderCols: r => [r.nombre, r.descripcion||'—'],
-    onChange
+    onChange: () => { if(onChange) onChange(); poblarSelectProductoMaestro(); }
   });
 
   piezasProductoCtl = wireCatalog({
@@ -444,7 +466,8 @@ export function initMaestros(onChange){
     onChange
   });
 
-  poblarDatalistProductosMaestro();
+  poblarSelectsAreasEnMaestros();
+  poblarSelectProductoMaestro();
   poblarSelectCategoriaMateriaPrima();
   poblarSelectMaterialAreas();
 

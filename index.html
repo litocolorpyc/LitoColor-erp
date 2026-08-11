@@ -628,7 +628,7 @@
           <div class="field"><label>Nombre</label><input type="text" id="m-maq-nombre" placeholder="ej. Heidelberg GTO"></div>
         </div>
         <div class="form-row">
-          <div class="field"><label>Área</label><input type="text" id="m-maq-area" placeholder="ej. Litografia"></div>
+          <div class="field"><label>Área</label><select id="m-maq-area"></select></div>
         </div>
         <div class="form-foot"><span id="m-maq-mode"></span><button type="button" class="btn-primary" id="m-maq-save">Agregar máquina</button></div>
         <div class="table-wrap" style="margin-top:12px">
@@ -648,7 +648,7 @@
           <div class="field"><label>Etiqueta <span class="card-hint">(lo que ve el operario)</span></label><input type="text" id="m-act-etiqueta" placeholder="ej. 1503 - Plastificar"></div>
         </div>
         <div class="form-row">
-          <div class="field"><label>Área</label><input type="text" id="m-act-area" placeholder="ej. Plastificado"></div>
+          <div class="field"><label>Área</label><select id="m-act-area"></select></div>
           <div class="field"><label>Categoría</label>
             <select id="m-act-categoria"><option value="">—</option><option>Directa</option><option>Indirecta</option><option>Paro</option><option>Legales</option></select>
           </div>
@@ -686,7 +686,7 @@
       <div class="card">
         <div class="card-head"><h3>Subprocesos</h3><span class="card-hint">pasos internos de un proceso/área (ej. "Terminado" de un sobre: doblar pestañas, engomado, cerrar) — mientras un área tenga subprocesos acá, no cuenta como terminada hasta que TODOS estén hechos · "Retirar" no borra nada</span></div>
         <div class="form-row">
-          <div class="field"><label>Proceso <span class="card-hint">(el área — debe escribirse igual que en Máquinas/Actividades)</span></label><input type="text" id="m-sub-proceso" list="m-sub-proceso-list" placeholder="ej. Terminado"><datalist id="m-sub-proceso-list"></datalist></div>
+          <div class="field"><label>Proceso <span class="card-hint">(el área)</span></label><select id="m-sub-proceso"></select></div>
           <div class="field"><label>Subproceso</label><input type="text" id="m-sub-nombre" placeholder="ej. Doblar pestañas"></div>
           <div class="field"><label>Orden <span class="card-hint">(en qué secuencia se hace, opcional)</span></label><input type="number" id="m-sub-orden" min="0" placeholder="1"></div>
         </div>
@@ -765,7 +765,7 @@
         <div class="card-head"><h3>Materiales por área</h3><span class="card-hint">lo que consume cada área al producir — planchas, tinta, colbón, grapas, rollos de laminado, etc. (no es el papel de la orden, eso va en "Materias primas")</span></div>
         <div class="form-row">
           <div class="field"><label>Nombre del insumo</label><input type="text" id="m-ins-nombre" placeholder="ej. Colbón, Plancha CTP, Rollo laminado mate"></div>
-          <div class="field"><label>Área que lo consume</label><input type="text" id="m-ins-area" list="m-ins-area-list" placeholder="ej. Terminado, Litografia, Plastificado"></div>
+          <div class="field"><label>Área que lo consume</label><select id="m-ins-area"></select></div>
         </div>
         <div class="form-row">
           <div class="field"><label>Unidad (opcional)</label><input type="text" id="m-ins-unidad" placeholder="ej. kg, rollo, caja, unidad"></div>
@@ -776,19 +776,6 @@
           <div class="field"><label>Costo por unidad</label><input type="number" id="m-ins-costo" min="0" placeholder="ej. 12000"></div>
         </div>
         <span class="card-hint">Deja Stock/Mínimo en 0 si todavía no vas a llevar inventario de este insumo — así no sale como alerta.</span>
-        <datalist id="m-ins-area-list">
-          <option value="Diseño"></option>
-          <option value="Litografia"></option>
-          <option value="Impresión Digital"></option>
-          <option value="Gran Formato"></option>
-          <option value="Guillotina"></option>
-          <option value="Troquelado"></option>
-          <option value="Plastificado"></option>
-          <option value="Engomadora"></option>
-          <option value="Terminado"></option>
-          <option value="Servicio de Impresión Externo"></option>
-          <option value="Trabajo Externo"></option>
-        </datalist>
         <div class="form-foot"><span id="m-ins-mode"></span><button type="button" class="btn-primary" id="m-ins-save">Agregar insumo</button></div>
         <div class="table-wrap" style="margin-top:12px">
           <table id="tbl-m-insumos">
@@ -879,10 +866,9 @@
       <div class="card">
         <div class="card-head"><h3>Piezas por producto</h3><span class="card-hint">qué piezas suele tener cada producto — se completa sola cada vez que usas una pieza nueva en una orden, pero también puedes agregarlas aquí de una vez</span></div>
         <div class="form-row">
-          <div class="field"><label>Producto</label><input type="text" id="m-pp-producto" list="m-pp-producto-list" placeholder="ej. Cuaderno 100 hojas"></div>
+          <div class="field"><label>Producto <span class="card-hint">(desde Maestros &gt; Productos)</span></label><select id="m-pp-producto"></select></div>
           <div class="field"><label>Pieza</label><input type="text" id="m-pp-pieza" placeholder="ej. Carátula"></div>
         </div>
-        <datalist id="m-pp-producto-list"></datalist>
         <div class="form-foot"><span id="m-pp-mode"></span><button type="button" class="btn-primary" id="m-pp-save">Agregar pieza</button></div>
         <div class="table-wrap" style="margin-top:12px">
           <table id="tbl-m-piezas-producto">
