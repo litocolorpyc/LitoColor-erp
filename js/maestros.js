@@ -381,7 +381,7 @@ export function initMaestros(onChange){
       { id:'m-mp-costo', col:'costo_unitario', type:'number' }
     ],
     renderCols: r => {
-      const bajo = (r.stock_minimo||0) > 0 && (r.stock_actual||0) < r.stock_minimo;
+      const bajo = (r.stock_actual||0) < 0 || ((r.stock_minimo||0) > 0 && (r.stock_actual||0) < r.stock_minimo);
       // Una materia prima SÍ puede consumirla más de un área — ver el
       // bloque "Áreas que consumen una materia prima" más abajo.
       const areas = DB.materias_primas_areas.filter(x => x.materia_prima_codigo === r.codigo).map(x => x.area);
@@ -405,7 +405,7 @@ export function initMaestros(onChange){
       { id:'m-ins-costo', col:'costo_unitario', type:'number' }
     ],
     renderCols: r => {
-      const bajo = (r.stock_minimo||0) > 0 && (r.stock_actual||0) < r.stock_minimo;
+      const bajo = (r.stock_actual||0) < 0 || ((r.stock_minimo||0) > 0 && (r.stock_actual||0) < r.stock_minimo);
       return [r.nombre, r.area, r.unidad||'—',
         `<span style="${bajo?'color:var(--bad);font-weight:600':''}">${fmtNum(r.stock_actual)}</span>${bajo?' ⚠':''}`,
         r.costo_unitario!=null?fmtCOP(r.costo_unitario):'—'];

@@ -1,5 +1,6 @@
 import { DB } from './store.js';
 import { estadoOrden } from './ordenes.js';
+import { fmtNum } from './helpers.js';
 
 function diasDesde(fechaStr){
   if(!fechaStr) return null;
@@ -74,6 +75,26 @@ function calcularAlertas(){
       severidad: 'alta',
       icono: '📦',
       mensaje: `La orden <b>${a.orden}</b> (${o?.cliente || 'sin cliente'}) necesita <b>${a.cantidad_faltante} ${a.unidad || ''}</b> más de <b>${mat?.nombre || a.materia_prima_codigo}</b> — falta reponer stock en Materias primas.`
+    });
+  });
+
+  // E) stock en negativo — el consumo real de un operario puede superar el
+  // stock cargado (es normal en litografía: se registra el consumo real
+  // aunque la compra todavía no haya entrado, ver descontarInventarioY
+  // CargarCosto en js/registrar.js). No se bloquea el registro, pero
+  // tiene que quedar visible hasta que alguien cargue la compra.
+  DB.materias_primas.filter(m => (m.stock_actual || 0) < 0).forEach(m => {
+    alertas.push({
+      severidad: 'alta',
+      icono: '🔴',
+      mensaje: `<b>${m.nombre}</b> quedó con stock <b>negativo (${fmtNum(m.stock_actual,2)} ${m.unidad || 'pliegos'})</b> — se consumió más de lo que había cargado. Carga la compra en Maestros &gt; Materias primas.`
+    });
+  });
+  DB.insumos_area.filter(m => (m.stock_actual || 0) < 0).forEach(m => {
+    alertas.push({
+      severidad: 'alta',
+      icono: '🔴',
+      mensaje: `<b>${m.nombre}</b> (${m.area || 'sin área'}) quedó con stock <b>negativo (${fmtNum(m.stock_actual,2)} ${m.unidad || 'unidad'})</b> — se consumió más de lo que había cargado. Carga la compra en Maestros &gt; Materiales por área.`
     });
   });
 

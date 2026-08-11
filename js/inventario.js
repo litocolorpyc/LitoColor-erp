@@ -35,12 +35,17 @@ export function renderInventario(){
   if(!tbody) return;
   const filas = filasInventario();
 
-  // "En seguimiento" = ya se le puso un mínimo o un stock desde Maestros
-  // (o hay una orden esperándolo, aunque el mínimo/stock nunca se haya
-  // configurado). Sin este filtro, los 226 papeles precargados (todos en
-  // 0/0 por default) saldrían de entrada como si no hubiera ni una hoja.
-  const enSeguimiento = filas.filter(f => f.minimo > 0 || f.stock > 0 || f.esperando.length > 0);
-  const bajoMinimo = enSeguimiento.filter(f => f.minimo > 0 && f.stock < f.minimo);
+  // "En seguimiento" = ya se le puso un mínimo o un stock desde Maestros,
+  // hay una orden esperándolo, o el stock quedó en negativo (se consumió
+  // más de lo que había — se deja así a propósito, ver descontarInventario-
+  // YCargarCosto en js/registrar.js: es normal en litografía que el
+  // consumo real se registre antes de que llegue la compra). Sin este
+  // filtro, los 226 papeles precargados (todos en 0/0 por default)
+  // saldrían de entrada como si no hubiera ni una hoja, PERO un negativo
+  // nunca se puede perder de vista aunque nunca se le haya puesto mínimo.
+  const enSeguimiento = filas.filter(f => f.minimo > 0 || f.stock !== 0 || f.esperando.length > 0);
+  const negativos = enSeguimiento.filter(f => f.stock < 0);
+  const bajoMinimo = enSeguimiento.filter(f => f.stock < 0 || (f.minimo > 0 && f.stock < f.minimo));
   const esperando = enSeguimiento.filter(f => f.esperando.length > 0);
   const valorTotal = enSeguimiento.reduce((s,f) => s + (f.costo ? f.costo * f.stock : 0), 0);
 
@@ -48,25 +53,31 @@ export function renderInventario(){
   if(cont){
     cont.innerHTML = `
       <div class="kpi"><div class="lbl">Materiales en seguimiento</div><div class="val">${enSeguimiento.length}</div><div class="sub">de ${filas.length} en los catálogos</div></div>
+      <div class="kpi"><div class="lbl">Stock en negativo</div><div class="val ${negativos.length ? 'neg' : ''}">${negativos.length}</div><div class="sub">${negativos.length ? 'se consumió más de lo que había — urge comprar' : 'ninguno en negativo'}</div></div>
       <div class="kpi"><div class="lbl">Bajo el mínimo</div><div class="val ${bajoMinimo.length ? 'neg' : ''}">${bajoMinimo.length}</div><div class="sub">${bajoMinimo.length ? 'considera comprar' : 'todo en orden'}</div></div>
       <div class="kpi"><div class="lbl">Con órdenes esperando</div><div class="val ${esperando.length ? 'neg' : ''}">${esperando.length}</div><div class="sub">${esperando.length ? 'repón stock para liberarlas' : 'ninguna orden esperando'}</div></div>
       <div class="kpi"><div class="lbl">Valor estimado en inventario</div><div class="val">${fmtCOP(valorTotal)}</div><div class="sub">stock actual × costo por unidad</div></div>`;
   }
 
-  // Las que tienen órdenes esperando van primero — son las más urgentes.
+  // Negativo primero (lo más urgente), luego las que tienen órdenes
+  // esperando, luego por qué tan lejos están de su mínimo.
   const ordenadas = enSeguimiento.slice().sort((a,b) =>
-    (b.esperando.length>0) - (a.esperando.length>0) || (a.stock - a.minimo) - (b.stock - b.minimo));
+    (a.stock<0?0:1) - (b.stock<0?0:1) || (b.esperando.length>0) - (a.esperando.length>0) || (a.stock - a.minimo) - (b.stock - b.minimo));
   tbody.innerHTML = ordenadas.map(f => {
-    const bajo = f.minimo > 0 && f.stock < f.minimo;
+    const negativo = f.stock < 0;
+    const bajo = negativo || (f.minimo > 0 && f.stock < f.minimo);
     const esperandoHTML = f.esperando.length
       ? f.esperando.map(a => `<span class="row-btn fila-clicable" data-orden="${a.orden}" style="display:inline-block;margin:1px 3px 1px 0">Orden ${a.orden} (falta ${fmtNum(a.cantidad_faltante,0)} ${a.unidad||''})</span>`).join('')
       : '—';
+    const estadoHTML = negativo
+      ? '<span class="estado-chip pending">🔴 Stock negativo</span>'
+      : (bajo ? '<span class="estado-chip pending">⚠ Bajo mínimo</span>' : '<span class="estado-chip done">✓ OK</span>');
     return `<tr style="${bajo ? 'background:var(--bg-warning,rgba(163,45,45,.06))' : ''}">
       <td>${f.tipo}</td><td>${f.nombre}</td><td>${f.grupo}</td>
-      <td class="num">${fmtNum(f.stock,2)} ${f.unidad}</td>
+      <td class="num" style="${negativo?'color:var(--bad);font-weight:600':''}">${fmtNum(f.stock,2)} ${f.unidad}</td>
       <td class="num">${fmtNum(f.minimo,2)}</td>
       <td class="num">${f.costo != null ? fmtCOP(f.costo) : '—'}</td>
-      <td>${bajo ? '<span class="estado-chip pending">⚠ Bajo mínimo</span>' : '<span class="estado-chip done">✓ OK</span>'}</td>
+      <td>${estadoHTML}</td>
       <td>${esperandoHTML}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--ink-faint)">Todavía no configuraste stock ni mínimo para ningún material — hazlo desde "Materias primas" o "Materiales por área"</td></tr>';
