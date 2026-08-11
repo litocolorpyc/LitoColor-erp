@@ -149,7 +149,7 @@ export function populateReg(){
 //      quedar disponible en varias áreas a la vez).
 //   3) los insumos por defecto de esta área (Maestros > Materiales por
 //      área — planchas, tinta, colbón, grapas, etc.).
-function materialSelectOptionsHTML(area, valorActual, materialesOrden){
+export function materialSelectOptionsHTML(area, valorActual, materialesOrden){
   const opcionesInsumo = DB.insumos_area.filter(m => m.area === area && m.activo !== false)
     .map(m => ({ nombre: m.nombre, unidad: m.unidad }));
   const codigosVinculados = new Set(DB.materias_primas_areas.filter(x => x.area === area).map(x => x.materia_prima_codigo));
@@ -176,7 +176,7 @@ function materialSelectOptionsHTML(area, valorActual, materialesOrden){
   return opts.join('');
 }
 
-function parseCantidadConsumo(consumoMp){
+export function parseCantidadConsumo(consumoMp){
   if(!consumoMp) return '';
   const m = String(consumoMp).match(/^([\d.,]+)/);
   return m ? m[1].replace(',', '.') : '';
@@ -188,7 +188,7 @@ function parseCantidadConsumo(consumoMp){
 // tiene "unidad" configurada); se agrega el papel de "Materias primas"
 // como fuente nueva, siempre con unidad (pliegos por defecto), porque ahí
 // sí queremos llevar inventario sin depender de que alguien lo configure.
-function unidadNumericaDelMaterial(area, nombre){
+export function unidadNumericaDelMaterial(area, nombre){
   const insumo = DB.insumos_area.find(m => m.area === area && m.nombre === nombre);
   if(insumo) return insumo.unidad || null;
   const papel = DB.materias_primas.find(m => m.nombre === nombre);
@@ -534,6 +534,17 @@ async function empezarActividadAsignada(id){
   }
 }
 
+// Encuentra en qué catálogo vive un material por nombre — insumos_area
+// primero (más específico, por área), materias_primas después. Se usa
+// tanto para descontar como para revertir, así los dos quedan consistentes.
+function buscarMaterialPorNombre(area, nombre){
+  const insumo = DB.insumos_area.find(m => m.area === area && m.nombre === nombre);
+  if(insumo) return { tabla: 'insumos_area', mat: insumo, key: 'id' };
+  const mp = DB.materias_primas.find(m => m.nombre === nombre);
+  if(mp) return { tabla: 'materias_primas', mat: mp, key: 'codigo' };
+  return null;
+}
+
 // Punto 13 de AjustesERP: cuando el consumo se capturó como número (papel
 // de "Materias primas" o un insumo de "Materiales por área" con unidad
 // configurada), se descuenta del inventario y se carga automáticamente
@@ -541,13 +552,17 @@ async function empezarActividadAsignada(id){
 // real de material, no solo mano de obra (mismo mecanismo de orden/
 // suborden asociada del punto 10). Si el material no tiene costo_unitario
 // cargado, igual se descuenta el stock, solo no se genera el costo.
-async function descontarInventarioYCargarCosto({ nombre, area, cantidad, orden, suborden, fecha }){
+//
+// produccionId queda guardado en el costos_movimientos que se genera —
+// así, si Jefe de Producción/Gerencia corrige después ese registro
+// (Operario > "Corregir registro"), se puede encontrar y revertir el
+// costo exacto que había generado (ver revertirConsumoDeRegistro más
+// abajo) en vez de dejarlo huérfano o duplicado.
+export async function descontarInventarioYCargarCosto({ nombre, area, cantidad, orden, suborden, fecha, produccionId }){
   if(!nombre || !cantidad || cantidad <= 0) return;
-  const insumo = DB.insumos_area.find(m => m.area === area && m.nombre === nombre);
-  const tabla = insumo ? 'insumos_area' : (DB.materias_primas.find(m => m.nombre === nombre) ? 'materias_primas' : null);
-  if(!tabla) return; // "Otro" escrito a mano, sin catálogo — no hay de dónde descontar
-  const mat = insumo || DB.materias_primas.find(m => m.nombre === nombre);
-  const key = tabla === 'materias_primas' ? 'codigo' : 'id';
+  const encontrado = buscarMaterialPorNombre(area, nombre);
+  if(!encontrado) return; // "Otro" escrito a mano, sin catálogo — no hay de dónde descontar
+  const { tabla, mat, key } = encontrado;
 
   try{
     const nuevoStock = (mat.stock_actual || 0) - cantidad;
@@ -567,13 +582,46 @@ async function descontarInventarioYCargarCosto({ nombre, area, cantidad, orden, 
       concepto_id: concepto.id, tipo: 'Variable', fecha: fecha || fechaHoyLocal(),
       valor: cantidad * mat.costo_unitario, proveedor: null,
       comentario: `Consumo automático — ${nombre} (${fmtNum(cantidad,2)})`,
-      orden: orden ?? null, suborden: suborden ?? null
+      orden: orden ?? null, suborden: suborden ?? null, produccion_id: produccionId ?? null
     };
     const { data, error } = await sb.from('costos_movimientos').insert([row]).select();
     if(error) throw error;
     DB.costos_movimientos.unshift(data[0]);
   }catch(err){
     console.error('No se pudo cargar el costo del material consumido:', err);
+  }
+}
+
+// Contrario de descontarInventarioYCargarCosto: le devuelve la cantidad al
+// stock del material y borra el costo automático que había generado ese
+// registro puntual — se usa al CORREGIR el consumo de un registro ya
+// guardado (Jefe de Producción/Gerencia/Admin), para no dejar el
+// inventario ni los costos desfasados con lo que el registro dice ahora.
+export async function revertirConsumoDeRegistro(nombre, area, cantidad, produccionId){
+  if(!nombre || !cantidad || cantidad <= 0) return;
+  const encontrado = buscarMaterialPorNombre(area, nombre);
+  if(encontrado){
+    try{
+      const { tabla, mat, key } = encontrado;
+      const nuevoStock = (mat.stock_actual || 0) + cantidad;
+      const { data, error } = await sb.from(tabla).update({ stock_actual: nuevoStock }).eq(key, mat[key]).select();
+      if(error) throw error;
+      Object.assign(mat, data[0]);
+    }catch(err){
+      console.error('No se pudo devolver el consumo anterior al inventario:', err);
+    }
+  }
+  if(produccionId == null) return;
+  try{
+    const { error } = await sb.from('costos_movimientos').delete()
+      .eq('produccion_id', produccionId).ilike('comentario', 'Consumo automático%');
+    if(error) throw error;
+    let idx;
+    while((idx = DB.costos_movimientos.findIndex(m => m.produccion_id === produccionId && (m.comentario||'').startsWith('Consumo automático'))) >= 0){
+      DB.costos_movimientos.splice(idx, 1);
+    }
+  }catch(err){
+    console.error('No se pudo borrar el costo automático anterior:', err);
   }
 }
 
@@ -629,7 +677,7 @@ async function finishActivity(id, horaIni, fecha){
       if(cantidadConsumida > 0){
         await descontarInventarioYCargarCosto({
           nombre: materiaPrima, area: card.dataset.area, cantidad: cantidadConsumida,
-          orden: data[0].orden, suborden: data[0].suborden, fecha: data[0].fecha
+          orden: data[0].orden, suborden: data[0].suborden, fecha: data[0].fecha, produccionId: data[0].id
         });
       }
     }

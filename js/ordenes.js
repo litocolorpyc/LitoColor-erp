@@ -1,7 +1,7 @@
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
 import { toast, fmtNum, exportarExcel, fechaHoyLocal } from './helpers.js';
-import { getCurrentUser } from './auth.js';
+import { getCurrentUser, puedeEditarProduccion } from './auth.js';
 import { poblarDatalistProveedores } from './costos.js';
 
 const ROLES_REORDENAN_PRIORIDAD = ['admin', 'gerente', 'jefe_produccion'];
@@ -1092,6 +1092,14 @@ export function renderRadarHistorico(){
 let chartDetalle = null;
 let ordenDetalleActual = null; // recuerda qué orden está abierta en el detalle, para el botón de imprimir
 
+// El botón "Ajustar" del Historial de producción abre "Corregir registro"
+// (Operario), que vive en otro módulo/pestaña — ordenes.js no puede
+// importar dashboard.js directo (dashboard.js ya importa de ordenes.js, y
+// se generaría un ciclo), así que app.js inyecta acá el handler real una
+// sola vez al arrancar.
+let onAjustarConsumoCallback = null;
+export function setAjustarConsumoHandler(fn){ onAjustarConsumoCallback = fn; }
+
 // ---------- presupuesto vs. real, por orden ----------
 function comparativoPresupuestoHTML(pres, costoReal, ingresoReal, costoMateriales){
   const totalCosto = (pres.total_costo != null) ? pres.total_costo : ((pres.costo || 0) + (pres.imprevistos || 0));
@@ -1224,6 +1232,7 @@ function estadoRegistroHTML(r){
 
 function historialOrdenHTML(registros, piezas){
   if(!registros.length) return '<p class="card-hint">Todavía no hay registros de producción para esta orden.</p>';
+  const puedeAjustar = puedeEditarProduccion();
   const filas = historialOrdenRows(registros).map(r => `<tr>
       <td>${(r.fecha||'').slice(0,10)}${r.horaIni ? ' ' + r.horaIni.slice(0,5) : ''}${r.horaFin ? ' – ' + r.horaFin.slice(0,5) : ''}</td>
       <td>${piezaLabelDeRegistro(r, piezas)}</td>
@@ -1234,11 +1243,14 @@ function historialOrdenHTML(registros, piezas){
       <td>${r.maquina || 'Manual'}</td>
       <td class="num">${r.tiempoHr != null ? fmtNum(r.tiempoHr,2) : '—'}</td>
       <td class="num">${r.cantidad != null ? fmtNum(r.cantidad,0) : '—'}</td>
+      <td>${r.materiaPrima || '—'}</td>
+      <td>${r.consumoMP || '—'}</td>
       <td>${estadoRegistroHTML(r)}</td>
       <td>${r.comentario || ''}</td>
+      ${puedeAjustar ? `<td><button type="button" class="row-btn" data-ajustar="${r.id}">Ajustar</button></td>` : ''}
     </tr>`).join('');
   return `<div class="table-wrap"><table class="detalle-mini-table">
-    <thead><tr><th>Fecha / hora</th><th>Pieza</th><th>Área</th><th>Subproceso</th><th>Actividad</th><th>Operario</th><th>Máquina</th><th>Horas</th><th>Cant.</th><th>Estado</th><th>Comentario</th></tr></thead>
+    <thead><tr><th>Fecha / hora</th><th>Pieza</th><th>Área</th><th>Subproceso</th><th>Actividad</th><th>Operario</th><th>Máquina</th><th>Horas</th><th>Cant.</th><th>Materia prima</th><th>Consumo</th><th>Estado</th><th>Comentario</th>${puedeAjustar ? '<th></th>' : ''}</tr></thead>
     <tbody>${filas}</tbody>
   </table></div>`;
 }
@@ -1366,6 +1378,12 @@ export function mostrarDetalleOrden(orden){
 
   wirePresupuestoOrden(orden, costo, ingreso, costoMateriales);
 
+  document.querySelectorAll('#opp-detalle-body [data-ajustar]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if(onAjustarConsumoCallback) onAjustarConsumoCallback(parseInt(btn.dataset.ajustar, 10));
+    });
+  });
+
   if(areas.length){
     const el = document.getElementById('chart-detalle-area');
     if(chartDetalle) chartDetalle.destroy();
@@ -1397,12 +1415,13 @@ function historialOrdenPrintHTML(registros, piezas){
       <td>${r.subproceso || '—'}</td>
       <td>${r.actividad || '—'}</td>
       <td>${r.operario || '—'}</td>
+      <td>${r.materiaPrima || '—'}${r.consumoMP ? ' — ' + r.consumoMP : ''}</td>
       <td>${estadoRegistroTexto(r)}</td>
       <td>${r.comentario || ''}</td>
     </tr>`).join('');
   return `<h3>Historial de producción</h3>
   <table class="historial-print">
-    <thead><tr><th>Fecha / hora</th><th>Pieza</th><th>Área</th><th>Subproceso</th><th>Actividad</th><th>Operario</th><th>Estado</th><th>Comentario</th></tr></thead>
+    <thead><tr><th>Fecha / hora</th><th>Pieza</th><th>Área</th><th>Subproceso</th><th>Actividad</th><th>Operario</th><th>Materia prima</th><th>Estado</th><th>Comentario</th></tr></thead>
     <tbody>${filas}</tbody>
   </table>`;
 }

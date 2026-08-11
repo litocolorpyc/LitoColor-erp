@@ -1,7 +1,7 @@
 import { loadAll } from './store.js';
-import { renderGerencial, renderProduccion, renderOperario, populateOperarioSelect, initDashboardFilters } from './dashboard.js';
+import { renderGerencial, renderProduccion, renderOperario, populateOperarioSelect, initDashboardFilters, abrirEdicionRegistroDesdeOrden } from './dashboard.js';
 import { initRegistrar, populateReg } from './registrar.js';
-import { initOppForm, renderOppRecent, populateClienteSelect, populateProductoSelect, refreshPapelPliegoSelects } from './ordenes.js';
+import { initOppForm, renderOppRecent, populateClienteSelect, populateProductoSelect, refreshPapelPliegoSelects, setAjustarConsumoHandler } from './ordenes.js';
 import { initMaestros, renderMaestros } from './maestros.js';
 import { initUsuarios } from './usuarios.js';
 import { initCalendario, renderCalendario } from './calendario.js';
@@ -74,6 +74,7 @@ async function arrancarApp(){
 
   pasoSeguro('Registrar', () => initRegistrar(onRegistrarChange));
   pasoSeguro('Órdenes (formulario)', () => initOppForm(populateReg));
+  pasoSeguro('Ajustar consumo desde Historial', () => setAjustarConsumoHandler(abrirEdicionRegistroDesdeOrden));
   pasoSeguro('Órdenes (tablas)', renderOppRecent);
   pasoSeguro('Maestros', () => initMaestros(onMaestrosChange));
   pasoSeguro('Usuarios', initUsuarios);

@@ -238,6 +238,19 @@
           <div class="field"><label>¿Reproceso?</label><select id="ole-reproceso"><option value="No">No</option><option value="Si">Sí</option></select></div>
         </div>
         <div class="form-row">
+          <div class="field">
+            <label>Insumo consumido</label>
+            <select id="ole-materia-select"></select>
+            <input type="text" id="ole-materia-otro" placeholder="especifica el insumo" style="display:none;margin-top:5px">
+          </div>
+          <div class="field">
+            <label id="ole-consumo-label">Consumo</label>
+            <input type="number" id="ole-consumo-num" min="0" step="0.01" placeholder="cantidad" style="display:none">
+            <input type="text" id="ole-consumo" placeholder="ej. 2 planchas, 150 g" style="display:none">
+          </div>
+        </div>
+        <span class="card-hint">Al cambiar el insumo o la cantidad, el inventario se ajusta solo: se devuelve lo que este registro había descontado y se aplica lo nuevo.</span>
+        <div class="form-row">
           <div class="field"><label>¿Quedó terminado este proceso?</label><select id="ole-proceso-completo"><option value="Si">Sí, terminado</option><option value="No">No, quedó pausado</option></select></div>
           <div class="field" id="ole-motivo-pausa-wrap" style="display:none"><label>Motivo de la pausa</label><select id="ole-motivo-pausa"></select></div>
         </div>
@@ -968,6 +981,7 @@
         <p><b>Consultar orden:</b> arriba del todo en Órdenes hay una tarjeta para escribir cualquier número de orden y ver su detalle completo sin tener que buscarla en la tabla de abajo.</p>
         <p><b>Buscar/Editar/Duplicar/Cancelar:</b> en "Buscar y administrar órdenes". "Duplicar" crea una orden NUEVA con los mismos datos — útil cuando un cliente repite un pedido. "Cancelar" no borra historial, solo retira.</p>
         <p><b>Ver detalle:</b> muestra absolutamente todo — ficha técnica completa de cada pieza (tamaño, papel, tintas, corte, acabados…), procesos con su check, materiales consumidos, horas por operario/máquina, y el comparativo de Presupuesto vs. Real. Tiene un botón <b>"🖨 Imprimir"</b> para cuando no hay pantalla a mano en planta — abre una hoja limpia lista para imprimir.</p>
+        <p><b>Historial de producción y ajuste de consumos:</b> dentro del detalle de la orden, la tabla "Historial de producción" lista cada registro con su Materia prima y Consumo. <b>Solo Jefe de Producción, Gerencia o Admin</b> ven un botón <b>"Ajustar"</b> en cada fila — abre "Corregir registro" (en Operario) con ese registro puntual, donde se puede cambiar el insumo consumido y la cantidad. Al guardar, el inventario se ajusta solo: se devuelve al stock lo que ese registro había descontado antes y se aplica de nuevo con los valores corregidos — así Inventario, Materias primas/Materiales por área y los costos de la orden quedan siempre correlacionados con lo que dice el registro.</p>
         <table>
           <thead><tr><th>Estado</th><th>Significa</th></tr></thead>
           <tbody>

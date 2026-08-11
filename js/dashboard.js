@@ -3,7 +3,8 @@ import { DB, normProd } from './store.js';
 import { fmtCOP, fmtNum, areaColor, rangoFechas, rangoAnterior, deltaBadge, exportarExcel, toast } from './helpers.js';
 import { mostrarDetalleOrden, tipoTrabajoLabel, renderOppRecent, subprocesosDeArea } from './ordenes.js';
 import { puedeEditarProduccion } from './auth.js';
-import { listaAreasDisponibles } from './registrar.js';
+import { listaAreasDisponibles, materialSelectOptionsHTML, unidadNumericaDelMaterial, parseCantidadConsumo, descontarInventarioYCargarCosto, revertirConsumoDeRegistro } from './registrar.js';
+import { renderInventario } from './inventario.js';
 
 // Cambia a la pestaña de Órdenes y abre el detalle completo de una orden —
 // se usa desde las tablas del Gerencial donde se puede hacer click en una
@@ -433,6 +434,54 @@ function actualizarWrapMotivoPausa(){
   document.getElementById('ole-motivo-pausa-wrap').style.display = esPausa ? '' : 'none';
 }
 
+// Insumo consumido + Consumo — mismo desplegable y misma lógica que usa
+// Registrar (ver js/registrar.js), reutilizados acá para que Jefe de
+// Producción/Gerencia/Admin puedan AJUSTAR el consumo de materia prima de
+// un registro ya guardado (pedido: "debe existir una correlación entre
+// inventarios, insumos por área y materia prima" — ver guardarEdicionRegistro,
+// que revierte el descuento anterior y aplica el nuevo).
+function materialesDeOrdenPara(orden){
+  return orden != null
+    ? [...new Set(DB.opp_piezas.filter(p => p.orden === orden).map(p => p.papel).filter(Boolean))]
+    : [];
+}
+function poblarMaterialEdicion(area, valorActual, consumoActualTexto, materialesOrden){
+  const sel = document.getElementById('ole-materia-select');
+  const otro = document.getElementById('ole-materia-otro');
+  const consumoNum = document.getElementById('ole-consumo-num');
+  const consumoTxt = document.getElementById('ole-consumo');
+  const consumoLabel = document.getElementById('ole-consumo-label');
+  sel.innerHTML = materialSelectOptionsHTML(area, valorActual, materialesOrden);
+  const otroSeleccionado = sel.value === '__otro__';
+  otro.style.display = otroSeleccionado ? 'block' : 'none';
+  otro.value = otroSeleccionado ? (valorActual || '') : '';
+
+  const unidad = valorActual ? unidadNumericaDelMaterial(area, valorActual) : null;
+  consumoLabel.textContent = 'Consumo' + (unidad ? ' (' + unidad + ')' : '');
+  consumoNum.dataset.unidad = unidad || '';
+  consumoNum.style.display = unidad ? 'block' : 'none';
+  consumoTxt.style.display = unidad ? 'none' : 'block';
+  consumoNum.value = unidad ? parseCantidadConsumo(consumoActualTexto) : '';
+  consumoTxt.value = unidad ? '' : (consumoActualTexto || '');
+}
+function wireMaterialSelectEdicion(){
+  const sel = document.getElementById('ole-materia-select');
+  const otro = document.getElementById('ole-materia-otro');
+  const consumoNum = document.getElementById('ole-consumo-num');
+  const consumoTxt = document.getElementById('ole-consumo');
+  const consumoLabel = document.getElementById('ole-consumo-label');
+  sel.onchange = () => {
+    otro.style.display = sel.value === '__otro__' ? 'block' : 'none';
+    if(sel.value === '__otro__') otro.focus();
+    const areaActual = document.getElementById('ole-area').value;
+    const unidad = (sel.value && sel.value !== '__otro__') ? unidadNumericaDelMaterial(areaActual, sel.value) : null;
+    consumoNum.dataset.unidad = unidad || '';
+    consumoNum.style.display = unidad ? 'block' : 'none';
+    consumoTxt.style.display = unidad ? 'none' : 'block';
+    consumoLabel.textContent = 'Consumo' + (unidad ? ' (' + unidad + ')' : '');
+  };
+}
+
 // El operario a veces elige mal la suborden/pieza al registrar (o registra
 // "sin OPP / general" pudiendo elegir una) — esto arma el mismo desplegable
 // que usa Registrar (ver js/registrar.js, populatePiezaReg) para poder
@@ -458,10 +507,14 @@ function abrirEdicionRegistro(id){
   poblarSelectMaquinaEdicion(row.area, row.maquina);
   poblarSelectPiezaEdicion(row.orden, row.op);
   poblarSelectSubprocesoEdicion(row.area, row.subproceso);
+  const materialesOrden = materialesDeOrdenPara(row.orden);
+  poblarMaterialEdicion(row.area, row.materiaPrima, row.consumoMP, materialesOrden);
+  wireMaterialSelectEdicion();
   areaSel.onchange = () => {
     poblarSelectActividadEdicion(areaSel.value, null);
     poblarSelectMaquinaEdicion(areaSel.value, null);
     poblarSelectSubprocesoEdicion(areaSel.value, null);
+    poblarMaterialEdicion(areaSel.value, null, null, materialesOrden);
   };
 
   document.getElementById('ole-cantidad').value = row.cantidad ?? '';
@@ -514,12 +567,30 @@ async function guardarEdicionRegistro(){
     return;
   }
 
+  // Insumo consumido / Consumo — lo que YA estaba guardado en el registro
+  // (para revertirlo del inventario) y lo que queda en el formulario
+  // (para aplicarlo). Ver poblarMaterialEdicion/wireMaterialSelectEdicion.
+  const unidadAnterior = row.materiaPrima ? unidadNumericaDelMaterial(row.area, row.materiaPrima) : null;
+  const cantidadAnterior = unidadAnterior ? parseFloat(parseCantidadConsumo(row.consumoMP)) : NaN;
+
+  const materiaSel = document.getElementById('ole-materia-select');
+  const materiaNueva = materiaSel.value === '__otro__'
+    ? (document.getElementById('ole-materia-otro').value.trim() || null)
+    : (materiaSel.value || null);
+  const consumoNumEl = document.getElementById('ole-consumo-num');
+  const usaConsumoNumericoNuevo = consumoNumEl && consumoNumEl.style.display !== 'none';
+  const consumoNuevoTexto = usaConsumoNumericoNuevo
+    ? (consumoNumEl.value ? consumoNumEl.value + (consumoNumEl.dataset.unidad ? ' ' + consumoNumEl.dataset.unidad : '') : null)
+    : (document.getElementById('ole-consumo').value.trim() || null);
+
   const updates = {
     area: areaEditada,
     actividad: document.getElementById('ole-actividad').value,
     maquina: document.getElementById('ole-maquina').value || null,
     subproceso: subprocesoSel.value || null,
     cantidad: parseFloat(document.getElementById('ole-cantidad').value || 0),
+    materia_prima: materiaNueva,
+    consumo_mp: consumoNuevoTexto,
     comentario: document.getElementById('ole-comentario').value || null,
     reproceso: document.getElementById('ole-reproceso').value,
     proceso_completo: !esPausa,
@@ -537,12 +608,32 @@ async function guardarEdicionRegistro(){
     if(!data || !data.length) throw new Error('Supabase no devolvió el registro actualizado (revisa permisos RLS de UPDATE en produccion)');
     const idx = DB.produccion.findIndex(r => r.id === id);
     if(idx >= 0) DB.produccion[idx] = normProd(data[0]);
+
+    // Mantiene correlacionados produccion / inventario (materias_primas o
+    // insumos_area) / costos_movimientos: primero devuelve lo que este
+    // registro ya había descontado con el material/área ANTERIOR, después
+    // aplica el consumo NUEVO. Si el material no cambió, es prácticamente
+    // un neteo; si cambió de material o de área, cada uno queda correcto.
+    if(row.materiaPrima && !isNaN(cantidadAnterior) && cantidadAnterior > 0){
+      await revertirConsumoDeRegistro(row.materiaPrima, row.area, cantidadAnterior, id);
+    }
+    if(usaConsumoNumericoNuevo && materiaNueva){
+      const cantidadNueva = parseFloat(consumoNumEl.value);
+      if(cantidadNueva > 0){
+        await descontarInventarioYCargarCosto({
+          nombre: materiaNueva, area: areaEditada, cantidad: cantidadNueva,
+          orden: data[0].orden, suborden: data[0].suborden, fecha: data[0].fecha, produccionId: id
+        });
+      }
+    }
+
     toast('Registro corregido');
     cerrarEdicionRegistro();
     renderOperario();
     renderProduccion();
     renderGerencial();
     renderOppRecent();
+    renderInventario();
   }catch(err){
     console.error(err);
     toast('Error al guardar la corrección — revisa la consola');
@@ -557,6 +648,15 @@ async function eliminarRegistroLog(id){
   const ok = confirm(`¿Eliminar este registro de ${row.operario || 'operario'} (${row.actividad || 'actividad'}, orden ${row.orden ?? '—'})? Esta acción no se puede deshacer.`);
   if(!ok) return;
   try{
+    // Si este registro había descontado un material, se le devuelve al
+    // inventario antes de borrarlo — si no, el stock queda decontado para
+    // siempre por un registro que ya ni existe.
+    const unidad = row.materiaPrima ? unidadNumericaDelMaterial(row.area, row.materiaPrima) : null;
+    const cantidad = unidad ? parseFloat(parseCantidadConsumo(row.consumoMP)) : NaN;
+    if(row.materiaPrima && !isNaN(cantidad) && cantidad > 0){
+      await revertirConsumoDeRegistro(row.materiaPrima, row.area, cantidad, id);
+    }
+
     const { error } = await sb.from('produccion').delete().eq('id', id);
     if(error) throw error;
     const idx = DB.produccion.findIndex(r => r.id === id);
@@ -566,6 +666,7 @@ async function eliminarRegistroLog(id){
     renderProduccion();
     renderGerencial();
     renderOppRecent();
+    renderInventario();
   }catch(err){
     console.error(err);
     toast('Error al eliminar — revisa la consola');
@@ -577,6 +678,18 @@ function wireEdicionRegistro(){
   const btnGuardar = document.getElementById('ole-guardar');
   if(btnCancelar) btnCancelar.addEventListener('click', cerrarEdicionRegistro);
   if(btnGuardar) btnGuardar.addEventListener('click', guardarEdicionRegistro);
+}
+
+// Botón "Ajustar" del Historial de producción (Detalle de la orden, en
+// Órdenes) — cambia a la pestaña Operario y abre "Corregir registro" para
+// ese registro puntual. Se inyecta en ordenes.js desde app.js (ver
+// setAjustarConsumoHandler) porque ordenes.js no puede importar este
+// módulo sin generar un ciclo (dashboard.js ya importa de ordenes.js).
+export function abrirEdicionRegistroDesdeOrden(id){
+  const btnTab = document.querySelector('.tab-btn[data-tab="operario"]');
+  if(!btnTab) return;
+  btnTab.click();
+  setTimeout(() => abrirEdicionRegistro(id), 60);
 }
 
 export function initDashboardFilters(){
