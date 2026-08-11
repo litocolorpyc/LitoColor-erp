@@ -872,6 +872,57 @@ function agruparPorAreaOperarioMaquinaPrint(recs){
     .join('') || '<tr><td colspan="4">Sin registros de producción aún</td></tr>';
 }
 
+// A qué pieza pertenece un registro de producción — mismo criterio que se
+// usa para agrupar (r.op === p.op, o si no hay OP, por suborden).
+function piezaLabelDeRegistro(r, piezas){
+  const p = piezas.find(pz => pz.op && pz.op === r.op) || piezas.find(pz => pz.suborden === r.suborden);
+  if(p) return `${p.suborden}. ${p.pieza || 'Pieza'}`;
+  return r.suborden != null ? `Suborden ${r.suborden}` : '—';
+}
+
+// Historial de TODO lo que pasó en la orden — un registro por cada
+// actividad que un operario inició (no agrupado, a diferencia de la tabla
+// de horas por área), del más reciente al más antiguo, con su comentario.
+// Antes el comentario que el operario escribe al finalizar una actividad
+// (ver js/registrar.js, .rc-comentario) se guardaba en produccion.comentario
+// pero no se mostraba en ninguna parte — quedaba enterrado en la base.
+function historialOrdenRows(registros){
+  return [...registros].sort((a,b) => {
+    const fa = (a.fecha||'') + ' ' + (a.horaIni||'');
+    const fb = (b.fecha||'') + ' ' + (b.horaIni||'');
+    return fb.localeCompare(fa);
+  });
+}
+
+function estadoRegistroHTML(r){
+  const chips = [];
+  if(!r.horaFin) chips.push('<span class="estado-chip estado-chip-warn">⏱ en curso</span>');
+  else if(r.procesoCompleto === false) chips.push('<span class="estado-chip estado-chip-warn">continúa después</span>');
+  else chips.push('<span class="estado-chip done">✓ terminado</span>');
+  if(r.reproceso) chips.push('<span class="estado-chip pending">↺ reproceso</span>');
+  return chips.join(' ');
+}
+
+function historialOrdenHTML(registros, piezas){
+  if(!registros.length) return '<p class="card-hint">Todavía no hay registros de producción para esta orden.</p>';
+  const filas = historialOrdenRows(registros).map(r => `<tr>
+      <td>${(r.fecha||'').slice(0,10)}${r.horaIni ? ' ' + r.horaIni.slice(0,5) : ''}${r.horaFin ? ' – ' + r.horaFin.slice(0,5) : ''}</td>
+      <td>${piezaLabelDeRegistro(r, piezas)}</td>
+      <td>${r.area || '—'}</td>
+      <td>${r.actividad || '—'}</td>
+      <td>${r.operario || '—'}</td>
+      <td>${r.maquina || 'Manual'}</td>
+      <td class="num">${r.tiempoHr != null ? fmtNum(r.tiempoHr,2) : '—'}</td>
+      <td class="num">${r.cantidad != null ? fmtNum(r.cantidad,0) : '—'}</td>
+      <td>${estadoRegistroHTML(r)}</td>
+      <td>${r.comentario || ''}</td>
+    </tr>`).join('');
+  return `<div class="table-wrap"><table class="detalle-mini-table">
+    <thead><tr><th>Fecha / hora</th><th>Pieza</th><th>Área</th><th>Actividad</th><th>Operario</th><th>Máquina</th><th>Horas</th><th>Cant.</th><th>Estado</th><th>Comentario</th></tr></thead>
+    <tbody>${filas}</tbody>
+  </table></div>`;
+}
+
 export function mostrarDetalleOrden(orden){
   const o = DB.opp_ordenes.find(x => x.orden === orden);
   if(!o){
@@ -986,6 +1037,11 @@ export function mostrarDetalleOrden(orden){
     </div>
 
     <div class="detalle-piezas-grid">${piezasHTML}</div>
+
+    <div class="card" style="margin:16px 0 0">
+      <div class="card-head"><h3>Historial de producción</h3><span class="card-hint">todos los registros de esta orden, con comentarios — del más reciente al más antiguo</span></div>
+      ${historialOrdenHTML(registros, piezas)}
+    </div>
   `;
 
   wirePresupuestoOrden(orden, costo, ingreso, costoMateriales);
@@ -1000,6 +1056,33 @@ export function mostrarDetalleOrden(orden){
 
   document.getElementById('opp-detalle-card').style.display = '';
   document.getElementById('opp-detalle-card').scrollIntoView({ behavior:'smooth' });
+}
+
+function estadoRegistroTexto(r){
+  const partes = [];
+  if(!r.horaFin) partes.push('en curso');
+  else if(r.procesoCompleto === false) partes.push('continúa después');
+  else partes.push('terminado');
+  if(r.reproceso) partes.push('reproceso');
+  return partes.join(' · ');
+}
+
+function historialOrdenPrintHTML(registros, piezas){
+  if(!registros.length) return '';
+  const filas = historialOrdenRows(registros).map(r => `<tr>
+      <td>${(r.fecha||'').slice(0,10)}${r.horaIni ? ' ' + r.horaIni.slice(0,5) : ''}${r.horaFin ? ' – ' + r.horaFin.slice(0,5) : ''}</td>
+      <td>${piezaLabelDeRegistro(r, piezas)}</td>
+      <td>${r.area || '—'}</td>
+      <td>${r.actividad || '—'}</td>
+      <td>${r.operario || '—'}</td>
+      <td>${estadoRegistroTexto(r)}</td>
+      <td>${r.comentario || ''}</td>
+    </tr>`).join('');
+  return `<h3>Historial de producción</h3>
+  <table class="historial-print">
+    <thead><tr><th>Fecha / hora</th><th>Pieza</th><th>Área</th><th>Actividad</th><th>Operario</th><th>Estado</th><th>Comentario</th></tr></thead>
+    <tbody>${filas}</tbody>
+  </table>`;
 }
 
 // ---------- imprimir la orden (para cuando no hay pantalla a mano en planta) ----------
@@ -1065,6 +1148,8 @@ export function imprimirDetalleOrden(orden){
     </div>`;
   }).join('') || '<p>Esta orden no tiene piezas registradas (probablemente migrada del histórico sin detalle de OPP).</p>';
 
+  const historialHTML = historialOrdenPrintHTML(registros, piezas);
+
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
 <title>Orden ${orden} — ${o.cliente || ''}</title>
 <style>
@@ -1077,6 +1162,7 @@ export function imprimirDetalleOrden(orden){
   .ficha-print td.lbl{ color:#555; width:38%; }
   .procesos-print, .materiales-print{ font-size:12px; margin:4px 0; }
   .pieza-print{ page-break-inside: avoid; margin-bottom:14px; }
+  .historial-print{ page-break-inside: avoid; }
   @media print{ body{ margin:10mm; } }
 </style>
 </head><body>
@@ -1084,6 +1170,7 @@ export function imprimirDetalleOrden(orden){
   <div class="sub">${o.cliente || '—'} ${o.producto ? '· ' + o.producto : ''} · ${tipoTrabajoLabel(o)} · ${(o.fecha||'').slice(0,10)} · Estado: ${estado.label}${estado.pct!=null ? ' (' + estado.pct + '%)' : ''}</div>
   ${o.observaciones ? `<p><b>Observaciones:</b> ${o.observaciones}</p>` : ''}
   ${piezasHTML}
+  ${historialHTML}
 </body></html>`;
 
   const w = window.open('', '_blank');

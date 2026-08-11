@@ -414,6 +414,21 @@ function poblarSelectMaquinaEdicion(area, valorActual){
   if(valorActual && !maqs.some(m=>m.nombre===valorActual)) sel.value = '';
 }
 
+// El operario a veces elige mal la suborden/pieza al registrar (o registra
+// "sin OPP / general" pudiendo elegir una) — esto arma el mismo desplegable
+// que usa Registrar (ver js/registrar.js, populatePiezaReg) para poder
+// corregir a qué pieza de la orden queda ligado el registro, no solo el
+// área/actividad. Antes esto no se podía tocar desde "Corregir registro".
+function poblarSelectPiezaEdicion(orden, opActual){
+  const sel = document.getElementById('ole-pieza');
+  const hint = document.getElementById('ole-pieza-hint');
+  const piezas = orden != null ? DB.opp_piezas.filter(p => p.orden === orden).sort((a,b)=>a.suborden-b.suborden) : [];
+  sel.innerHTML = '<option value="">— Sin OPP / general —</option>' +
+    piezas.map(p => `<option value="${p.op}" data-suborden="${p.suborden}"${p.op===opActual?' selected':''}>${p.suborden}. ${p.pieza || 'Pieza'}</option>`).join('');
+  if(!piezas.length){ sel.disabled = true; hint.textContent = orden != null ? '(esta orden no tiene piezas en OPP)' : '(registro sin orden)'; }
+  else { sel.disabled = false; hint.textContent = `(de la orden ${orden})`; }
+}
+
 function abrirEdicionRegistro(id){
   const row = DB.produccion.find(r => r.id === id);
   if(!row){ toast('No se encontró ese registro'); return; }
@@ -422,6 +437,7 @@ function abrirEdicionRegistro(id){
   areaSel.innerHTML = listaAreasDisponibles().map(a=>`<option value="${a}"${a===row.area?' selected':''}>${a}</option>`).join('');
   poblarSelectActividadEdicion(row.area, row.actividad);
   poblarSelectMaquinaEdicion(row.area, row.maquina);
+  poblarSelectPiezaEdicion(row.orden, row.op);
   areaSel.onchange = () => { poblarSelectActividadEdicion(areaSel.value, null); poblarSelectMaquinaEdicion(areaSel.value, null); };
 
   document.getElementById('ole-cantidad').value = row.cantidad ?? '';
@@ -429,7 +445,7 @@ function abrirEdicionRegistro(id){
   document.getElementById('ole-comentario').value = row.comentario || '';
   document.getElementById('ole-reproceso').value = row.reproceso === 'Si' ? 'Si' : 'No';
   document.getElementById('ole-guardar').dataset.id = id;
-  document.getElementById('op-log-editar-info').textContent = `Registro del ${(row.fecha||'').slice(0,10)} — ${row.operario || '—'} — Orden ${row.orden ?? '—'}`;
+  document.getElementById('op-log-editar-info').textContent = `Registro del ${(row.fecha||'').slice(0,10)} — ${row.operario || '—'} — Orden ${row.orden ?? '—'}${row.suborden!=null ? ' / suborden ' + row.suborden : ''}`;
 
   const card = document.getElementById('op-log-editar-card');
   card.style.display = '';
@@ -450,6 +466,11 @@ async function guardarEdicionRegistro(){
   const persona = DB.personal.find(p => p.nombre === row.operario);
   const rate = persona ? (persona.valor_hora || 0) : (row.tiempoHr ? (row.valorActividad || 0) / row.tiempoHr : 0);
 
+  const piezaSel = document.getElementById('ole-pieza');
+  const piezaOpt = piezaSel.selectedOptions[0];
+  const opValue = piezaSel.value || null;
+  const subordenValue = (opValue && piezaOpt && piezaOpt.dataset.suborden) ? parseInt(piezaOpt.dataset.suborden, 10) : null;
+
   const updates = {
     area: document.getElementById('ole-area').value,
     actividad: document.getElementById('ole-actividad').value,
@@ -458,7 +479,9 @@ async function guardarEdicionRegistro(){
     comentario: document.getElementById('ole-comentario').value || null,
     reproceso: document.getElementById('ole-reproceso').value,
     tiempo_hr: horas,
-    valor_actividad: horas * rate
+    valor_actividad: horas * rate,
+    op: opValue,
+    suborden: subordenValue
   };
 
   btn.disabled = true; btn.textContent = 'Guardando…';
