@@ -40,7 +40,7 @@ function populateOrdenSelect(){
 function populateActividadReg(){
   const area = document.getElementById('r-area').value;
   const actSel = document.getElementById('r-actividad');
-  const acts = DB.actividades.filter(a=>a.area===area);
+  const acts = DB.actividades.filter(a=>a.area===area && a.activo!==false);
   actSel.innerHTML = acts.map(a=>`<option value="${a.etiqueta}">${a.etiqueta}</option>`).join('') || '<option value="">Sin actividades para esta área</option>';
 }
 function populateMaquinaReg(){
@@ -79,7 +79,7 @@ function limpiarErrorCampo(el){ el.classList.remove('campo-requerido-error'); }
 export function listaAreasDisponibles(){
   return Array.from(new Set([
     ...DB.maquinas.map(m=>m.area),
-    ...DB.actividades.map(a=>a.area)
+    ...DB.actividades.filter(a=>a.activo!==false).map(a=>a.area)
   ])).filter(Boolean).sort();
 }
 

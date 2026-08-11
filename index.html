@@ -59,6 +59,7 @@
         <div class="sidebar-group-label">Maestros</div>
         <button class="tab-btn" data-tab="m-empleados" role="tab">Empleados</button>
         <button class="tab-btn" data-tab="m-maquinas" role="tab">Máquinas</button>
+        <button class="tab-btn" data-tab="m-actividades" role="tab">Actividades</button>
         <button class="tab-btn" data-tab="m-materias" role="tab">Materias primas</button>
         <button class="tab-btn" data-tab="m-insumos" role="tab">Materiales por área</button>
         <button class="tab-btn" data-tab="m-piezas-producto" role="tab">Piezas por producto</button>
@@ -593,6 +594,32 @@
       </div>
     </section>
 
+    <section class="tab-panel" id="panel-m-actividades">
+      <div class="card">
+        <div class="card-head"><h3>Actividades</h3><span class="card-hint">las opciones que ve el operario al elegir "Actividad" en Registrar, por área · "Retirar" no borra nada</span></div>
+        <div class="form-row">
+          <div class="field"><label>Código</label><input type="number" id="m-act-codigo" placeholder="ej. 1503"></div>
+          <div class="field"><label>Etiqueta <span class="card-hint">(lo que ve el operario)</span></label><input type="text" id="m-act-etiqueta" placeholder="ej. 1503 - Plastificar"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Área</label><input type="text" id="m-act-area" placeholder="ej. Plastificado"></div>
+          <div class="field"><label>Categoría</label>
+            <select id="m-act-categoria"><option value="">—</option><option>Directa</option><option>Indirecta</option><option>Paro</option><option>Legales</option></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Actividad <span class="card-hint">(nombre interno, opcional)</span></label><input type="text" id="m-act-actividad" placeholder="ej. Plastificar"></div>
+        </div>
+        <div class="form-foot"><span id="m-act-mode"></span><button type="button" class="btn-primary" id="m-act-save">Agregar actividad</button></div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table id="tbl-m-actividades">
+            <thead><tr><th>Código</th><th>Etiqueta</th><th>Área</th><th>Categoría</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <section class="tab-panel" id="panel-m-materias">
       <div class="card">
         <div class="card-head"><h3>Materias primas</h3><span class="card-hint">papel, laminados, argollas, pegantes — ya viene precargado con 226</span></div>
@@ -858,8 +885,8 @@
         </table>
         <h4>Prioridad de producción</h4>
         <p>La tarjeta "Prioridad de producción" (arriba en Órdenes) muestra todas las órdenes activas en el orden en que se deben trabajar. Las órdenes nuevas siempre entran de últimas. <b>Solo Gerente, Jefe de Producción o Admin</b> pueden arrastrar las filas (ícono ⠿) para cambiar ese orden — los demás roles solo la ven.</p>
-        <h4>Materiales por área y Piezas por producto</h4>
-        <p>En Maestros encontrarás <b>"Materiales por área"</b> (qué insumo consume cada área — planchas en Litografía, colbón en Terminado, etc., usado en Registrar) y <b>"Piezas por producto"</b> (qué piezas suele tener cada producto — se completa sola, pero también se puede editar ahí directamente).</p>
+        <h4>Materiales por área, Actividades y Piezas por producto</h4>
+        <p>En Maestros encontrarás <b>"Materiales por área"</b> (qué insumo consume cada área — planchas en Litografía, colbón en Terminado, etc., usado en Registrar), <b>"Actividades"</b> (las opciones de "Actividad" que ve el operario al registrar trabajo en cada área — ahí se agregan, editan o retiran) y <b>"Piezas por producto"</b> (qué piezas suele tener cada producto — se completa sola, pero también se puede editar ahí directamente).</p>
         <h4>Calendario</h4>
         <p>Línea de tiempo por máquina (6am-8pm). Barras de color = actividad real; rayado = en curso ahora.</p>
         <h4>Alertas</h4>
@@ -868,7 +895,7 @@
 
       <div class="card" id="ayuda-admin">
         <div class="card-head"><h3>Para Administradora</h3></div>
-        <p>Todos los maestros (Empleados, Máquinas, Materias primas, Materiales por área, Clientes, Proveedores, Productos, Piezas por producto) funcionan igual: llena el formulario y "Agregar"; "Editar" carga la fila para corregirla; "Retirar" desactiva sin borrar nada (y se puede "Reactivar").</p>
+        <p>Todos los maestros (Empleados, Máquinas, Actividades, Materias primas, Materiales por área, Clientes, Proveedores, Productos, Piezas por producto) funcionan igual: llena el formulario y "Agregar"; "Editar" carga la fila para corregirla; "Retirar" desactiva sin borrar nada (y se puede "Reactivar").</p>
         <p><b>Proveedores:</b> ahora tienen un campo "Tipo de proveedor" (ej. "Proveedor de Insumos", "Proveedor de Maquila") — es texto libre con sugerencias, no una lista cerrada. Vale la pena categorizar los que ya existen: eso hace que, al elegir un proveedor desde una orden, el sistema sugiera primero el tipo más relevante para ese trabajo.</p>
         <p><b>Importar recibo de caja:</b> en Costos > Registrar un costo hay una tarjeta para subir el PDF del recibo de caja que descarga la administradora desde Siigo. El sistema intenta leer el número de recibo, fecha, NIT y cada línea automáticamente — siempre se revisa/corrige en una tabla antes de guardar, y por cada línea se puede elegir a qué orden se asocia y escribir una observación. <b>Solo funciona automático con el PDF real</b> (el que tiene texto, no una foto); con fotos o capturas, la tabla se llena a mano.</p>
       </div>

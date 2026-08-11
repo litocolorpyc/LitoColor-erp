@@ -119,6 +119,7 @@ function wireCatalog(opts){
 export function renderMaestros(){
   empleadosCtl.render();
   maquinasCtl.render();
+  actividadesCtl.render();
   materiasCtl.render();
   insumosCtl.render();
   clientesCtl.render();
@@ -136,7 +137,7 @@ function poblarDatalistProductosMaestro(){
   dl.innerHTML = DB.productos.filter(p=>p.activo!==false).map(p => `<option value="${p.nombre}">`).join('');
 }
 
-let empleadosCtl, maquinasCtl, materiasCtl, insumosCtl, clientesCtl, proveedoresCtl, productosCtl, piezasProductoCtl;
+let empleadosCtl, maquinasCtl, actividadesCtl, materiasCtl, insumosCtl, clientesCtl, proveedoresCtl, productosCtl, piezasProductoCtl;
 
 export function initMaestros(onChange){
   empleadosCtl = wireCatalog({
@@ -160,6 +161,20 @@ export function initMaestros(onChange){
       { id:'m-maq-area', col:'area' }
     ],
     renderCols: r => [r.codigo||'—', r.nombre, r.area||'—'],
+    onChange
+  });
+
+  actividadesCtl = wireCatalog({
+    table: 'actividades', key: 'id', data: DB.actividades, tableSel: '#tbl-m-actividades',
+    saveBtnId: 'm-act-save', modeId: 'm-act-mode', addLabel: 'Agregar actividad',
+    fields: [
+      { id:'m-act-codigo', col:'codigo', type:'number' },
+      { id:'m-act-etiqueta', col:'etiqueta', required:true },
+      { id:'m-act-area', col:'area', required:true },
+      { id:'m-act-categoria', col:'categoria' },
+      { id:'m-act-actividad', col:'actividad' }
+    ],
+    renderCols: r => [r.codigo ?? '—', r.etiqueta || '—', r.area || '—', r.categoria || '—'],
     onChange
   });
 
