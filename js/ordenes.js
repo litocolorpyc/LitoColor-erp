@@ -526,31 +526,45 @@ export function subprocesosDeArea(area){
     .sort((a,b) => (a.orden ?? 999) - (b.orden ?? 999));
 }
 
-// Áreas que YA se dieron por terminadas para esta pieza: la sesión de
-// trabajo debe estar finalizada (horaFin) Y el operario no haber marcado
-// "voy a continuar después"/pausa (procesoCompleto === false). Antes
-// bastaba con que existiera CUALQUIER registro terminado de esa área para
-// contarla como completada (ver punto 8 de AjustesERP) — pero un área
-// puede tener varios PASOS internos (ej. "Terminado" de un sobre: doblar
-// pestañas, luego engomar, luego cerrar) que hasta ahora se registraban
-// todos bajo la misma área, así que con terminar el primer paso ya se daba
-// por completada el área entera aunque faltaran los demás. Si el área
-// tiene subprocesos definidos, ahora se exige que TODOS y cada uno tengan
-// al menos un registro terminado — no solo la área en general.
+// El registro CERRADO (horaFin seteada) más reciente de una lista, por
+// fecha+hora de fin. "más reciente" es lo que manda para saber si un
+// área/subproceso está terminado — ver areasCompletadasPorPieza.
+function masReciente(recs){
+  return recs.reduce((max, r) => {
+    if(!max) return r;
+    return ((r.fecha||'') + (r.horaFin||'')) > ((max.fecha||'') + (max.horaFin||'')) ? r : max;
+  }, null);
+}
+
+// Áreas que YA se dieron por terminadas para esta pieza. Corrección
+// (12ago26): antes, con que CUALQUIER registro de esa área hubiera
+// quedado terminado alguna vez, el área contaba como completada para
+// siempre — así, si alguien reabría un área ya terminada para hacerle
+// algo más (reproceso, un detalle que faltó) y esta vez la PAUSABA en
+// vez de finalizarla, el área seguía viéndose "terminada" con datos
+// viejos y la orden desaparecía de los tableros aunque en la realidad
+// seguía con trabajo pendiente. Ahora manda el registro CERRADO MÁS
+// RECIENTE de cada área (o de cada subproceso, si el área los tiene): si
+// el último quedó pausado, el área vuelve a estar pendiente aunque antes
+// se hubiera terminado — así se puede "reabrir" un proceso sin trucos.
 export function areasCompletadasPorPieza(pieza){
   const recs = DB.produccion.filter(r =>
-    (r.op === pieza.op || (r.orden === pieza.orden && r.suborden === pieza.suborden)) &&
-    r.horaFin && r.procesoCompleto !== false
+    (r.op === pieza.op || (r.orden === pieza.orden && r.suborden === pieza.suborden)) && r.horaFin
   );
   const requeridos = Array.isArray(pieza.procesos_requeridos) ? pieza.procesos_requeridos : [];
   const completadas = new Set();
   requeridos.forEach(area => {
     const subs = subprocesosDeArea(area);
+    const recsArea = recs.filter(r => r.area === area);
     if(!subs.length){
-      if(recs.some(r => r.area === area)) completadas.add(area);
+      const ultimo = masReciente(recsArea);
+      if(ultimo && ultimo.procesoCompleto !== false) completadas.add(area);
     } else {
-      const subsTerminados = new Set(recs.filter(r => r.area === area && r.subproceso).map(r => r.subproceso));
-      if(subs.every(s => subsTerminados.has(s.nombre))) completadas.add(area);
+      const todosOk = subs.every(s => {
+        const ultimo = masReciente(recsArea.filter(r => r.subproceso === s.nombre));
+        return ultimo && ultimo.procesoCompleto !== false;
+      });
+      if(todosOk) completadas.add(area);
     }
   });
   return completadas;
