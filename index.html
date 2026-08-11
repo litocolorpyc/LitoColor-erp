@@ -1026,6 +1026,7 @@
         <p><b>Áreas</b> es el maestro base: define qué es un área de producción y en qué orden se hacen por defecto (Diseño antes que Terminado, etc.) — Máquinas, Actividades, Materiales por área, Subprocesos, y el checklist de procesos al crear una orden, todos usan estos mismos nombres.</p>
         <p><b>Proveedores:</b> ahora tienen un campo "Tipo de proveedor" (ej. "Proveedor de Insumos", "Proveedor de Maquila") — es texto libre con sugerencias, no una lista cerrada. Vale la pena categorizar los que ya existen: eso hace que, al elegir un proveedor desde una orden, el sistema sugiera primero el tipo más relevante para ese trabajo.</p>
         <p><b>Importar recibo de caja:</b> en Costos > Registrar un costo hay una tarjeta para subir el PDF del recibo de caja que descarga la administradora desde Siigo. El sistema intenta leer el número de recibo, fecha, NIT y cada línea automáticamente — siempre se revisa/corrige en una tabla antes de guardar, y por cada línea se puede elegir a qué orden se asocia y escribir una observación. <b>Solo funciona automático con el PDF real</b> (el que tiene texto, no una foto); con fotos o capturas, la tabla se llena a mano.</p>
+        <p><b>IVA/Retención e inventario al importar una compra:</b> apenas se carga el archivo aparece un cuadro para poner el IVA% y la Retención% de esa factura (aplican a todas sus líneas). Con eso se calcula el <b>costo neto</b> de cada línea (unitario − IVA% + Retención%). El sistema intenta ligar cada línea a un material real de "Materias primas" o "Materiales por área" — las que no encuentra coincidencia quedan resaltadas en la columna "Material del inventario" para elegirlo a mano. Al guardar, las líneas CON material ligado suman su cantidad al stock y dejan el costo por unidad en ese valor neto — las que quedan sin material solo se guardan como costo, sin tocar inventario.</p>
       </div>
 
       <div class="card" id="ayuda-gerente">
@@ -1132,9 +1133,15 @@
             <div class="field"><label>NIT del proveedor</label><input type="text" id="recibo-nit"></div>
             <div class="field"><label>Proveedor</label><input type="text" id="recibo-tercero"></div>
           </div>
-          <div class="table-wrap">
+          <div class="form-row">
+            <div class="field"><label>IVA % aplicado <span class="card-hint">(de toda la factura)</span></label><input type="number" id="recibo-iva-pct" min="0" step="0.01" readonly></div>
+            <div class="field"><label>Retención % aplicada</label><input type="number" id="recibo-retencion-pct" min="0" step="0.01" readonly></div>
+            <button type="button" class="row-btn" id="recibo-editar-iva" style="align-self:flex-end;margin-bottom:8px">Cambiar %</button>
+          </div>
+          <span class="card-hint">El costo que se descarga al inventario es el <b>valor neto</b>: unitario − IVA% + Retención% (columna "Costo neto" abajo). Solo las líneas con un "Material del inventario" elegido actualizan stock y costo por unidad al guardar.</span>
+          <div class="table-wrap" style="margin-top:8px">
             <table id="tbl-recibo-items">
-              <thead><tr><th>Ítem</th><th>Descripción</th><th class="num">Cant.</th><th class="num">Vr. Unit.</th><th class="num">IVA %</th><th class="num">Reten. %</th><th class="num">Vr. Total</th><th>Orden asociada</th><th>Sub.</th><th>Concepto</th><th>Tipo</th><th>Observación</th><th></th></tr></thead>
+              <thead><tr><th>Ítem</th><th>Descripción</th><th class="num">Cant.</th><th class="num">Vr. Unit.</th><th class="num">IVA %</th><th class="num">Reten. %</th><th class="num">Vr. Total</th><th class="num">Costo neto</th><th>Material del inventario</th><th>Orden asociada</th><th>Sub.</th><th>Concepto</th><th>Tipo</th><th>Observación</th><th></th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
@@ -1144,6 +1151,18 @@
             <span class="card-hint" id="recibo-total-hint"></span>
             <button type="button" class="btn-primary" id="recibo-guardar">Guardar recibo</button>
           </div>
+        </div>
+      </div>
+
+      <div class="modal-overlay" id="recibo-iva-modal" style="display:none">
+        <div class="modal-card">
+          <h3>IVA y Retención de esta factura</h3>
+          <p class="card-hint">Se aplican a todas las líneas del documento para calcular el <b>costo neto</b> que se descarga al inventario: unitario − IVA% + Retención%.</p>
+          <div class="form-row">
+            <div class="field"><label>IVA %</label><input type="number" id="recibo-iva-modal-pct" min="0" step="0.01" placeholder="ej. 19"></div>
+            <div class="field"><label>Retención %</label><input type="number" id="recibo-retencion-modal-pct" min="0" step="0.01" placeholder="ej. 2.5"></div>
+          </div>
+          <div class="form-foot"><span></span><button type="button" class="btn-primary" id="recibo-iva-modal-aplicar">Aplicar</button></div>
         </div>
       </div>
       <div class="card">

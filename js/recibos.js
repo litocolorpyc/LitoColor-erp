@@ -3,6 +3,7 @@ import { DB } from './store.js';
 import { toast, fmtCOP, fechaHoyLocal } from './helpers.js';
 import { getCurrentUser } from './auth.js';
 import { renderMovimientosRecientes, renderResumenCostosMes } from './costos.js';
+import { renderInventario } from './inventario.js';
 
 if(typeof pdfjsLib !== 'undefined'){
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -153,6 +154,64 @@ function tipoDeConcepto(conceptoId){
 }
 let itemsActuales = [];
 let cabeceraTotalesActuales = {};
+// IVA%/Retención% de ESTE documento — se piden una sola vez (modal) y se
+// aplican a todas sus líneas para calcular el costo neto que se descarga
+// al inventario (pedido: "el costo del material se ingresa al inventario
+// como valor neto, descontando IVA y sumando retención").
+let ivaPctAplicado = 0;
+let retencionPctAplicado = 0;
+
+// unitario YA INCLUYE IVA → se le quita el IVA y se le suma la retención.
+function calcularNeto(valorUnitario){
+  const v = valorUnitario || 0;
+  return v - (v * ivaPctAplicado / 100) + (v * retencionPctAplicado / 100);
+}
+
+function normalizarNombreMaterial(s){
+  return String(s||'').toLowerCase().trim().replace(/\s+/g,' ');
+}
+
+// Intenta ligar la descripción de una línea a un material real del
+// inventario (Materias primas o Materiales por área). Solo devuelve una
+// coincidencia si es ÚNICA — si el texto calza con más de un material a
+// la vez, mejor dejarlo sin marcar y que la persona lo revise a mano que
+// arriesgarse a actualizar el material equivocado.
+function buscarMaterialParaLinea(descripcion){
+  if(!descripcion) return null;
+  const texto = normalizarNombreMaterial(descripcion);
+  const mpExacta = DB.materias_primas.find(m => normalizarNombreMaterial(m.nombre) === texto);
+  if(mpExacta) return { tabla:'materias_primas', key: mpExacta.codigo };
+  const insExactos = DB.insumos_area.filter(m => normalizarNombreMaterial(m.nombre) === texto);
+  if(insExactos.length === 1) return { tabla:'insumos_area', key: String(insExactos[0].id) };
+  if(insExactos.length > 1) return null; // mismo nombre en varias áreas — ambiguo, que elijan a mano
+
+  const candidatosMP = DB.materias_primas.filter(m => {
+    const n = normalizarNombreMaterial(m.nombre);
+    return texto.includes(n) || n.includes(texto);
+  });
+  const candidatosIns = DB.insumos_area.filter(m => {
+    const n = normalizarNombreMaterial(m.nombre);
+    return texto.includes(n) || n.includes(texto);
+  });
+  if(candidatosMP.length + candidatosIns.length === 1){
+    if(candidatosMP.length) return { tabla:'materias_primas', key: candidatosMP[0].codigo };
+    return { tabla:'insumos_area', key: String(candidatosIns[0].id) };
+  }
+  return null;
+}
+
+function opcionesMaterialInventario(tablaSel, keySel){
+  const opts = ['<option value="">— sin coincidencia, elegí uno —</option>'];
+  DB.materias_primas.filter(m=>m.activo!==false).forEach(m => {
+    const sel = tablaSel==='materias_primas' && keySel===m.codigo;
+    opts.push(`<option value="materias_primas|${m.codigo}"${sel?' selected':''}>📄 ${m.nombre} (${m.codigo})</option>`);
+  });
+  DB.insumos_area.filter(m=>m.activo!==false).forEach(m => {
+    const sel = tablaSel==='insumos_area' && keySel===String(m.id);
+    opts.push(`<option value="insumos_area|${m.id}"${sel?' selected':''}>🧰 ${m.nombre} (${m.area||'—'})</option>`);
+  });
+  return opts.join('');
+}
 
 function opcionesOrden(ordenSeleccionada){
   const activas = DB.opp_ordenes.slice().sort((a,b) => b.orden - a.orden).slice(0, 200);
@@ -167,10 +226,19 @@ function opcionesConcepto(conceptoIdSeleccionado){
     activos.map(c => `<option value="${c.id}"${c.id===conceptoIdSeleccionado?' selected':''}>${c.tipo} — ${c.nombre}</option>`).join('');
 }
 
+// Recalcula el costo neto de cada línea con el IVA%/Retención% vigente
+// de este documento — se llama al aplicar el modal y cada vez que cambia
+// un "Vr. Unit." a mano.
+function recalcularNetos(){
+  itemsActuales.forEach(it => { it.valor_neto_unitario = calcularNeto(it.valor_unitario); });
+}
+
 function renderTablaItems(){
   const tbody = document.querySelector('#tbl-recibo-items tbody');
-  tbody.innerHTML = itemsActuales.map((it, i) => `
-    <tr data-i="${i}">
+  tbody.innerHTML = itemsActuales.map((it, i) => {
+    const sinMaterial = !it.material_tabla || !it.material_key;
+    return `
+    <tr data-i="${i}" style="${sinMaterial?'background:var(--bg-warning,rgba(163,45,45,.05))':''}">
       <td><input type="text" class="ri-codigo" value="${it.codigo||''}" style="width:36px"></td>
       <td><input type="text" class="ri-desc" value="${it.descripcion||''}" style="width:100%;min-width:160px"></td>
       <td><input type="number" class="ri-cantidad num" value="${it.cantidad||0}" style="width:70px"></td>
@@ -178,13 +246,16 @@ function renderTablaItems(){
       <td><input type="number" class="ri-iva num" value="${it.iva_pct||0}" style="width:55px"></td>
       <td><input type="number" class="ri-reten num" value="${it.retencion_pct||0}" style="width:55px"></td>
       <td><input type="number" class="ri-credito num" value="${it.valor_credito||0}" style="width:100px"></td>
+      <td class="num" title="unitario − IVA% + Retención% de esta factura">${fmtCOP(it.valor_neto_unitario||0)}</td>
+      <td><select class="ri-material" title="${sinMaterial?'Sin coincidencia — elegí el material real para que actualice el inventario':'Se va a sumar la cantidad al stock y actualizar el costo por unidad de este material'}">${opcionesMaterialInventario(it.material_tabla, it.material_key)}</select></td>
       <td><select class="ri-orden">${opcionesOrden(it.orden)}</select></td>
       <td><input type="number" class="ri-suborden" value="${it.suborden||''}" placeholder="sub." title="Suborden / pieza (ej. el 2 de OP5955-2)" style="width:55px"></td>
       <td><select class="ri-concepto">${opcionesConcepto(it.concepto_id)}</select></td>
       <td><select class="ri-tipo"><option value="">—</option><option value="Fijo"${it.tipo_costo==='Fijo'?' selected':''}>Fijo</option><option value="Variable"${it.tipo_costo==='Variable'?' selected':''}>Variable</option></select></td>
       <td><input type="text" class="ri-obs" value="${it.observacion||''}" placeholder="opcional" style="width:100%;min-width:120px"></td>
       <td><button type="button" class="row-btn row-btn-danger ri-del">✕</button></td>
-    </tr>`).join('') || '<tr><td colspan="13" style="text-align:center;color:var(--ink-faint)">Sin líneas todavía — agrega una manualmente</td></tr>';
+    </tr>`;
+  }).join('') || '<tr><td colspan="15" style="text-align:center;color:var(--ink-faint)">Sin líneas todavía — agrega una manualmente</td></tr>';
 
   tbody.querySelectorAll('tr').forEach(tr => {
     const i = parseInt(tr.dataset.i, 10);
@@ -192,10 +263,22 @@ function renderTablaItems(){
     tr.querySelector('.ri-codigo').addEventListener('input', e => itemsActuales[i].codigo = e.target.value);
     tr.querySelector('.ri-desc').addEventListener('input', e => itemsActuales[i].descripcion = e.target.value);
     tr.querySelector('.ri-cantidad').addEventListener('input', e => { itemsActuales[i].cantidad = parseFloat(e.target.value)||0; actualizarResumen(); });
-    tr.querySelector('.ri-unitario').addEventListener('input', e => { itemsActuales[i].valor_unitario = parseFloat(e.target.value)||0; actualizarResumen(); });
+    tr.querySelector('.ri-unitario').addEventListener('input', e => {
+      itemsActuales[i].valor_unitario = parseFloat(e.target.value)||0;
+      itemsActuales[i].valor_neto_unitario = calcularNeto(itemsActuales[i].valor_unitario);
+      tr.querySelector('td.num[title]').textContent = fmtCOP(itemsActuales[i].valor_neto_unitario);
+      actualizarResumen();
+    });
     tr.querySelector('.ri-iva').addEventListener('input', e => { itemsActuales[i].iva_pct = parseFloat(e.target.value)||0; actualizarResumen(); });
     tr.querySelector('.ri-reten').addEventListener('input', e => { itemsActuales[i].retencion_pct = parseFloat(e.target.value)||0; actualizarResumen(); });
     tr.querySelector('.ri-credito').addEventListener('input', e => { itemsActuales[i].valor_credito = parseFloat(e.target.value)||0; actualizarResumen(); });
+    tr.querySelector('.ri-material').addEventListener('change', e => {
+      const [tabla, key] = e.target.value ? e.target.value.split('|') : [null, null];
+      itemsActuales[i].material_tabla = tabla;
+      itemsActuales[i].material_key = key;
+      tr.style.background = (tabla && key) ? '' : 'var(--bg-warning,rgba(163,45,45,.05))';
+      actualizarResumen();
+    });
     tr.querySelector('.ri-orden').addEventListener('change', e => itemsActuales[i].orden = e.target.value ? parseInt(e.target.value,10) : null);
     tr.querySelector('.ri-suborden').addEventListener('input', e => itemsActuales[i].suborden = e.target.value ? parseInt(e.target.value,10) : null);
     tr.querySelector('.ri-concepto').addEventListener('change', e => {
@@ -218,9 +301,11 @@ function actualizarResumen(){
   const baseAprox = itemsActuales.reduce((s,it)=>s+((it.valor_unitario||0)*(it.cantidad||0)),0);
   const conOrden = itemsActuales.filter(it => it.orden).length;
   const conConcepto = itemsActuales.filter(it => it.concepto_id).length;
+  const conMaterial = itemsActuales.filter(it => it.material_tabla && it.material_key).length;
   hint.innerHTML = `Total de líneas: ${fmtCOP(totalItems)} · Base aprox. (unitario × cantidad): ${fmtCOP(baseAprox)}`
     + (conOrden ? ` · ${conOrden}/${itemsActuales.length} línea(s) con orden asociada` : '')
-    + ` · ${conConcepto}/${itemsActuales.length} línea(s) con concepto de costo (solo esas cuentan en Costos)`;
+    + ` · ${conConcepto}/${itemsActuales.length} línea(s) con concepto de costo (solo esas cuentan en Costos)`
+    + ` · ${conMaterial}/${itemsActuales.length} línea(s) van a actualizar inventario`;
 }
 
 // ---------- flujo principal ----------
@@ -258,6 +343,36 @@ async function manejarArchivo(file){
     itemsActuales = [];
     cabeceraTotalesActuales = {};
   }
+
+  // Intenta ligar cada línea a un material real del inventario — la
+  // persona revisa/corrige las que queden sin coincidencia (resaltadas)
+  // antes de guardar. Ver buscarMaterialParaLinea.
+  itemsActuales.forEach(it => {
+    const match = buscarMaterialParaLinea(it.descripcion);
+    it.material_tabla = match ? match.tabla : null;
+    it.material_key = match ? match.key : null;
+  });
+
+  mostrarModalIva();
+}
+
+// Pide el IVA%/Retención% de ESTE documento (una vez, se aplica a todas
+// las líneas) — aparece apenas se carga el archivo, antes de mostrar la
+// tabla de revisión final con los costos netos ya calculados.
+function mostrarModalIva(){
+  document.getElementById('recibo-iva-modal-pct').value = ivaPctAplicado || '';
+  document.getElementById('recibo-retencion-modal-pct').value = retencionPctAplicado || '';
+  document.getElementById('recibo-iva-modal').style.display = 'flex';
+  document.getElementById('recibo-iva-modal-pct').focus();
+}
+
+function aplicarModalIva(){
+  ivaPctAplicado = parseFloat(document.getElementById('recibo-iva-modal-pct').value) || 0;
+  retencionPctAplicado = parseFloat(document.getElementById('recibo-retencion-modal-pct').value) || 0;
+  document.getElementById('recibo-iva-pct').value = ivaPctAplicado;
+  document.getElementById('recibo-retencion-pct').value = retencionPctAplicado;
+  recalcularNetos();
+  document.getElementById('recibo-iva-modal').style.display = 'none';
   renderTablaItems();
   actualizarResumen();
 }
@@ -273,6 +388,10 @@ function limpiarFormularioRecibo(){
   document.getElementById('recibo-tercero').value = '';
   itemsActuales = [];
   cabeceraTotalesActuales = {};
+  ivaPctAplicado = 0;
+  retencionPctAplicado = 0;
+  document.getElementById('recibo-iva-pct').value = '';
+  document.getElementById('recibo-retencion-pct').value = '';
   renderTablaItems();
   actualizarResumen();
   document.getElementById('recibo-review').style.display = 'none';
@@ -315,6 +434,8 @@ async function guardarRecibo(){
       total_bruto: cabeceraTotalesActuales.total_bruto ?? null,
       iva: cabeceraTotalesActuales.iva ?? null,
       retefuente: cabeceraTotalesActuales.retefuente ?? null,
+      iva_pct_aplicado: ivaPctAplicado || null,
+      retencion_pct_aplicado: retencionPctAplicado || null,
       archivo_nombre: document.getElementById('recibo-file').files[0]?.name || null,
       cargado_por: user ? user.nombre : null
     }]).select();
@@ -326,10 +447,47 @@ async function guardarRecibo(){
       cantidad: it.cantidad || null, valor_unitario: it.valor_unitario || null,
       iva_pct: it.iva_pct || null, retencion_pct: it.retencion_pct || null,
       valor_debito: it.valor_debito || 0, valor_credito: it.valor_credito || 0,
+      valor_neto_unitario: it.valor_neto_unitario || null,
+      material_tabla: it.material_tabla || null, material_key: it.material_key || null,
       orden: it.orden || null, suborden: it.suborden || null, observacion: it.observacion || null
     }));
     const { error: errItems } = await sb.from('recibos_caja_items').insert(payloadItems);
     if(errItems) throw errItems;
+
+    // Pedido: "el costo del material se ingresa al inventario como valor
+    // neto" — cada línea con un material ligado y cantidad > 0 suma esa
+    // cantidad al stock y deja el costo por unidad en el valor neto recién
+    // calculado (unitario − IVA% + Retención%). Las líneas sin material
+    // ligado (sin coincidencia, sin revisar) NO tocan inventario.
+    let materialesActualizados = 0;
+    const materialesFallidos = [];
+    for(const it of itemsActuales){
+      if(!it.material_tabla || !it.material_key || !it.cantidad || it.cantidad <= 0) continue;
+      try{
+        if(it.material_tabla === 'materias_primas'){
+          const mat = DB.materias_primas.find(m => m.codigo === it.material_key);
+          if(!mat) throw new Error('material no encontrado en memoria');
+          const nuevoStock = (mat.stock_actual || 0) + it.cantidad;
+          const { data, error } = await sb.from('materias_primas')
+            .update({ stock_actual: nuevoStock, costo_unitario: it.valor_neto_unitario }).eq('codigo', it.material_key).select();
+          if(error) throw error;
+          Object.assign(mat, data[0]);
+        } else {
+          const mat = DB.insumos_area.find(m => String(m.id) === it.material_key);
+          if(!mat) throw new Error('material no encontrado en memoria');
+          const nuevoStock = (mat.stock_actual || 0) + it.cantidad;
+          const { data, error } = await sb.from('insumos_area')
+            .update({ stock_actual: nuevoStock, costo_unitario: it.valor_neto_unitario }).eq('id', mat.id).select();
+          if(error) throw error;
+          Object.assign(mat, data[0]);
+        }
+        materialesActualizados++;
+      }catch(err){
+        console.error('No se pudo actualizar el inventario de "' + it.descripcion + '":', err);
+        materialesFallidos.push(it.descripcion || it.codigo || '(sin descripción)');
+      }
+    }
+    if(materialesActualizados) renderInventario();
 
     // Esto es lo que faltaba antes: sin esto, el documento quedaba guardado
     // pero no contaba como costo real en ningún reporte. Cada línea con un
@@ -362,7 +520,10 @@ async function guardarRecibo(){
     const sinConcepto = itemsActuales.length - conCosto.length;
     toast('Documento ' + (numero || reciboId) + ' guardado con ' + payloadItems.length + ' línea(s)'
       + (movimientosCreados ? ` · ${movimientosCreados} línea(s) ya cuentan como costo real` : '')
-      + (sinConcepto ? ` · ${sinConcepto} sin concepto, no se contaron en Costos` : ''));
+      + (sinConcepto ? ` · ${sinConcepto} sin concepto, no se contaron en Costos` : '')
+      + (materialesActualizados ? ` · ${materialesActualizados} material(es) de inventario actualizados (stock + costo neto)` : '')
+      + (materialesFallidos.length ? ` · ⚠️ no se pudo actualizar: ${materialesFallidos.join(', ')}` : ''),
+      materialesFallidos.length ? 7000 : undefined);
     DB.recibos_caja.unshift(recibo[0]);
     limpiarFormularioRecibo();
   }catch(err){
@@ -381,7 +542,7 @@ export function initRecibosCaja(){
     if(file) manejarArchivo(file);
   });
   document.getElementById('recibo-add-item').addEventListener('click', () => {
-    itemsActuales.push({ codigo:'', descripcion:'', cantidad:0, valor_unitario:0, iva_pct:0, retencion_pct:0, valor_credito:0, valor_debito:0, orden:null, suborden:null, observacion:'', concepto_id:null, tipo_costo:null });
+    itemsActuales.push({ codigo:'', descripcion:'', cantidad:0, valor_unitario:0, iva_pct:0, retencion_pct:0, valor_credito:0, valor_debito:0, valor_neto_unitario:0, material_tabla:null, material_key:null, orden:null, suborden:null, observacion:'', concepto_id:null, tipo_costo:null });
     document.getElementById('recibo-review').style.display = '';
     renderTablaItems();
     actualizarResumen();
@@ -391,4 +552,6 @@ export function initRecibosCaja(){
     if(itemsActuales.length && !confirm('¿Limpiar el formulario? Se perderá lo que hayas leído o escrito sin guardar.')) return;
     limpiarFormularioRecibo();
   });
+  document.getElementById('recibo-editar-iva').addEventListener('click', mostrarModalIva);
+  document.getElementById('recibo-iva-modal-aplicar').addEventListener('click', aplicarModalIva);
 }
