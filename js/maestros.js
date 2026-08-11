@@ -123,6 +123,7 @@ export function renderMaestros(){
   actividadesCtl.render();
   motivosPausaCtl.render();
   subprocesosCtl.render();
+  categoriasMateriaPrimaCtl.render();
   materiasCtl.render();
   insumosCtl.render();
   clientesCtl.render();
@@ -131,6 +132,81 @@ export function renderMaestros(){
   piezasProductoCtl.render();
   poblarDatalistProductosMaestro();
   poblarDatalistProcesosMaestro();
+  poblarSelectCategoriaMateriaPrima();
+  poblarSelectMaterialAreas();
+}
+
+// ---------- materias primas: categoría (select) y áreas que la consumen ----------
+// Categoría: antes era una lista fija de <option> en el HTML; ahora sale
+// del maestro "Categorías de materia prima" (solo las activas).
+function poblarSelectCategoriaMateriaPrima(){
+  const sel = document.getElementById('m-mp-categoria');
+  if(!sel) return;
+  const valorPrevio = sel.value;
+  sel.innerHTML = DB.categorias_materia_prima.filter(c=>c.activo!==false).map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('');
+  if(Array.from(sel.options).some(o=>o.value===valorPrevio)) sel.value = valorPrevio;
+}
+
+// Áreas que consumen: relación N:M aparte (materias_primas_areas) — una
+// materia prima SÍ puede ser consumida por varias áreas, a diferencia de
+// la categoría. Es un widget separado del catálogo genérico porque no es
+// "agregar una fila", es "marcar/desmarcar áreas para la fila elegida".
+function poblarSelectMaterialAreas(){
+  const sel = document.getElementById('m-mpa-material');
+  if(!sel) return;
+  const valorPrevio = sel.value;
+  sel.innerHTML = DB.materias_primas.map(m => `<option value="${m.codigo}">${m.codigo} — ${m.nombre}</option>`).join('');
+  if(Array.from(sel.options).some(o=>o.value===valorPrevio)) sel.value = valorPrevio;
+  poblarChecksAreasMaterial();
+}
+
+function poblarChecksAreasMaterial(){
+  const cont = document.getElementById('m-mpa-checks');
+  const sel = document.getElementById('m-mpa-material');
+  if(!cont || !sel) return;
+  const codigo = sel.value;
+  const actuales = new Set(DB.materias_primas_areas.filter(x => x.materia_prima_codigo === codigo).map(x => x.area));
+  cont.innerHTML = listaAreasDisponibles().map(a =>
+    `<label><input type="checkbox" value="${a}"${actuales.has(a)?' checked':''}> ${a}</label>`
+  ).join('') || '<span class="card-hint">no hay áreas cargadas todavía (Máquinas/Actividades)</span>';
+  document.getElementById('m-mpa-hint').textContent = '';
+}
+
+async function guardarAreasMaterial(){
+  const sel = document.getElementById('m-mpa-material');
+  const codigo = sel.value;
+  if(!codigo){ toast('Elige una materia prima primero'); return; }
+  const marcadas = new Set(Array.from(document.querySelectorAll('#m-mpa-checks input:checked')).map(c => c.value));
+  const actuales = new Set(DB.materias_primas_areas.filter(x => x.materia_prima_codigo === codigo).map(x => x.area));
+  const aAgregar = [...marcadas].filter(a => !actuales.has(a));
+  const aQuitar = DB.materias_primas_areas.filter(x => x.materia_prima_codigo === codigo && !marcadas.has(x.area));
+
+  const btn = document.getElementById('m-mpa-save');
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  try{
+    if(aAgregar.length){
+      const { data, error } = await sb.from('materias_primas_areas')
+        .insert(aAgregar.map(area => ({ materia_prima_codigo: codigo, area }))).select();
+      if(error) throw error;
+      DB.materias_primas_areas.push(...data);
+    }
+    if(aQuitar.length){
+      const { error } = await sb.from('materias_primas_areas').delete().in('id', aQuitar.map(x => x.id));
+      if(error) throw error;
+      aQuitar.forEach(x => {
+        const idx = DB.materias_primas_areas.findIndex(y => y.id === x.id);
+        if(idx >= 0) DB.materias_primas_areas.splice(idx, 1);
+      });
+    }
+    toast('Áreas actualizadas');
+    document.getElementById('m-mpa-hint').textContent = 'guardado ✓';
+    materiasCtl.render();
+  }catch(err){
+    console.error(err);
+    toast('No se pudo guardar — revisa la consola');
+  }finally{
+    btn.disabled = false; btn.textContent = 'Guardar áreas';
+  }
 }
 
 // Sugerencias de "Proceso" para el maestro "Subprocesos" — las áreas que ya
@@ -150,7 +226,7 @@ function poblarDatalistProductosMaestro(){
   dl.innerHTML = DB.productos.filter(p=>p.activo!==false).map(p => `<option value="${p.nombre}">`).join('');
 }
 
-let empleadosCtl, maquinasCtl, actividadesCtl, motivosPausaCtl, subprocesosCtl, materiasCtl, insumosCtl, clientesCtl, proveedoresCtl, productosCtl, piezasProductoCtl;
+let empleadosCtl, maquinasCtl, actividadesCtl, motivosPausaCtl, subprocesosCtl, categoriasMateriaPrimaCtl, materiasCtl, insumosCtl, clientesCtl, proveedoresCtl, productosCtl, piezasProductoCtl;
 
 export function initMaestros(onChange){
   empleadosCtl = wireCatalog({
@@ -213,6 +289,20 @@ export function initMaestros(onChange){
     onChange
   });
 
+  // Una materia prima pertenece a UNA sola categoría — sigue siendo el
+  // campo de texto materias_primas.categoria de siempre, pero ahora el
+  // <select> se llena desde este maestro en vez de una lista fija en el
+  // HTML (ver poblarSelectCategoriaMateriaPrima).
+  categoriasMateriaPrimaCtl = wireCatalog({
+    table: 'categorias_materia_prima', key: 'id', data: DB.categorias_materia_prima, tableSel: '#tbl-m-cat-materia',
+    saveBtnId: 'm-catmp-save', modeId: 'm-catmp-mode', addLabel: 'Agregar categoría',
+    fields: [
+      { id:'m-catmp-nombre', col:'nombre', required:true }
+    ],
+    renderCols: r => [r.nombre],
+    onChange: () => { if(onChange) onChange(); poblarSelectCategoriaMateriaPrima(); }
+  });
+
   materiasCtl = wireCatalog({
     table: 'materias_primas', key: 'codigo', data: DB.materias_primas, tableSel: '#tbl-m-materias',
     saveBtnId: 'm-mp-save', modeId: 'm-mp-mode', addLabel: 'Agregar materia prima',
@@ -229,11 +319,15 @@ export function initMaestros(onChange){
     ],
     renderCols: r => {
       const bajo = (r.stock_minimo||0) > 0 && (r.stock_actual||0) < r.stock_minimo;
+      // Una materia prima SÍ puede consumirla más de un área — ver el
+      // bloque "Áreas que consumen una materia prima" más abajo.
+      const areas = DB.materias_primas_areas.filter(x => x.materia_prima_codigo === r.codigo).map(x => x.area);
       return [r.codigo, r.nombre, r.categoria||'—', r.pliego_ancho?r.pliego_ancho+'x'+r.pliego_alto:'—',
         `<span style="${bajo?'color:var(--bad);font-weight:600':''}">${fmtNum(r.stock_actual)} ${r.unidad||'pliegos'}</span>${bajo?' ⚠':''}`,
-        r.costo_unitario!=null?fmtCOP(r.costo_unitario):'—'];
+        r.costo_unitario!=null?fmtCOP(r.costo_unitario):'—',
+        areas.length ? areas.join(', ') : '<span class="card-hint">ninguna configurada</span>'];
     },
-    onChange
+    onChange: () => { if(onChange) onChange(); poblarSelectMaterialAreas(); }
   });
 
   insumosCtl = wireCatalog({
@@ -310,4 +404,11 @@ export function initMaestros(onChange){
   });
 
   poblarDatalistProductosMaestro();
+  poblarSelectCategoriaMateriaPrima();
+  poblarSelectMaterialAreas();
+
+  const selMaterial = document.getElementById('m-mpa-material');
+  if(selMaterial) selMaterial.addEventListener('change', poblarChecksAreasMaterial);
+  const btnGuardarAreas = document.getElementById('m-mpa-save');
+  if(btnGuardarAreas) btnGuardarAreas.addEventListener('click', guardarAreasMaterial);
 }

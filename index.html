@@ -62,6 +62,7 @@
         <button class="tab-btn" data-tab="m-actividades" role="tab">Actividades</button>
         <button class="tab-btn" data-tab="m-motivos-pausa" role="tab">Motivos de pausa</button>
         <button class="tab-btn" data-tab="m-subprocesos" role="tab">Subprocesos</button>
+        <button class="tab-btn" data-tab="m-cat-materia" role="tab">Categorías de materia prima</button>
         <button class="tab-btn" data-tab="m-materias" role="tab">Materias primas</button>
         <button class="tab-btn" data-tab="m-insumos" role="tab">Materiales por área</button>
         <button class="tab-btn" data-tab="m-piezas-producto" role="tab">Piezas por producto</button>
@@ -669,6 +670,22 @@
       </div>
     </section>
 
+    <section class="tab-panel" id="panel-m-cat-materia">
+      <div class="card">
+        <div class="card-head"><h3>Categorías de materia prima</h3><span class="card-hint">papel, cartón/cartulina, laminado, argolla, pegante, etc. — cada materia prima pertenece a una sola · "Retirar" no borra nada</span></div>
+        <div class="form-row">
+          <div class="field"><label>Categoría</label><input type="text" id="m-catmp-nombre" placeholder="ej. Laminado"></div>
+        </div>
+        <div class="form-foot"><span id="m-catmp-mode"></span><button type="button" class="btn-primary" id="m-catmp-save">Agregar categoría</button></div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table id="tbl-m-cat-materia">
+            <thead><tr><th>Categoría</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <section class="tab-panel" id="panel-m-materias">
       <div class="card">
         <div class="card-head"><h3>Materias primas</h3><span class="card-hint">papel, laminados, argollas, pegantes — ya viene precargado con 226</span></div>
@@ -677,8 +694,8 @@
           <div class="field"><label>Nombre</label><input type="text" id="m-mp-nombre" placeholder="ej. Propalcote 150 gr C2S 70x100"></div>
         </div>
         <div class="form-row">
-          <div class="field"><label>Categoría</label>
-            <select id="m-mp-categoria"><option>Papel</option><option>Carton/Cartulina</option><option>Laminado</option><option>Argolla</option><option>Pegante</option><option>Papel quimico (NCR)</option><option>Otro</option></select>
+          <div class="field"><label>Categoría <span class="card-hint">(desde Maestros &gt; Categorías de materia prima)</span></label>
+            <select id="m-mp-categoria"></select>
           </div>
           <div class="field"><label>Pliego (ancho x alto cm, opcional)</label>
             <div style="display:flex;gap:6px">
@@ -697,10 +714,19 @@
         <div class="form-foot"><span id="m-mp-mode"></span><button type="button" class="btn-primary" id="m-mp-save">Agregar materia prima</button></div>
         <div class="table-wrap" style="margin-top:12px;max-height:420px;overflow-y:auto">
           <table id="tbl-m-materias">
-            <thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Pliego</th><th>Stock</th><th>Costo/unidad</th><th></th></tr></thead>
+            <thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Pliego</th><th>Stock</th><th>Costo/unidad</th><th>Áreas que la consumen</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Áreas que consumen una materia prima</h3><span class="card-hint">una materia prima puede ser consumida por varias áreas — quedan disponibles como "Insumo consumido" en Registrar</span></div>
+        <div class="form-row" style="align-items:flex-end">
+          <div class="field full"><label>Materia prima</label><select id="m-mpa-material"></select></div>
+        </div>
+        <div id="m-mpa-checks" class="mpa-checks"></div>
+        <div class="form-foot"><span id="m-mpa-hint" class="card-hint"></span><button type="button" class="btn-primary" id="m-mpa-save">Guardar áreas</button></div>
       </div>
     </section>
 
@@ -940,6 +966,8 @@
         <p>En Maestros encontrarás <b>"Materiales por área"</b> (qué insumo consume cada área — planchas en Litografía, colbón en Terminado, etc., usado en Registrar), <b>"Actividades"</b> (las opciones de "Actividad" que ve el operario al registrar trabajo en cada área — ahí se agregan, editan o retiran), <b>"Motivos de pausa"</b> (las causas que el operario elige al pausar una actividad — desayuno, almuerzo, cambio de actividad, daño de máquina, etc.), <b>"Subprocesos"</b> (los pasos internos que tiene un proceso/área — ej. "Terminado" de un sobre son varios pasos: doblar pestañas, engomar, cerrar; mientras un área tenga subprocesos cargados acá, no se da por terminada hasta que TODOS queden hechos, ver más abajo) y <b>"Piezas por producto"</b> (qué piezas suele tener cada producto — se completa sola, pero también se puede editar ahí directamente).</p>
         <h4>Subprocesos</h4>
         <p>Un proceso (área) puede tener varios pasos que se hacen uno después del otro y cada uno se toma su tiempo — por ejemplo, el "Terminado" de un sobre no es un solo paso: primero se doblan las pestañas, luego se engoma, luego se cierra. Si cargas esos pasos en el maestro <b>"Subprocesos"</b> (Proceso = el área exacta, ej. "Terminado"; Subproceso = el paso, ej. "Engomado"), el operario va a tener que elegir cuál subproceso está haciendo al iniciar o empezar una actividad de esa área — y esa área de la pieza <b>NO</b> se va a dar por terminada (ni la orden va a llegar a 100%/Completada) hasta que <b>TODOS</b> los subprocesos activos de esa área tengan al menos un registro terminado. Un área sin subprocesos cargados sigue funcionando exactamente igual que siempre: con un solo registro terminado ya cuenta como completa. El estado de "totalmente terminado" lo puede marcar tanto el operario (al finalizar cada subproceso) como el Jefe de Producción/Gerencia/Admin corrigiendo un registro.</p>
+        <h4>Categorías de materia prima, y qué áreas la consumen</h4>
+        <p>Cada materia prima (Maestros &gt; Materias primas) pertenece a <b>una sola</b> categoría — antes era una lista fija (Papel, Cartón/Cartulina, Laminado, etc.), ahora sale del maestro <b>"Categorías de materia prima"</b>, así se pueden agregar nuevas sin tocar código. En cambio, una misma materia prima <b>SÍ puede ser consumida por varias áreas</b> a la vez (ej. un mismo pegante en Terminado y en Encuadernación) — eso se configura aparte, en la tarjeta "Áreas que consumen una materia prima" (abajo de la tabla de Materias primas): elegís la materia prima, marcás las áreas, y le das "Guardar áreas". Las áreas que marques ahí van a aparecer como opción de "Insumo consumido" en Registrar para esa área.</p>
         <h4>Calendario</h4>
         <p>Línea de tiempo por máquina (6am-8pm). Barras de color = actividad real; rayado = en curso ahora.</p>
         <h4>Alertas</h4>
@@ -948,7 +976,7 @@
 
       <div class="card" id="ayuda-admin">
         <div class="card-head"><h3>Para Administradora</h3></div>
-        <p>Todos los maestros (Empleados, Máquinas, Actividades, Motivos de pausa, Subprocesos, Materias primas, Materiales por área, Clientes, Proveedores, Productos, Piezas por producto) funcionan igual: llena el formulario y "Agregar"; "Editar" carga la fila para corregirla; "Retirar" desactiva sin borrar nada (y se puede "Reactivar").</p>
+        <p>Todos los maestros (Empleados, Máquinas, Actividades, Motivos de pausa, Subprocesos, Categorías de materia prima, Materias primas, Materiales por área, Clientes, Proveedores, Productos, Piezas por producto) funcionan igual: llena el formulario y "Agregar"; "Editar" carga la fila para corregirla; "Retirar" desactiva sin borrar nada (y se puede "Reactivar"). La excepción es "Áreas que consumen una materia prima" (dentro de Materias primas), que no agrega filas sino que marca/desmarca casillas.</p>
         <p><b>Proveedores:</b> ahora tienen un campo "Tipo de proveedor" (ej. "Proveedor de Insumos", "Proveedor de Maquila") — es texto libre con sugerencias, no una lista cerrada. Vale la pena categorizar los que ya existen: eso hace que, al elegir un proveedor desde una orden, el sistema sugiera primero el tipo más relevante para ese trabajo.</p>
         <p><b>Importar recibo de caja:</b> en Costos > Registrar un costo hay una tarjeta para subir el PDF del recibo de caja que descarga la administradora desde Siigo. El sistema intenta leer el número de recibo, fecha, NIT y cada línea automáticamente — siempre se revisa/corrige en una tabla antes de guardar, y por cada línea se puede elegir a qué orden se asocia y escribir una observación. <b>Solo funciona automático con el PDF real</b> (el que tiene texto, no una foto); con fotos o capturas, la tabla se llena a mano.</p>
       </div>

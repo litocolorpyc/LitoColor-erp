@@ -132,7 +132,17 @@ export function populateReg(){
 // Arma el <select> de insumos disponibles para el área de esta actividad,
 // con una opción "Otro" para cuando el insumo no está en el maestro todavía.
 function materialSelectOptionsHTML(area, valorActual, papelSugerido){
-  const opciones = DB.insumos_area.filter(m => m.area === area && m.activo !== false);
+  const opcionesInsumo = DB.insumos_area.filter(m => m.area === area && m.activo !== false);
+  // Materias primas (papel, cartulina, laminado, argolla, pegante, etc.)
+  // vinculadas a esta área desde Maestros > Materias primas > "Áreas que
+  // consumen" — una materia prima puede quedar disponible en varias áreas
+  // a la vez (a diferencia de su categoría, que es una sola). Antes SOLO
+  // Guillotina/Corte inicial "veían" materias primas, y únicamente el
+  // papel puntual de esa orden (ver "sugerido" más abajo, que sigue igual).
+  const codigosVinculados = new Set(DB.materias_primas_areas.filter(x => x.area === area).map(x => x.materia_prima_codigo));
+  const nombresYaListados = new Set(opcionesInsumo.map(m => m.nombre));
+  const opcionesMP = DB.materias_primas.filter(m => codigosVinculados.has(m.codigo) && !nombresYaListados.has(m.nombre));
+  const opciones = [...opcionesInsumo, ...opcionesMP];
   const yaListado = opciones.some(m => m.nombre === papelSugerido);
   // En Guillotina/Corte inicial, el papel que ya quedó definido en la
   // orden para esa pieza es el insumo más probable — se sugiere de
