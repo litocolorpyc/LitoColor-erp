@@ -3,7 +3,7 @@
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
 import { toast, fmtNum, fechaHoyLocal } from './helpers.js';
-import { getOrdenesSeleccionables } from './ordenes.js';
+import { getOrdenesSeleccionables, subprocesosDeArea } from './ordenes.js';
 
 const timerIntervals = new Map();
 const sessionRates = new Map();
@@ -22,7 +22,8 @@ function renderRecentReg(){
   if(hint) hint.textContent = 'de ' + nombre;
   const recent = DB.produccion.filter(r => r.operario === nombre).slice(0,12);
   tbody.innerHTML = recent.map(r=>{
-    const estado = r.horaFin ? '<span class="estado-chip done">✓ Completo</span>' : '<span class="estado-chip estado-chip-warn">⏱ En curso</span>';
+    const estado = !r.horaIni ? '<span class="estado-chip pending">📌 Asignada</span>'
+      : (r.horaFin ? '<span class="estado-chip done">✓ Completo</span>' : '<span class="estado-chip estado-chip-warn">⏱ En curso</span>');
     const pieza = r.op ? r.op : (r.orden ? '<span style="color:var(--ink-faint)">sin pieza</span>' : '—');
     return `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td>${r.orden??'—'}</td><td>${pieza}</td><td>${estado}</td></tr>`;
   }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--ink-faint)">Sin registros todavía</td></tr>';
@@ -37,18 +38,47 @@ function populateOrdenSelect(){
   if(activas.some(o => String(o.orden) === valorPrevio)) sel.value = valorPrevio;
 }
 
-function populateActividadReg(){
-  const area = document.getElementById('r-area').value;
-  const actSel = document.getElementById('r-actividad');
+// Opciones de Actividad/Máquina para un área — se reutilizan tanto en el
+// formulario de "Iniciar actividad" como en la tarjeta de una actividad
+// ASIGNADA que el operario todavía no empezó (ver runningCardPendienteHTML).
+function actividadOptionsHTML(area){
   const acts = DB.actividades.filter(a=>a.area===area && a.activo!==false);
-  actSel.innerHTML = acts.map(a=>`<option value="${a.etiqueta}">${a.etiqueta}</option>`).join('') || '<option value="">Sin actividades para esta área</option>';
+  return acts.map(a=>`<option value="${a.etiqueta}">${a.etiqueta}</option>`).join('') || '<option value="">Sin actividades para esta área</option>';
+}
+function maquinaOptionsHTML(area){
+  const maqs = DB.maquinas.filter(m=>m.area===area && m.activo!==false);
+  return '<option value="">Trabajo manual (sin máquina)</option>' +
+    maqs.map(m=>`<option value="${m.nombre}">${m.nombre}</option>`).join('');
+}
+// Motivos de pausa (Desayuno, Almuerzo, Cambio de actividad, Daño de
+// máquina, …) — catálogo en Maestros. Se piden al "Pausar" una actividad.
+function motivoPausaOptionsHTML(){
+  const motivos = DB.motivos_pausa.filter(m=>m.activo!==false);
+  return '<option value="">— elige un motivo —</option>' +
+    motivos.map(m=>`<option value="${m.nombre}">${m.nombre}</option>`).join('');
+}
+// Pasos internos de un área (catálogo "Subprocesos" en Maestros, ej.
+// Terminado → Doblar pestañas/Engomado/Cerrar) — solo si el área tiene
+// alguno definido. Mientras no estén TODOS registrados como terminados,
+// el área no cuenta como completa (ver areasCompletadasPorPieza).
+function subprocesoOptionsHTML(area){
+  const subs = subprocesosDeArea(area);
+  return '<option value="">— elige el subproceso —</option>' +
+    subs.map(s=>`<option value="${s.nombre}">${s.nombre}</option>`).join('');
+}
+function populateActividadReg(){
+  document.getElementById('r-actividad').innerHTML = actividadOptionsHTML(document.getElementById('r-area').value);
 }
 function populateMaquinaReg(){
+  document.getElementById('r-maquina').innerHTML = maquinaOptionsHTML(document.getElementById('r-area').value);
+}
+function populateSubprocesoReg(){
   const area = document.getElementById('r-area').value;
-  const maqSel = document.getElementById('r-maquina');
-  const maqs = DB.maquinas.filter(m=>m.area===area && m.activo!==false);
-  maqSel.innerHTML = '<option value="">Trabajo manual (sin máquina)</option>' +
-    maqs.map(m=>`<option value="${m.nombre}">${m.nombre}</option>`).join('');
+  const subs = subprocesosDeArea(area);
+  const wrap = document.getElementById('r-subproceso-wrap');
+  if(!wrap) return;
+  wrap.style.display = subs.length ? '' : 'none';
+  document.getElementById('r-subproceso').innerHTML = subprocesoOptionsHTML(area);
 }
 function populatePiezaReg(){
   const orden = parseInt(document.getElementById('r-orden').value, 10);
@@ -95,6 +125,7 @@ export function populateReg(){
   if(areas.includes(areaPrevia)) areaSel.value = areaPrevia;
   populateActividadReg();
   populateMaquinaReg();
+  populateSubprocesoReg();
   populateOrdenSelect();
 }
 
@@ -135,7 +166,30 @@ function unidadNumericaDelMaterial(area, nombre){
   return papel ? (papel.unidad || 'pliegos') : null;
 }
 
+// Tarjeta de una actividad ASIGNADA por un jefe/gerente (ver "Prioridad de
+// producción" en js/ordenes.js) que el operario todavía no empezó — no
+// tiene hora_ini. Se ve de inmediato en "Tus actividades en curso" apenas
+// se asigna, aunque no haya tiempos registrados todavía; el operario elige
+// la actividad/máquina puntual y le da "Empezar" para que arranque el reloj.
+function runningCardPendienteHTML(row){
+  return `<div class="reg-running-card reg-running-pendiente" data-id="${row.id}" data-area="${row.area || ''}">
+    <div class="reg-running-row"><span>Orden / Pieza</span><b>${row.orden || '—'}${row.op ? ' / ' + row.op : ''}</b></div>
+    <div class="reg-running-row"><span>Área asignada</span><b>${row.area || '—'}</b></div>
+    ${row.asignado_por ? `<div class="reg-running-row"><span>Asignada por</span><b>${row.asignado_por}</b></div>` : ''}
+    <span class="estado-chip pending">📌 asignada, sin iniciar</span>
+    <div class="form-row">
+      <div class="field"><label>Actividad</label><select class="rc-actividad-select">${actividadOptionsHTML(row.area)}</select></div>
+      <div class="field"><label>Máquina</label><select class="rc-maquina-select">${maquinaOptionsHTML(row.area)}</select></div>
+    </div>
+    ${subprocesosDeArea(row.area).length ? `<div class="form-row">
+      <div class="field full"><label>Subproceso <span class="card-hint">(este proceso tiene varios pasos — elige cuál vas a hacer)</span></label><select class="rc-subproceso-select">${subprocesoOptionsHTML(row.area)}</select></div>
+    </div>` : ''}
+    <button type="button" class="btn-primary btn-clock rc-empezar">▶ Empezar esta actividad</button>
+  </div>`;
+}
+
 function runningCardHTML(row){
+  if(!row.hora_ini) return runningCardPendienteHTML(row);
   const otroSeleccionado = !!row.materia_prima && !DB.insumos_area.some(m => m.area === row.area && m.nombre === row.materia_prima);
   const unidadActual = row.materia_prima ? unidadNumericaDelMaterial(row.area, row.materia_prima) : null;
   const piezaDeEsteRegistro = row.op ? DB.opp_piezas.find(p => p.op === row.op) : null;
@@ -155,10 +209,13 @@ function runningCardHTML(row){
         <label>¿Quedó terminado este proceso (${row.area || '—'})?</label>
         <select class="rc-proceso-completo">
           <option value="Si" selected>Sí, quedó terminado por completo</option>
-          <option value="No">No, voy a continuar después (ej. mañana)</option>
+          <option value="No">No, voy a pausar (continúa después)</option>
         </select>
-        <span class="card-hint">Si eliges "No", esta orden NO va a contar este proceso como terminado hasta que lo finalices de verdad</span>
+        <span class="card-hint">Si eliges "No", esta orden NO va a contar este proceso como terminado hasta que lo finalices de verdad. Un operario no puede tener dos actividades corriendo a la vez — pausa esta para poder iniciar otra.</span>
       </div>
+    </div>
+    <div class="form-row rc-motivo-pausa-wrap" style="display:none">
+      <div class="field full"><label>Motivo de la pausa</label><select class="rc-motivo-pausa">${motivoPausaOptionsHTML()}</select></div>
     </div>
     <div class="form-row">
       <div class="field">
@@ -175,6 +232,19 @@ function runningCardHTML(row){
     <div class="field full"><label>Comentario</label><textarea class="rc-comentario" rows="2">${row.comentario || ''}</textarea></div>
     <button type="button" class="btn-primary btn-clock rc-finish">⏹ Finalizar esta actividad</button>
   </div>`;
+}
+
+// Muestra/oculta el motivo de pausa y cambia el texto del botón según lo
+// que el operario elija en "¿Quedó terminado este proceso?".
+function wirePausaToggle(card){
+  const sel = card.querySelector('.rc-proceso-completo');
+  const actualizar = () => {
+    const esPausa = sel.value === 'No';
+    card.querySelector('.rc-motivo-pausa-wrap').style.display = esPausa ? '' : 'none';
+    card.querySelector('.rc-finish').textContent = esPausa ? '⏸ Pausar esta actividad' : '⏹ Finalizar esta actividad';
+  };
+  sel.addEventListener('change', actualizar);
+  actualizar();
 }
 
 function wireMaterialSelect(card){
@@ -223,15 +293,25 @@ async function refreshRunningSessions(){
     return;
   }
   const hoy = fechaHoyLocal();
+  // Incluye tanto lo realmente en curso HOY (hora_ini seteada) como
+  // cualquier actividad ASIGNADA que todavía no se ha empezado (hora_ini
+  // null) sin importar qué día se asignó — así el operario la sigue
+  // viendo hasta que la empiece, no solo el día que se la repartieron.
   const { data, error } = await sb.from('produccion').select('*')
-    .eq('operario', nombre).eq('fecha', hoy).is('hora_fin', null)
+    .eq('operario', nombre).is('hora_fin', null)
+    .or(`fecha.eq.${hoy},hora_ini.is.null`)
     .order('id', { ascending: true });
   if(error){ console.error(error); toast('No se pudo consultar tus actividades en curso'); return; }
 
   const rate = parseFloat(document.getElementById('r-operario').selectedOptions[0]?.dataset.rate || 0);
   (data || []).forEach(row => sessionRates.set(row.id, rate));
 
-  document.getElementById('reg-hint').textContent = data && data.length ? `${data.length} actividad(es) en curso` : 'sin actividades en curso ahora';
+  const enCurso = (data || []).filter(r => r.hora_ini).length;
+  const asignadas = (data || []).length - enCurso;
+  const partesHint = [];
+  if(enCurso) partesHint.push(`${enCurso} en curso`);
+  if(asignadas) partesHint.push(`${asignadas} asignada(s) sin iniciar`);
+  document.getElementById('reg-hint').textContent = partesHint.length ? partesHint.join(' · ') : 'sin actividades en curso ahora';
 
   if(!data || !data.length){
     cont.innerHTML = '<p style="color:var(--ink-faint);font-size:13px">No tienes actividades en curso. Inicia una arriba.</p>';
@@ -240,10 +320,28 @@ async function refreshRunningSessions(){
   cont.innerHTML = data.map(row => runningCardHTML(row)).join('');
   data.forEach(row => {
     const card = cont.querySelector(`[data-id="${row.id}"]`);
-    card.querySelector('.rc-finish').addEventListener('click', () => finishActivity(row.id, row.hora_ini, row.fecha));
-    wireMaterialSelect(card);
-    startCardTimer(row.id, row.fecha, row.hora_ini);
+    if(row.hora_ini){
+      card.querySelector('.rc-finish').addEventListener('click', () => finishActivity(row.id, row.hora_ini, row.fecha));
+      wireMaterialSelect(card);
+      wirePausaToggle(card);
+      startCardTimer(row.id, row.fecha, row.hora_ini);
+    } else {
+      card.querySelector('.rc-empezar').addEventListener('click', () => empezarActividadAsignada(row.id));
+    }
   });
+}
+
+// Un operario no puede tener tiempo corriendo en dos actividades a la vez
+// — puede pausar la que tiene (ver rc-proceso-completo/rc-motivo-pausa) e
+// ir a hacer otra, pero no las dos al mismo tiempo. Se consulta Supabase
+// en vivo (no la memoria local) para cubrir el caso de que haya iniciado
+// algo desde otro dispositivo/pestaña.
+async function actividadEnCursoDelOperario(nombre){
+  const { data, error } = await sb.from('produccion').select('id,actividad,area')
+    .eq('operario', nombre).is('hora_fin', null).not('hora_ini', 'is', null)
+    .limit(1);
+  if(error){ console.error(error); return null; } // no bloquear por un error de red, solo no se pudo verificar
+  return (data && data[0]) || null;
 }
 
 async function startActivity(){
@@ -279,9 +377,23 @@ async function startActivity(){
     }
   }
 
+  const areaElegida = document.getElementById('r-area').value;
+  const subprocesoSel = document.getElementById('r-subproceso');
+  if(subprocesosDeArea(areaElegida).length && !subprocesoSel.value){
+    toast('Este proceso tiene varios pasos — elige cuál subproceso vas a hacer');
+    subprocesoSel.focus();
+    return;
+  }
+
   const btn = document.getElementById('r-start');
   btn.disabled = true; btn.textContent = 'Iniciando…';
   try{
+    const enCurso = await actividadEnCursoDelOperario(nombre);
+    if(enCurso){
+      toast(`Ya tienes "${enCurso.actividad || enCurso.area || 'una actividad'}" en curso — finalízala o pausala antes de iniciar otra`);
+      document.getElementById('reg-running-list').scrollIntoView({ behavior:'smooth' });
+      return;
+    }
     const now = new Date();
     const fecha = fechaHoyLocal(now);
     const horaIni = now.toTimeString().slice(0,5);
@@ -295,7 +407,8 @@ async function startActivity(){
     const row = {
       fecha, operario: nombre, hora_ini: horaIni, hora_fin: null,
       actividad: document.getElementById('r-actividad').value,
-      area: document.getElementById('r-area').value,
+      area: areaElegida,
+      subproceso: subprocesoSel.value || null,
       maquina: document.getElementById('r-maquina').value || null,
       orden, suborden: subordenSel, op: opValue,
       cliente: sinOrden ? concepto : (ordenInfo ? ordenInfo.cliente : null),
@@ -320,6 +433,62 @@ async function startActivity(){
     toast('Error al iniciar — revisa la consola');
   }finally{
     btn.disabled = false; btn.textContent = '▶ Iniciar actividad';
+  }
+}
+
+// El operario confirma/empieza una actividad que un jefe/gerente le asignó
+// desde "Prioridad de producción" (ver js/ordenes.js) — el registro ya
+// existía (hora_ini null), acá recién arranca el reloj. Elige la actividad
+// y máquina puntuales porque quien asigna solo definió la orden/área.
+async function empezarActividadAsignada(id){
+  const card = document.querySelector(`.reg-running-card[data-id="${id}"]`);
+  if(!card) return;
+  const nombre = document.getElementById('r-operario').value;
+  const actividadSel = card.querySelector('.rc-actividad-select');
+  const maquinaSel = card.querySelector('.rc-maquina-select');
+  const subprocesoSel = card.querySelector('.rc-subproceso-select');
+  if(!actividadSel.value){
+    toast('Elige qué actividad vas a hacer antes de empezar');
+    actividadSel.focus();
+    return;
+  }
+  if(subprocesoSel && !subprocesoSel.value){
+    toast('Este proceso tiene varios pasos — elige cuál subproceso vas a hacer');
+    subprocesoSel.focus();
+    return;
+  }
+
+  const btn = card.querySelector('.rc-empezar');
+  btn.disabled = true; btn.textContent = 'Empezando…';
+  try{
+    const enCurso = await actividadEnCursoDelOperario(nombre);
+    if(enCurso){
+      toast(`Ya tienes "${enCurso.actividad || enCurso.area || 'una actividad'}" en curso — finalízala o pausala antes de empezar otra`);
+      return;
+    }
+    const now = new Date();
+    const updates = {
+      fecha: fechaHoyLocal(now),
+      hora_ini: now.toTimeString().slice(0,5),
+      actividad: actividadSel.value,
+      maquina: maquinaSel.value || null,
+      subproceso: subprocesoSel ? (subprocesoSel.value || null) : null
+    };
+    const { data, error } = await sb.from('produccion').update(updates).eq('id', id).select();
+    if(error) throw error;
+    if(!data || !data.length) throw new Error('Supabase no devolvió el registro actualizado');
+
+    const idx = DB.produccion.findIndex(r => r.id === id);
+    if(idx >= 0) DB.produccion[idx] = normProd(data[0]);
+    toast('Actividad iniciada · ' + updates.hora_ini);
+    await refreshRunningSessions();
+    renderRecentReg();
+    if(onChangeCallback) onChangeCallback();
+  }catch(err){
+    console.error(err);
+    toast('Error al empezar — revisa la consola');
+  }finally{
+    btn.disabled = false; btn.textContent = '▶ Empezar esta actividad';
   }
 }
 
@@ -369,7 +538,15 @@ async function descontarInventarioYCargarCosto({ nombre, area, cantidad, orden, 
 async function finishActivity(id, horaIni, fecha){
   const card = document.querySelector(`.reg-running-card[data-id="${id}"]`);
   const btn = card.querySelector('.rc-finish');
-  btn.disabled = true; btn.textContent = 'Finalizando…';
+  const esPausa = card.querySelector('.rc-proceso-completo').value === 'No';
+  const motivoPausa = esPausa ? card.querySelector('.rc-motivo-pausa').value : '';
+  if(esPausa && !motivoPausa){
+    toast('Elige el motivo de la pausa antes de guardar');
+    card.querySelector('.rc-motivo-pausa').focus();
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = esPausa ? 'Pausando…' : 'Finalizando…';
   try{
     const now = new Date();
     const horaIniDate = new Date(fecha + 'T' + horaIni);
@@ -392,7 +569,8 @@ async function finishActivity(id, horaIni, fecha){
       consumo_mp: consumoMp,
       comentario: card.querySelector('.rc-comentario').value || null,
       reproceso: card.querySelector('.rc-reproceso').value,
-      proceso_completo: card.querySelector('.rc-proceso-completo').value !== 'No',
+      proceso_completo: !esPausa,
+      motivo_pausa: esPausa ? motivoPausa : null,
       tiempo_hr: hrs,
       valor_actividad: hrs * rate
     };
@@ -402,7 +580,7 @@ async function finishActivity(id, horaIni, fecha){
 
     const idx = DB.produccion.findIndex(r => r.id === id);
     if(idx >= 0) DB.produccion[idx] = normProd(data[0]);
-    toast('Actividad finalizada · ' + fmtNum(hrs,2) + ' h registradas');
+    toast(esPausa ? `Actividad pausada (${motivoPausa}) · ${fmtNum(hrs,2)} h registradas` : 'Actividad finalizada · ' + fmtNum(hrs,2) + ' h registradas');
 
     if(usaConsumoNumerico && materiaPrima){
       const cantidadConsumida = parseFloat(consumoNum.value);
@@ -430,7 +608,7 @@ async function finishActivity(id, horaIni, fecha){
     console.error(err);
     toast('Error al finalizar — revisa la consola');
   }finally{
-    btn.disabled = false; btn.textContent = '⏹ Finalizar esta actividad';
+    btn.disabled = false; btn.textContent = esPausa ? '⏸ Pausar esta actividad' : '⏹ Finalizar esta actividad';
   }
 }
 
@@ -440,7 +618,7 @@ async function finishActivity(id, horaIni, fecha){
 export function initRegistrar(onChange){
   onChangeCallback = onChange || null;
   populateReg();
-  document.getElementById('r-area').addEventListener('change', () => { populateActividadReg(); populateMaquinaReg(); });
+  document.getElementById('r-area').addEventListener('change', () => { populateActividadReg(); populateMaquinaReg(); populateSubprocesoReg(); });
   document.getElementById('r-orden').addEventListener('change', () => { populatePiezaReg(); limpiarErrorCampo(document.getElementById('r-orden')); });
   document.getElementById('r-pieza').addEventListener('change', () => limpiarErrorCampo(document.getElementById('r-pieza')));
   document.getElementById('r-sin-orden').addEventListener('change', toggleSinOrden);

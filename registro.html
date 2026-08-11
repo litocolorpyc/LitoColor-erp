@@ -34,9 +34,9 @@
         <li>Elige la Orden, luego la Pieza específica (importante: si no la eliges, tu tiempo no se refleja en el avance).</li>
         <li>Elige Área, Actividad y Máquina.</li>
         <li>Click en "▶ Iniciar actividad" — la hora la toma el sistema solo.</li>
-        <li>Cuando termines, busca tu tarjeta en "Tus actividades en curso", llena la cantidad, y dale "⏹ Finalizar esta actividad".</li>
+        <li>Cuando termines, busca tu tarjeta en "Tus actividades en curso", llena la cantidad, y dale "⏹ Finalizar esta actividad". Si te tienes que ir a hacer otra cosa sin terminar, elige "No, voy a pausar", indica el motivo, y dale "⏸ Pausar esta actividad".</li>
       </ol>
-      <p style="font-size:12px;color:var(--ink-soft);margin:0">Puedes tener varias actividades corriendo a la vez. Si cierras la pantalla sin finalizar, no se pierde nada.</p>
+      <p style="font-size:12px;color:var(--ink-soft);margin:0">No puedes tener dos actividades corriendo tiempo al mismo tiempo — primero pausa o finaliza la que tienes para poder iniciar otra. Si tu jefe te asigna trabajo, lo vas a ver aparecer solo acá como "asignada, sin iniciar" — dale "▶ Empezar" cuando lo vayas a hacer. Si cierras la pantalla sin finalizar, no se pierde nada.</p>
     </div>
 
     <div class="card">
@@ -64,6 +64,9 @@
           <div class="field"><label>Actividad</label><select id="r-actividad"></select></div>
           <div class="field"><label>Máquina</label><select id="r-maquina"><option value="">Trabajo manual (sin máquina)</option></select></div>
         </div>
+        <div class="form-row" id="r-subproceso-wrap" style="display:none">
+          <div class="field full"><label>Subproceso <span class="card-hint">(este proceso tiene varios pasos — elige cuál vas a hacer)</span></label><select id="r-subproceso"></select></div>
+        </div>
         <div class="form-foot">
           <span></span>
           <button type="button" class="btn-primary btn-clock" id="r-start">▶ Iniciar actividad</button>
@@ -82,7 +85,7 @@
     </div>
 
     <div class="card">
-      <div class="card-head"><h3>Tus actividades en curso</h3><span class="card-hint">puedes tener varias a la vez</span></div>
+      <div class="card-head"><h3>Tus actividades en curso</h3><span class="card-hint">solo una corre tiempo a la vez — puedes tener varias asignadas esperando</span></div>
       <div id="reg-running-list"><p style="color:var(--ink-faint);font-size:13px">Selecciona tu nombre arriba para ver tus actividades en curso.</p></div>
     </div>
 

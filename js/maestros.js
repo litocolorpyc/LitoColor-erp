@@ -1,6 +1,7 @@
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
 import { toast, fmtNum } from './helpers.js';
+import { listaAreasDisponibles } from './registrar.js';
 
 function fmtCOP(n){ if(n==null||isNaN(n)) return '—'; return '$' + Math.round(n).toLocaleString('es-CO'); }
 
@@ -120,6 +121,8 @@ export function renderMaestros(){
   empleadosCtl.render();
   maquinasCtl.render();
   actividadesCtl.render();
+  motivosPausaCtl.render();
+  subprocesosCtl.render();
   materiasCtl.render();
   insumosCtl.render();
   clientesCtl.render();
@@ -127,6 +130,16 @@ export function renderMaestros(){
   productosCtl.render();
   piezasProductoCtl.render();
   poblarDatalistProductosMaestro();
+  poblarDatalistProcesosMaestro();
+}
+
+// Sugerencias de "Proceso" para el maestro "Subprocesos" — las áreas que ya
+// se usan en Máquinas/Actividades, para no crear un área nueva por un
+// error de tipeo (tiene que calzar exacto con procesos_requeridos).
+function poblarDatalistProcesosMaestro(){
+  const dl = document.getElementById('m-sub-proceso-list');
+  if(!dl) return;
+  dl.innerHTML = listaAreasDisponibles().map(a => `<option value="${a}">`).join('');
 }
 
 // Sugerencias de producto para el maestro "Piezas por producto" — toma los
@@ -137,7 +150,7 @@ function poblarDatalistProductosMaestro(){
   dl.innerHTML = DB.productos.filter(p=>p.activo!==false).map(p => `<option value="${p.nombre}">`).join('');
 }
 
-let empleadosCtl, maquinasCtl, actividadesCtl, materiasCtl, insumosCtl, clientesCtl, proveedoresCtl, productosCtl, piezasProductoCtl;
+let empleadosCtl, maquinasCtl, actividadesCtl, motivosPausaCtl, subprocesosCtl, materiasCtl, insumosCtl, clientesCtl, proveedoresCtl, productosCtl, piezasProductoCtl;
 
 export function initMaestros(onChange){
   empleadosCtl = wireCatalog({
@@ -175,6 +188,28 @@ export function initMaestros(onChange){
       { id:'m-act-actividad', col:'actividad' }
     ],
     renderCols: r => [r.codigo ?? '—', r.etiqueta || '—', r.area || '—', r.categoria || '—'],
+    onChange
+  });
+
+  motivosPausaCtl = wireCatalog({
+    table: 'motivos_pausa', key: 'id', data: DB.motivos_pausa, tableSel: '#tbl-m-motivos-pausa',
+    saveBtnId: 'm-mot-save', modeId: 'm-mot-mode', addLabel: 'Agregar motivo',
+    fields: [
+      { id:'m-mot-nombre', col:'nombre', required:true }
+    ],
+    renderCols: r => [r.nombre],
+    onChange
+  });
+
+  subprocesosCtl = wireCatalog({
+    table: 'subprocesos', key: 'id', data: DB.subprocesos, tableSel: '#tbl-m-subprocesos',
+    saveBtnId: 'm-sub-save', modeId: 'm-sub-mode', addLabel: 'Agregar subproceso',
+    fields: [
+      { id:'m-sub-proceso', col:'proceso', required:true },
+      { id:'m-sub-nombre', col:'nombre', required:true },
+      { id:'m-sub-orden', col:'orden', type:'number' }
+    ],
+    renderCols: r => [r.proceso, r.orden ?? '—', r.nombre],
     onChange
   });
 

@@ -7,7 +7,7 @@ export const DB = {
   personal: [], maquinas: [], actividades: [], pedidos: [], produccion: [],
   materias_primas: [], clientes: [], proveedores: [], opp_ordenes: [], opp_piezas: [],
   productos: [], costos_conceptos: [], costos_movimientos: [], insumos_area: [],
-  piezas_producto: [], presupuesto_orden: [], recibos_caja: []
+  piezas_producto: [], presupuesto_orden: [], recibos_caja: [], motivos_pausa: [], subprocesos: []
 };
 
 export function normProd(r){
@@ -20,10 +20,25 @@ export function normProd(r){
     valorActividad: r.valor_actividad, despachado: r.despachado, inventario: r.inventario,
     reproceso: r.reproceso, opp: r.opp,
     // true/null = el operario dio por terminado el proceso en esta sesión;
-    // false = "voy a continuar después" (ej. troquelado que sigue mañana).
-    // Ver areasCompletadasPorPieza() en ordenes.js — solo esas cuentan como
-    // área completada para el avance de la orden.
-    procesoCompleto: r.proceso_completo
+    // false = "voy a continuar después" (ej. troquelado que sigue mañana) o
+    // fue una pausa (ver motivoPausa). Ver areasCompletadasPorPieza() en
+    // ordenes.js — solo los terminados de verdad cuentan como área
+    // completada para el avance de la orden.
+    procesoCompleto: r.proceso_completo,
+    // Quién asignó esta actividad al operario (si nació desde "Prioridad de
+    // producción" en vez de que el operario la iniciara él mismo) — null en
+    // el caso normal. Mientras horaIni sea null, es una asignación pendiente
+    // de que el operario la empiece (ver js/registrar.js).
+    asignadoPor: r.asignado_por,
+    // Motivo de la pausa (Desayuno, Almuerzo, Cambio de actividad, Daño de
+    // máquina, etc. — catálogo "Motivos de pausa" en Maestros), solo cuando
+    // el registro se cerró como pausa en vez de como terminado.
+    motivoPausa: r.motivo_pausa,
+    // Subproceso puntual dentro del área (catálogo "Subprocesos" en
+    // Maestros, ej. área "Terminado" → "Doblar pestañas"/"Engomado") —
+    // solo aplica si el área tiene subprocesos definidos. Ver
+    // areasCompletadasPorPieza() en ordenes.js.
+    subproceso: r.subproceso
   };
 }
 
@@ -61,9 +76,11 @@ export async function loadCatalogos(){
     sb.from('insumos_area').select('*').order('area'),
     sb.from('piezas_producto').select('*').order('producto'),
     sb.from('presupuesto_orden').select('*'),
-    sb.from('recibos_caja').select('*').order('cargado_en', { ascending: false }).limit(100)
+    sb.from('recibos_caja').select('*').order('cargado_en', { ascending: false }).limit(100),
+    sb.from('motivos_pausa').select('*').order('nombre'),
+    sb.from('subprocesos').select('*').order('proceso').order('orden')
   ]);
-  const [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14] = results;
+  const [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16] = results;
   // Solo personal/maquinas/actividades/pedidos son indispensables para arrancar.
   // Las tablas más nuevas (materias_primas, clientes, proveedores, insumos_area)
   // pueden no existir todavía si no se ha corrido el SQL más reciente — no
@@ -88,6 +105,8 @@ export async function loadCatalogos(){
   DB.piezas_producto = p12.data || [];
   DB.presupuesto_orden = p13.data || [];
   DB.recibos_caja = p14.data || [];
+  DB.motivos_pausa = p15.data || [];
+  DB.subprocesos = p16.data || [];
 }
 
 export async function loadProduccion(){

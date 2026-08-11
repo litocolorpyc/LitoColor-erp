@@ -60,6 +60,8 @@
         <button class="tab-btn" data-tab="m-empleados" role="tab">Empleados</button>
         <button class="tab-btn" data-tab="m-maquinas" role="tab">Máquinas</button>
         <button class="tab-btn" data-tab="m-actividades" role="tab">Actividades</button>
+        <button class="tab-btn" data-tab="m-motivos-pausa" role="tab">Motivos de pausa</button>
+        <button class="tab-btn" data-tab="m-subprocesos" role="tab">Subprocesos</button>
         <button class="tab-btn" data-tab="m-materias" role="tab">Materias primas</button>
         <button class="tab-btn" data-tab="m-insumos" role="tab">Materiales por área</button>
         <button class="tab-btn" data-tab="m-piezas-producto" role="tab">Piezas por producto</button>
@@ -225,10 +227,17 @@
           <div class="field"><label>Actividad</label><select id="ole-actividad"></select></div>
           <div class="field"><label>Máquina</label><select id="ole-maquina"></select></div>
         </div>
+        <div class="form-row" id="ole-subproceso-wrap" style="display:none">
+          <div class="field full"><label>Subproceso</label><select id="ole-subproceso"></select></div>
+        </div>
         <div class="form-row">
           <div class="field"><label>Cantidad producida</label><input type="number" id="ole-cantidad" min="0"></div>
           <div class="field"><label>Horas trabajadas</label><input type="number" id="ole-horas" min="0" step="0.01"></div>
           <div class="field"><label>¿Reproceso?</label><select id="ole-reproceso"><option value="No">No</option><option value="Si">Sí</option></select></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>¿Quedó terminado este proceso?</label><select id="ole-proceso-completo"><option value="Si">Sí, terminado</option><option value="No">No, quedó pausado</option></select></div>
+          <div class="field" id="ole-motivo-pausa-wrap" style="display:none"><label>Motivo de la pausa</label><select id="ole-motivo-pausa"></select></div>
         </div>
         <div class="field full"><label>Comentario</label><textarea id="ole-comentario" rows="2"></textarea></div>
         <div class="form-foot">
@@ -532,6 +541,9 @@
               <div class="field"><label>Actividad</label><select id="r-actividad"></select></div>
               <div class="field"><label>Máquina</label><select id="r-maquina"><option value="">Trabajo manual (sin máquina)</option></select></div>
             </div>
+            <div class="form-row" id="r-subproceso-wrap" style="display:none">
+              <div class="field full"><label>Subproceso <span class="card-hint">(este proceso tiene varios pasos — elige cuál vas a hacer)</span></label><select id="r-subproceso"></select></div>
+            </div>
             <div class="form-foot">
               <span></span>
               <button type="button" class="btn-primary btn-clock" id="r-start">▶ Iniciar actividad</button>
@@ -551,7 +563,7 @@
       </div>
 
       <div class="card">
-        <div class="card-head"><h3>Tus actividades en curso</h3><span class="card-hint">puedes tener varias a la vez</span></div>
+        <div class="card-head"><h3>Tus actividades en curso</h3><span class="card-hint">solo una corre tiempo a la vez — puedes tener varias asignadas esperando</span></div>
         <div id="reg-running-list"><p style="color:var(--ink-faint);font-size:13px">Selecciona tu nombre arriba para ver tus actividades en curso.</p></div>
       </div>
     </section>
@@ -617,6 +629,40 @@
         <div class="table-wrap" style="margin-top:12px">
           <table id="tbl-m-actividades">
             <thead><tr><th>Código</th><th>Etiqueta</th><th>Área</th><th>Categoría</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-m-motivos-pausa">
+      <div class="card">
+        <div class="card-head"><h3>Motivos de pausa</h3><span class="card-hint">las causas que el operario elige al pausar una actividad (desayuno, almuerzo, cambio de actividad, daño de máquina, …) · "Retirar" no borra nada</span></div>
+        <div class="form-row">
+          <div class="field"><label>Motivo</label><input type="text" id="m-mot-nombre" placeholder="ej. Daño de máquina"></div>
+        </div>
+        <div class="form-foot"><span id="m-mot-mode"></span><button type="button" class="btn-primary" id="m-mot-save">Agregar motivo</button></div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table id="tbl-m-motivos-pausa">
+            <thead><tr><th>Motivo</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-m-subprocesos">
+      <div class="card">
+        <div class="card-head"><h3>Subprocesos</h3><span class="card-hint">pasos internos de un proceso/área (ej. "Terminado" de un sobre: doblar pestañas, engomado, cerrar) — mientras un área tenga subprocesos acá, no cuenta como terminada hasta que TODOS estén hechos · "Retirar" no borra nada</span></div>
+        <div class="form-row">
+          <div class="field"><label>Proceso <span class="card-hint">(el área — debe escribirse igual que en Máquinas/Actividades)</span></label><input type="text" id="m-sub-proceso" list="m-sub-proceso-list" placeholder="ej. Terminado"><datalist id="m-sub-proceso-list"></datalist></div>
+          <div class="field"><label>Subproceso</label><input type="text" id="m-sub-nombre" placeholder="ej. Doblar pestañas"></div>
+          <div class="field"><label>Orden <span class="card-hint">(en qué secuencia se hace, opcional)</span></label><input type="number" id="m-sub-orden" min="0" placeholder="1"></div>
+        </div>
+        <div class="form-foot"><span id="m-sub-mode"></span><button type="button" class="btn-primary" id="m-sub-save">Agregar subproceso</button></div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table id="tbl-m-subprocesos">
+            <thead><tr><th>Proceso</th><th>Orden</th><th>Subproceso</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -861,8 +907,10 @@
         <p>Si vas a trabajar algo que todavía no tiene una orden formal (ej. una Impresión Digital suelta o un Servicio de Trabajo Externo rápido), marca la casilla <b>"Trabajo sin orden asignada"</b> — los campos Orden y Pieza se ocultan y aparece uno de "Cliente / concepto del trabajo" para que escribas de qué se trata. Sigue siendo obligatorio llenarlo.</p>
         <h4>Insumo consumido</h4>
         <p>En la tarjeta de la actividad en curso, "Insumo consumido" te muestra solo los insumos del <b>Área</b> que elegiste (ej. si trabajas en Litografía, te muestra planchas y tintas; si es Terminado, colbón y grapas). Si el insumo que usaste no aparece en la lista, elige <b>"Otro / no está en la lista…"</b> y escríbelo — igual queda registrado. Cuando el insumo tiene una unidad definida (kg, unidad, rollo…), el campo "Consumo" se vuelve un número y la unidad aparece sola al lado; si no, escribes libremente.</p>
-        <h4>Finalizar</h4>
-        <p>Busca la tarjeta en "Tus actividades en curso", llena la cantidad producida, y click en "⏹ Finalizar esta actividad". Puedes tener varias actividades corriendo a la vez. Si cierras la pantalla sin finalizar, no se pierde nada — al volver a elegir tu nombre, la actividad sigue ahí.</p>
+        <h4>Finalizar o pausar</h4>
+        <p>Busca la tarjeta en "Tus actividades en curso", llena la cantidad producida, y click en "⏹ Finalizar esta actividad". Si todavía no terminaste ese proceso pero necesitas ir a hacer otra cosa (otra actividad, un daño de máquina, almuerzo…), elige <b>"No, voy a pausar"</b> en "¿Quedó terminado?", indica el motivo, y el botón se vuelve "⏸ Pausar esta actividad". No puedes tener dos actividades corriendo tiempo al mismo tiempo — primero pausa o finaliza la que tienes para poder iniciar otra. Si cierras la pantalla sin finalizar, no se pierde nada — al volver a elegir tu nombre, la actividad sigue ahí.</p>
+        <h4>Actividad asignada por tu jefe</h4>
+        <p>Si un Jefe de Producción o Gerente te asigna trabajo desde "Prioridad de producción", lo vas a ver aparecer solo en "Tus actividades en curso" con el aviso <b>"📌 asignada, sin iniciar"</b> — todavía sin reloj corriendo. Elige la Actividad y Máquina puntuales y dale <b>"▶ Empezar esta actividad"</b> para arrancar el tiempo.</p>
       </div>
 
       <div class="card" id="ayuda-produccion">
@@ -887,9 +935,11 @@
           </tbody>
         </table>
         <h4>Prioridad de producción</h4>
-        <p>La tarjeta "Prioridad de producción" (arriba en Órdenes) muestra todas las órdenes activas en el orden en que se deben trabajar. Las órdenes nuevas siempre entran de últimas. <b>Solo Gerente, Jefe de Producción o Admin</b> pueden arrastrar las filas (ícono ⠿) para cambiar ese orden — los demás roles solo la ven.</p>
-        <h4>Materiales por área, Actividades y Piezas por producto</h4>
-        <p>En Maestros encontrarás <b>"Materiales por área"</b> (qué insumo consume cada área — planchas en Litografía, colbón en Terminado, etc., usado en Registrar), <b>"Actividades"</b> (las opciones de "Actividad" que ve el operario al registrar trabajo en cada área — ahí se agregan, editan o retiran) y <b>"Piezas por producto"</b> (qué piezas suele tener cada producto — se completa sola, pero también se puede editar ahí directamente).</p>
+        <p>La tarjeta "Prioridad de producción" (arriba en Órdenes) muestra todas las órdenes activas en el orden en que se deben trabajar. Las órdenes nuevas siempre entran de últimas. <b>Solo Gerente, Jefe de Producción o Admin</b> pueden arrastrar las filas (ícono ⠿) para cambiar ese orden — los demás roles solo la ven. Ese mismo grupo puede usar el desplegable "— sin asignar —" de cada fila para asignarle esa orden a un operario: el sistema calcula sola cuál es la próxima pieza/área pendiente y esa queda asignada — el operario la ve de inmediato en "Tus actividades en curso" (pantalla Operario/Registrar) con el aviso "asignada, sin iniciar", aunque todavía no le haya puesto tiempo.</p>
+        <h4>Materiales por área, Actividades, Motivos de pausa, Subprocesos y Piezas por producto</h4>
+        <p>En Maestros encontrarás <b>"Materiales por área"</b> (qué insumo consume cada área — planchas en Litografía, colbón en Terminado, etc., usado en Registrar), <b>"Actividades"</b> (las opciones de "Actividad" que ve el operario al registrar trabajo en cada área — ahí se agregan, editan o retiran), <b>"Motivos de pausa"</b> (las causas que el operario elige al pausar una actividad — desayuno, almuerzo, cambio de actividad, daño de máquina, etc.), <b>"Subprocesos"</b> (los pasos internos que tiene un proceso/área — ej. "Terminado" de un sobre son varios pasos: doblar pestañas, engomar, cerrar; mientras un área tenga subprocesos cargados acá, no se da por terminada hasta que TODOS queden hechos, ver más abajo) y <b>"Piezas por producto"</b> (qué piezas suele tener cada producto — se completa sola, pero también se puede editar ahí directamente).</p>
+        <h4>Subprocesos</h4>
+        <p>Un proceso (área) puede tener varios pasos que se hacen uno después del otro y cada uno se toma su tiempo — por ejemplo, el "Terminado" de un sobre no es un solo paso: primero se doblan las pestañas, luego se engoma, luego se cierra. Si cargas esos pasos en el maestro <b>"Subprocesos"</b> (Proceso = el área exacta, ej. "Terminado"; Subproceso = el paso, ej. "Engomado"), el operario va a tener que elegir cuál subproceso está haciendo al iniciar o empezar una actividad de esa área — y esa área de la pieza <b>NO</b> se va a dar por terminada (ni la orden va a llegar a 100%/Completada) hasta que <b>TODOS</b> los subprocesos activos de esa área tengan al menos un registro terminado. Un área sin subprocesos cargados sigue funcionando exactamente igual que siempre: con un solo registro terminado ya cuenta como completa. El estado de "totalmente terminado" lo puede marcar tanto el operario (al finalizar cada subproceso) como el Jefe de Producción/Gerencia/Admin corrigiendo un registro.</p>
         <h4>Calendario</h4>
         <p>Línea de tiempo por máquina (6am-8pm). Barras de color = actividad real; rayado = en curso ahora.</p>
         <h4>Alertas</h4>
@@ -898,7 +948,7 @@
 
       <div class="card" id="ayuda-admin">
         <div class="card-head"><h3>Para Administradora</h3></div>
-        <p>Todos los maestros (Empleados, Máquinas, Actividades, Materias primas, Materiales por área, Clientes, Proveedores, Productos, Piezas por producto) funcionan igual: llena el formulario y "Agregar"; "Editar" carga la fila para corregirla; "Retirar" desactiva sin borrar nada (y se puede "Reactivar").</p>
+        <p>Todos los maestros (Empleados, Máquinas, Actividades, Motivos de pausa, Subprocesos, Materias primas, Materiales por área, Clientes, Proveedores, Productos, Piezas por producto) funcionan igual: llena el formulario y "Agregar"; "Editar" carga la fila para corregirla; "Retirar" desactiva sin borrar nada (y se puede "Reactivar").</p>
         <p><b>Proveedores:</b> ahora tienen un campo "Tipo de proveedor" (ej. "Proveedor de Insumos", "Proveedor de Maquila") — es texto libre con sugerencias, no una lista cerrada. Vale la pena categorizar los que ya existen: eso hace que, al elegir un proveedor desde una orden, el sistema sugiera primero el tipo más relevante para ese trabajo.</p>
         <p><b>Importar recibo de caja:</b> en Costos > Registrar un costo hay una tarjeta para subir el PDF del recibo de caja que descarga la administradora desde Siigo. El sistema intenta leer el número de recibo, fecha, NIT y cada línea automáticamente — siempre se revisa/corrige en una tabla antes de guardar, y por cada línea se puede elegir a qué orden se asocia y escribir una observación. <b>Solo funciona automático con el PDF real</b> (el que tiene texto, no una foto); con fotos o capturas, la tabla se llena a mano.</p>
       </div>

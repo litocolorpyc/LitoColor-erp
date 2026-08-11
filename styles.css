@@ -217,6 +217,9 @@ select, input, textarea{ font-family:inherit; font-size:13px; padding:7px 9px; b
 .prioridad-handle{ color:var(--ink-faint); font-size:16px; line-height:1; user-select:none; }
 .prioridad-num{ display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:22px; border-radius:50%; background:var(--brand-soft,#e8f0fb); color:var(--brand,#185FA5); font-weight:700; font-size:11px; flex-shrink:0; }
 .prioridad-info{ flex:1; }
+.prioridad-asignar{ display:flex; flex-direction:column; align-items:flex-end; gap:2px; flex-shrink:0; }
+.prioridad-asignar select{ font-size:12px; padding:3px 6px; }
+.prioridad-asignar .card-hint{ font-size:10.5px; text-align:right; max-width:220px; }
 #reg-prioridad-list{ display:flex; flex-direction:column; gap:6px; }
 
 .toast{ position:fixed; bottom:18px; right:18px; background:var(--ink); color:var(--paper); padding:10px 16px; border-radius:8px; font-size:13px; opacity:0; transform:translateY(8px); transition:opacity .25s, transform .25s; pointer-events:none; z-index:50; }

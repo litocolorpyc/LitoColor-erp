@@ -1,5 +1,5 @@
 import { sb } from './supabase-client.js';
-import { DB } from './store.js';
+import { DB, normProd } from './store.js';
 import { toast, fmtNum, exportarExcel, fechaHoyLocal } from './helpers.js';
 import { getCurrentUser } from './auth.js';
 import { poblarDatalistProveedores } from './costos.js';
@@ -456,25 +456,56 @@ function wireNuevoInline(selectId, wrapId, inputId, btnId, table, onCreated){
 }
 
 // ---------- estado / avance de una orden ----------
+// Subprocesos activos definidos para un área (catálogo "Subprocesos" en
+// Maestros), en el orden en que se deben hacer. Un área sin nada acá se
+// sigue completando con un solo registro terminado (ver abajo).
+export function subprocesosDeArea(area){
+  return DB.subprocesos
+    .filter(s => s.proceso === area && s.activo !== false)
+    .sort((a,b) => (a.orden ?? 999) - (b.orden ?? 999));
+}
+
 // Áreas que YA se dieron por terminadas para esta pieza: la sesión de
 // trabajo debe estar finalizada (horaFin) Y el operario no haber marcado
-// "voy a continuar después" (procesoCompleto === false). Antes bastaba con
-// que existiera CUALQUIER registro (hasta uno todavía en curso) para que el
-// área contara como completada — eso hacía que una orden apareciera como
-// 100% aunque el proceso siguiera a medias (ver punto 8 de AjustesERP).
+// "voy a continuar después"/pausa (procesoCompleto === false). Antes
+// bastaba con que existiera CUALQUIER registro terminado de esa área para
+// contarla como completada (ver punto 8 de AjustesERP) — pero un área
+// puede tener varios PASOS internos (ej. "Terminado" de un sobre: doblar
+// pestañas, luego engomar, luego cerrar) que hasta ahora se registraban
+// todos bajo la misma área, así que con terminar el primer paso ya se daba
+// por completada el área entera aunque faltaran los demás. Si el área
+// tiene subprocesos definidos, ahora se exige que TODOS y cada uno tengan
+// al menos un registro terminado — no solo la área en general.
 export function areasCompletadasPorPieza(pieza){
   const recs = DB.produccion.filter(r =>
     (r.op === pieza.op || (r.orden === pieza.orden && r.suborden === pieza.suborden)) &&
     r.horaFin && r.procesoCompleto !== false
   );
-  return new Set(recs.map(r => r.area).filter(Boolean));
+  const requeridos = Array.isArray(pieza.procesos_requeridos) ? pieza.procesos_requeridos : [];
+  const completadas = new Set();
+  requeridos.forEach(area => {
+    const subs = subprocesosDeArea(area);
+    if(!subs.length){
+      if(recs.some(r => r.area === area)) completadas.add(area);
+    } else {
+      const subsTerminados = new Set(recs.filter(r => r.area === area && r.subproceso).map(r => r.subproceso));
+      if(subs.every(s => subsTerminados.has(s.nombre))) completadas.add(area);
+    }
+  });
+  return completadas;
 }
 
 // Áreas que tienen CUALQUIER actividad (en curso o terminada) — se usa solo
 // para mostrar "En proceso" mientras se trabaja, sin exigir que ya cuente
-// como área completada.
+// como área completada. Se exige horaIni: una actividad ASIGNADA a un
+// operario pero que todavía no empezó (ver "Prioridad de producción" y
+// js/registrar.js) no cuenta como trabajo real todavía — si contara, una
+// orden pasaría a "En proceso" solo por haberse repartido, sin que nadie
+// hubiera puesto una mano encima.
 export function areasConActividadPorPieza(pieza){
-  const recs = DB.produccion.filter(r => r.op === pieza.op || (r.orden === pieza.orden && r.suborden === pieza.suborden));
+  const recs = DB.produccion.filter(r =>
+    (r.op === pieza.op || (r.orden === pieza.orden && r.suborden === pieza.suborden)) && r.horaIni
+  );
   return new Set(recs.map(r => r.area).filter(Boolean));
 }
 
@@ -593,6 +624,81 @@ function puedeEditarPresupuesto(){
   return puedeReordenarPrioridad();
 }
 
+// ---------- asignar operario a una orden (desde Prioridad de producción) ----------
+// El jefe/gerente no elige área ni pieza a mano — el sistema calcula sola
+// "lo próximo por hacer" de esa orden (primera pieza con procesos sin
+// terminar, primera área de esa pieza que falte) y esa es la actividad que
+// queda asignada. Igual criterio de prioridad que usa el tablero del
+// operario (ver getPiezasPendientesPorPrioridad), pero para una sola orden.
+function proximoPendienteDeOrden(orden){
+  const piezas = DB.opp_piezas.filter(p => p.orden === orden).sort((a,b)=>a.suborden-b.suborden);
+  for(const p of piezas){
+    const requeridos = Array.isArray(p.procesos_requeridos) ? p.procesos_requeridos : [];
+    if(!requeridos.length) continue;
+    const completados = areasCompletadasPorPieza(p);
+    const area = requeridos.find(a => !completados.has(a));
+    if(area) return { pieza: p, area };
+  }
+  return null;
+}
+
+// Registro de producción "asignado, sin iniciar" (horaIni null) que ya
+// exista para esta orden — así se reasigna/quita en vez de duplicar.
+function asignacionPendienteDeOrden(orden){
+  return DB.produccion.find(r => r.orden === orden && !r.horaIni && !r.horaFin) || null;
+}
+
+async function asignarOperarioAOrden(orden, operarioNombre){
+  const o = DB.opp_ordenes.find(x => x.orden === orden);
+  if(!o) return;
+  const pendiente = asignacionPendienteDeOrden(orden);
+  const user = getCurrentUser();
+
+  try{
+    if(!operarioNombre){
+      if(pendiente){
+        const { error } = await sb.from('produccion').delete().eq('id', pendiente.id);
+        if(error) throw error;
+        const idx = DB.produccion.findIndex(r => r.id === pendiente.id);
+        if(idx >= 0) DB.produccion.splice(idx, 1);
+        toast('Asignación quitada');
+      }
+    } else if(pendiente){
+      const { data, error } = await sb.from('produccion')
+        .update({ operario: operarioNombre, asignado_por: user?.nombre || null })
+        .eq('id', pendiente.id).select();
+      if(error) throw error;
+      const idx = DB.produccion.findIndex(r => r.id === pendiente.id);
+      if(idx >= 0) DB.produccion[idx] = normProd(data[0]);
+      toast('Reasignado a ' + operarioNombre);
+    } else {
+      const proximo = proximoPendienteDeOrden(orden);
+      if(!proximo){
+        toast('Esta orden no tiene piezas pendientes para asignar');
+        renderPrioridadOrdenes();
+        return;
+      }
+      const row = {
+        fecha: fechaHoyLocal(), operario: operarioNombre, hora_ini: null, hora_fin: null,
+        area: proximo.area, actividad: null, maquina: null,
+        orden: o.orden, suborden: proximo.pieza.suborden, op: proximo.pieza.op,
+        cliente: o.cliente, trabajo: proximo.pieza.pieza || null,
+        opp: proximo.pieza.op || String(o.orden),
+        asignado_por: user?.nombre || null
+      };
+      const { data, error } = await sb.from('produccion').insert([row]).select();
+      if(error) throw error;
+      DB.produccion.unshift(normProd(data[0]));
+      toast(`Asignado a ${operarioNombre} — ${proximo.area} · ${proximo.pieza.pieza || 'Pieza ' + proximo.pieza.suborden}`);
+    }
+    renderPrioridadOrdenes();
+  }catch(err){
+    console.error(err);
+    toast('No se pudo guardar la asignación — revisa la consola');
+    renderPrioridadOrdenes();
+  }
+}
+
 function renderPrioridadOrdenes(){
   const cont = document.getElementById('opp-prioridad-list');
   if(!cont) return;
@@ -610,13 +716,30 @@ function renderPrioridadOrdenes(){
     return;
   }
 
+  const operariosActivos = DB.personal.filter(p => p.activo !== false);
+
   cont.innerHTML = activas.map((o, i) => {
     const estado = estadoOrden(o);
+    const pendiente = asignacionPendienteDeOrden(o.orden);
+    const proximo = pendiente ? null : proximoPendienteDeOrden(o.orden);
+    const sinNadaQueAsignar = !pendiente && !proximo;
+    const hintAsignar = pendiente
+      ? `asignada a ${pendiente.operario} · ${pendiente.area}${pendiente.trabajo ? ' · ' + pendiente.trabajo : ''}`
+      : (proximo ? `próximo: ${proximo.area} · ${proximo.pieza.pieza || 'Pieza ' + proximo.pieza.suborden}` : 'sin piezas pendientes');
+    const selectorAsignar = puedeArrastrar ? `
+      <div class="prioridad-asignar">
+        <select class="prioridad-asignar-select" data-orden="${o.orden}" ${sinNadaQueAsignar ? 'disabled' : ''}>
+          <option value="">— sin asignar —</option>
+          ${operariosActivos.map(op => `<option value="${op.nombre}"${pendiente && pendiente.operario === op.nombre ? ' selected' : ''}>${op.nombre}</option>`).join('')}
+        </select>
+        <span class="card-hint">${hintAsignar}</span>
+      </div>` : '';
     return `<div class="prioridad-row" data-orden="${o.orden}" draggable="${puedeArrastrar}">
       <span class="prioridad-handle">${puedeArrastrar ? '⠿' : '·'}</span>
       <span class="prioridad-num">${i + 1}</span>
       <span class="prioridad-info fila-clicable"><b>Orden ${o.orden}</b> — ${o.cliente || '—'} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></span>
       ${estadoBadgeHTML(estado)}
+      ${selectorAsignar}
     </div>`;
   }).join('');
 
@@ -626,6 +749,18 @@ function renderPrioridadOrdenes(){
     info.addEventListener('click', () => {
       const orden = parseInt(info.closest('.prioridad-row').dataset.orden, 10);
       mostrarDetalleOrden(orden);
+    });
+  });
+
+  // El desplegable de asignar vive dentro de una fila arrastrable — sin
+  // esto, intentar abrirlo dispara el drag-and-drop en vez de la lista.
+  cont.querySelectorAll('.prioridad-asignar-select').forEach(sel => {
+    sel.addEventListener('mousedown', e => e.stopPropagation());
+    sel.addEventListener('click', e => e.stopPropagation());
+    sel.addEventListener('change', () => {
+      const orden = parseInt(sel.dataset.orden, 10);
+      sel.disabled = true;
+      asignarOperarioAOrden(orden, sel.value).finally(() => { sel.disabled = false; });
     });
   });
 
@@ -896,10 +1031,11 @@ function historialOrdenRows(registros){
 
 function estadoRegistroHTML(r){
   const chips = [];
-  if(!r.horaFin) chips.push('<span class="estado-chip estado-chip-warn">⏱ en curso</span>');
-  else if(r.procesoCompleto === false) chips.push('<span class="estado-chip estado-chip-warn">continúa después</span>');
+  if(!r.horaIni) chips.push(`<span class="estado-chip pending">📌 asignada, sin iniciar${r.asignadoPor ? ' — por ' + r.asignadoPor : ''}</span>`);
+  else if(!r.horaFin) chips.push('<span class="estado-chip estado-chip-warn">⏱ en curso</span>');
+  else if(r.procesoCompleto === false) chips.push(`<span class="estado-chip estado-chip-warn">⏸ pausa${r.motivoPausa ? ' — ' + r.motivoPausa : ''}</span>`);
   else chips.push('<span class="estado-chip done">✓ terminado</span>');
-  if(r.reproceso) chips.push('<span class="estado-chip pending">↺ reproceso</span>');
+  if(r.reproceso === 'Si') chips.push('<span class="estado-chip pending">↺ reproceso</span>');
   return chips.join(' ');
 }
 
@@ -909,6 +1045,7 @@ function historialOrdenHTML(registros, piezas){
       <td>${(r.fecha||'').slice(0,10)}${r.horaIni ? ' ' + r.horaIni.slice(0,5) : ''}${r.horaFin ? ' – ' + r.horaFin.slice(0,5) : ''}</td>
       <td>${piezaLabelDeRegistro(r, piezas)}</td>
       <td>${r.area || '—'}</td>
+      <td>${r.subproceso || '—'}</td>
       <td>${r.actividad || '—'}</td>
       <td>${r.operario || '—'}</td>
       <td>${r.maquina || 'Manual'}</td>
@@ -918,7 +1055,7 @@ function historialOrdenHTML(registros, piezas){
       <td>${r.comentario || ''}</td>
     </tr>`).join('');
   return `<div class="table-wrap"><table class="detalle-mini-table">
-    <thead><tr><th>Fecha / hora</th><th>Pieza</th><th>Área</th><th>Actividad</th><th>Operario</th><th>Máquina</th><th>Horas</th><th>Cant.</th><th>Estado</th><th>Comentario</th></tr></thead>
+    <thead><tr><th>Fecha / hora</th><th>Pieza</th><th>Área</th><th>Subproceso</th><th>Actividad</th><th>Operario</th><th>Máquina</th><th>Horas</th><th>Cant.</th><th>Estado</th><th>Comentario</th></tr></thead>
     <tbody>${filas}</tbody>
   </table></div>`;
 }
@@ -1060,10 +1197,11 @@ export function mostrarDetalleOrden(orden){
 
 function estadoRegistroTexto(r){
   const partes = [];
-  if(!r.horaFin) partes.push('en curso');
-  else if(r.procesoCompleto === false) partes.push('continúa después');
+  if(!r.horaIni) partes.push('asignada, sin iniciar' + (r.asignadoPor ? ' (por ' + r.asignadoPor + ')' : ''));
+  else if(!r.horaFin) partes.push('en curso');
+  else if(r.procesoCompleto === false) partes.push('pausa' + (r.motivoPausa ? ' — ' + r.motivoPausa : ''));
   else partes.push('terminado');
-  if(r.reproceso) partes.push('reproceso');
+  if(r.reproceso === 'Si') partes.push('reproceso');
   return partes.join(' · ');
 }
 
@@ -1073,6 +1211,7 @@ function historialOrdenPrintHTML(registros, piezas){
       <td>${(r.fecha||'').slice(0,10)}${r.horaIni ? ' ' + r.horaIni.slice(0,5) : ''}${r.horaFin ? ' – ' + r.horaFin.slice(0,5) : ''}</td>
       <td>${piezaLabelDeRegistro(r, piezas)}</td>
       <td>${r.area || '—'}</td>
+      <td>${r.subproceso || '—'}</td>
       <td>${r.actividad || '—'}</td>
       <td>${r.operario || '—'}</td>
       <td>${estadoRegistroTexto(r)}</td>
@@ -1080,7 +1219,7 @@ function historialOrdenPrintHTML(registros, piezas){
     </tr>`).join('');
   return `<h3>Historial de producción</h3>
   <table class="historial-print">
-    <thead><tr><th>Fecha / hora</th><th>Pieza</th><th>Área</th><th>Actividad</th><th>Operario</th><th>Estado</th><th>Comentario</th></tr></thead>
+    <thead><tr><th>Fecha / hora</th><th>Pieza</th><th>Área</th><th>Subproceso</th><th>Actividad</th><th>Operario</th><th>Estado</th><th>Comentario</th></tr></thead>
     <tbody>${filas}</tbody>
   </table>`;
 }
@@ -1883,8 +2022,22 @@ export function initOppForm(onChange){
 export function chipsProcesosHTML(pieza){
   const requeridos = Array.isArray(pieza.procesos_requeridos) ? pieza.procesos_requeridos : [];
   const completados = areasCompletadasPorPieza(pieza);
-  return requeridos.map(a => `<span class="estado-chip ${completados.has(a)?'done':'pending'}">${completados.has(a)?'✓':'·'} ${a}</span>`).join('')
-    || '<span class="card-hint">sin procesos definidos</span>';
+  // Cuando el área tiene subprocesos definidos, se le suma el avance
+  // (ej. "Terminado (2/6)") — así se ve qué falta, no solo si ya cerró.
+  const recsTerminados = DB.produccion.filter(r =>
+    (r.op === pieza.op || (r.orden === pieza.orden && r.suborden === pieza.suborden)) &&
+    r.horaFin && r.procesoCompleto !== false
+  );
+  return requeridos.map(a => {
+    const done = completados.has(a);
+    const subs = subprocesosDeArea(a);
+    let etiqueta = a;
+    if(subs.length){
+      const subsTerminados = new Set(recsTerminados.filter(r => r.area === a && r.subproceso).map(r => r.subproceso));
+      etiqueta += ` (${subs.filter(s => subsTerminados.has(s.nombre)).length}/${subs.length})`;
+    }
+    return `<span class="estado-chip ${done?'done':'pending'}">${done?'✓':'·'} ${etiqueta}</span>`;
+  }).join('') || '<span class="card-hint">sin procesos definidos</span>';
 }
 
 // Piezas/subórdenes pendientes (les falta terminar al menos un proceso

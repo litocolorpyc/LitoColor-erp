@@ -1,7 +1,7 @@
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
 import { fmtCOP, fmtNum, areaColor, rangoFechas, rangoAnterior, deltaBadge, exportarExcel, toast } from './helpers.js';
-import { mostrarDetalleOrden, tipoTrabajoLabel, renderOppRecent } from './ordenes.js';
+import { mostrarDetalleOrden, tipoTrabajoLabel, renderOppRecent, subprocesosDeArea } from './ordenes.js';
 import { puedeEditarProduccion } from './auth.js';
 import { listaAreasDisponibles } from './registrar.js';
 
@@ -414,6 +414,25 @@ function poblarSelectMaquinaEdicion(area, valorActual){
   if(valorActual && !maqs.some(m=>m.nombre===valorActual)) sel.value = '';
 }
 
+function poblarSelectSubprocesoEdicion(area, valorActual){
+  const wrap = document.getElementById('ole-subproceso-wrap');
+  const subs = subprocesosDeArea(area);
+  wrap.style.display = subs.length ? '' : 'none';
+  document.getElementById('ole-subproceso').innerHTML = '<option value="">— elige el subproceso —</option>' +
+    subs.map(s=>`<option value="${s.nombre}"${s.nombre===valorActual?' selected':''}>${s.nombre}</option>`).join('');
+}
+
+function poblarSelectMotivoPausaEdicion(valorActual){
+  const sel = document.getElementById('ole-motivo-pausa');
+  const motivos = DB.motivos_pausa.filter(m=>m.activo!==false);
+  sel.innerHTML = '<option value="">— elige un motivo —</option>' +
+    motivos.map(m=>`<option value="${m.nombre}"${m.nombre===valorActual?' selected':''}>${m.nombre}</option>`).join('');
+}
+function actualizarWrapMotivoPausa(){
+  const esPausa = document.getElementById('ole-proceso-completo').value === 'No';
+  document.getElementById('ole-motivo-pausa-wrap').style.display = esPausa ? '' : 'none';
+}
+
 // El operario a veces elige mal la suborden/pieza al registrar (o registra
 // "sin OPP / general" pudiendo elegir una) — esto arma el mismo desplegable
 // que usa Registrar (ver js/registrar.js, populatePiezaReg) para poder
@@ -438,12 +457,21 @@ function abrirEdicionRegistro(id){
   poblarSelectActividadEdicion(row.area, row.actividad);
   poblarSelectMaquinaEdicion(row.area, row.maquina);
   poblarSelectPiezaEdicion(row.orden, row.op);
-  areaSel.onchange = () => { poblarSelectActividadEdicion(areaSel.value, null); poblarSelectMaquinaEdicion(areaSel.value, null); };
+  poblarSelectSubprocesoEdicion(row.area, row.subproceso);
+  areaSel.onchange = () => {
+    poblarSelectActividadEdicion(areaSel.value, null);
+    poblarSelectMaquinaEdicion(areaSel.value, null);
+    poblarSelectSubprocesoEdicion(areaSel.value, null);
+  };
 
   document.getElementById('ole-cantidad').value = row.cantidad ?? '';
   document.getElementById('ole-horas').value = row.tiempoHr ?? '';
   document.getElementById('ole-comentario').value = row.comentario || '';
   document.getElementById('ole-reproceso').value = row.reproceso === 'Si' ? 'Si' : 'No';
+  document.getElementById('ole-proceso-completo').value = row.procesoCompleto === false ? 'No' : 'Si';
+  poblarSelectMotivoPausaEdicion(row.motivoPausa || null);
+  actualizarWrapMotivoPausa();
+  document.getElementById('ole-proceso-completo').onchange = actualizarWrapMotivoPausa;
   document.getElementById('ole-guardar').dataset.id = id;
   document.getElementById('op-log-editar-info').textContent = `Registro del ${(row.fecha||'').slice(0,10)} — ${row.operario || '—'} — Orden ${row.orden ?? '—'}${row.suborden!=null ? ' / suborden ' + row.suborden : ''}`;
 
@@ -471,13 +499,31 @@ async function guardarEdicionRegistro(){
   const opValue = piezaSel.value || null;
   const subordenValue = (opValue && piezaOpt && piezaOpt.dataset.suborden) ? parseInt(piezaOpt.dataset.suborden, 10) : null;
 
+  const esPausa = document.getElementById('ole-proceso-completo').value === 'No';
+  const motivoPausa = document.getElementById('ole-motivo-pausa').value;
+  if(esPausa && !motivoPausa){
+    toast('Elige el motivo de la pausa antes de guardar');
+    document.getElementById('ole-motivo-pausa').focus();
+    return;
+  }
+  const areaEditada = document.getElementById('ole-area').value;
+  const subprocesoSel = document.getElementById('ole-subproceso');
+  if(subprocesosDeArea(areaEditada).length && !subprocesoSel.value){
+    toast('Este proceso tiene varios pasos — elige el subproceso antes de guardar');
+    subprocesoSel.focus();
+    return;
+  }
+
   const updates = {
-    area: document.getElementById('ole-area').value,
+    area: areaEditada,
     actividad: document.getElementById('ole-actividad').value,
     maquina: document.getElementById('ole-maquina').value || null,
+    subproceso: subprocesoSel.value || null,
     cantidad: parseFloat(document.getElementById('ole-cantidad').value || 0),
     comentario: document.getElementById('ole-comentario').value || null,
     reproceso: document.getElementById('ole-reproceso').value,
+    proceso_completo: !esPausa,
+    motivo_pausa: esPausa ? motivoPausa : null,
     tiempo_hr: horas,
     valor_actividad: horas * rate,
     op: opValue,
