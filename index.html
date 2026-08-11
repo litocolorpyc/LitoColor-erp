@@ -265,6 +265,14 @@
       </div>
 
       <div class="card">
+        <div class="card-head"><h3>Prioridad por área</h3><span class="card-hint" id="opp-prioridad-area-hint"></span></div>
+        <div class="form-row" style="align-items:flex-end;margin-bottom:10px">
+          <div class="field"><label>Área</label><select id="opp-prioridad-area-select"></select></div>
+        </div>
+        <div id="opp-prioridad-area-list"></div>
+      </div>
+
+      <div class="card">
         <div class="card-head"><h3>Orden de producción</h3><span class="card-hint" id="opp-form-mode">Creando una orden nueva</span></div>
         <div class="form-foot" style="margin-top:0;margin-bottom:14px">
           <span class="card-hint">¿Ya tienes la orden en Excel? Impórtala y solo revisa antes de guardar</span>
@@ -985,6 +993,8 @@
         </table>
         <h4>Prioridad de producción</h4>
         <p>La tarjeta "Prioridad de producción" (arriba en Órdenes) muestra todas las órdenes activas en el orden en que se deben trabajar. Las órdenes nuevas siempre entran de últimas. <b>Solo Gerente, Jefe de Producción o Admin</b> pueden arrastrar las filas (ícono ⠿) para cambiar ese orden — los demás roles solo la ven. Ese mismo grupo puede usar el desplegable "— sin asignar —" de cada fila para asignarle esa orden a un operario: el sistema calcula sola cuál es la próxima pieza/área pendiente y esa queda asignada — el operario la ve de inmediato en "Tus actividades en curso" (pantalla Operario/Registrar) con el aviso "asignada, sin iniciar", aunque todavía no le haya puesto tiempo.</p>
+        <h4>Prioridad por área</h4>
+        <p>Debajo está "Prioridad por área": elegís un área (ej. "Litografía") en el desplegable y ves SOLO las piezas pendientes de esa área, de <b>todas</b> las órdenes activas juntas — independiente de cómo esté priorizada Troquelado, Terminado, etc. Arrastrando ahí decidís, dentro de esa área puntual, qué se hace primero. Mientras no toques una pieza en la cola de un área, cae de respaldo al orden de su Prioridad de producción general.</p>
         <h4>Materiales por área, Actividades, Motivos de pausa, Subprocesos y Piezas por producto</h4>
         <p>En Maestros encontrarás <b>"Materiales por área"</b> (qué insumo consume cada área — planchas en Litografía, colbón en Terminado, etc., usado en Registrar), <b>"Actividades"</b> (las opciones de "Actividad" que ve el operario al registrar trabajo en cada área — ahí se agregan, editan o retiran), <b>"Motivos de pausa"</b> (las causas que el operario elige al pausar una actividad — desayuno, almuerzo, cambio de actividad, daño de máquina, etc.), <b>"Subprocesos"</b> (los pasos internos que tiene un proceso/área — ej. "Terminado" de un sobre son varios pasos: doblar pestañas, engomar, cerrar; mientras un área tenga subprocesos cargados acá, no se da por terminada hasta que TODOS queden hechos, ver más abajo) y <b>"Piezas por producto"</b> (qué piezas suele tener cada producto — se completa sola, pero también se puede editar ahí directamente).</p>
         <h4>Subprocesos</h4>

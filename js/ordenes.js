@@ -632,6 +632,7 @@ function costoMaterialesDeOrden(orden){
 export function renderOppRecent(){
   renderOppLista(DB.opp_ordenes.slice(0, 20));
   renderPrioridadOrdenes();
+  renderPrioridadArea();
   renderEstadoOrdenes();
   renderOrdenesVivas();
   renderRadarHistorico();
@@ -870,6 +871,127 @@ async function persistirPrioridad(){
   }catch(err){
     console.error(err);
     toast('No se pudo guardar el nuevo orden de prioridad — intenta de nuevo');
+  }
+}
+
+// ---------- prioridad de producción POR ÁREA (cola independiente) ----------
+// Distinta de "Prioridad de producción" (arriba, por ORDEN completa): acá
+// se prioriza por SUBORDEN y ÁREA — una cola propia de, por ejemplo,
+// "Litografía" con las piezas pendientes de esa área de TODAS las órdenes
+// activas, sin importar cómo esté priorizada Troquelado o Terminado. No
+// reemplaza la prioridad por orden — cuando una pieza todavía no se
+// priorizó a mano en su área, cae de respaldo a la prioridad de su orden
+// (y al número de suborden), igual que getPiezasPendientesPorPrioridad().
+let prioridadAreaDragRow = null;
+
+function nombresDeAreas(){
+  return DB.areas.filter(a => a.activo !== false)
+    .sort((a,b) => (a.orden ?? 999) - (b.orden ?? 999))
+    .map(a => a.nombre);
+}
+
+function piezasPendientesDeArea(area){
+  const filas = [];
+  DB.opp_ordenes.filter(ordenEnCurso).forEach(o => {
+    DB.opp_piezas.filter(p => p.orden === o.orden).forEach(p => {
+      const requeridos = Array.isArray(p.procesos_requeridos) ? p.procesos_requeridos : [];
+      if(!requeridos.includes(area)) return;
+      if(areasCompletadasPorPieza(p).has(area)) return;
+      filas.push({ o, p });
+    });
+  });
+  const rangos = new Map(DB.prioridad_area.filter(x => x.area === area).map(x => [x.orden_prod + '-' + x.suborden, x.orden]));
+  return filas.sort((a,b) => {
+    const ra = rangos.has(a.o.orden + '-' + a.p.suborden) ? rangos.get(a.o.orden + '-' + a.p.suborden) : 999999;
+    const rb = rangos.has(b.o.orden + '-' + b.p.suborden) ? rangos.get(b.o.orden + '-' + b.p.suborden) : 999999;
+    return ra - rb || (a.o.prioridad ?? 999999) - (b.o.prioridad ?? 999999) || a.p.suborden - b.p.suborden;
+  });
+}
+
+function poblarSelectPrioridadArea(){
+  const sel = document.getElementById('opp-prioridad-area-select');
+  if(!sel) return;
+  const valorPrevio = sel.value;
+  sel.innerHTML = nombresDeAreas().map(a => `<option value="${a}">${a}</option>`).join('');
+  if(Array.from(sel.options).some(o => o.value === valorPrevio)) sel.value = valorPrevio;
+}
+
+function renderPrioridadArea(){
+  const sel = document.getElementById('opp-prioridad-area-select');
+  const cont = document.getElementById('opp-prioridad-area-list');
+  const hint = document.getElementById('opp-prioridad-area-hint');
+  if(!sel || !cont) return;
+  if(!sel.options.length) poblarSelectPrioridadArea();
+  const area = sel.value;
+  const puede = puedeReordenarPrioridad();
+  if(hint) hint.textContent = puede
+    ? 'Arrastra las filas (⠿) para priorizar el trabajo de esta área específica, cruzando todas las órdenes.'
+    : 'Solo el gerente o el jefe de producción pueden cambiar este orden.';
+
+  if(!area){ cont.innerHTML = '<p class="card-hint">No hay áreas cargadas todavía (Maestros &gt; Áreas).</p>'; return; }
+
+  const filas = piezasPendientesDeArea(area);
+  if(!filas.length){
+    cont.innerHTML = '<p style="color:var(--ink-faint);font-size:13px">No hay piezas pendientes de esta área ahora mismo.</p>';
+    return;
+  }
+
+  cont.innerHTML = filas.map(({ o, p }, i) => `<div class="prioridad-row" data-orden="${o.orden}" data-suborden="${p.suborden}" draggable="${puede}">
+      <span class="prioridad-handle">${puede ? '⠿' : '·'}</span>
+      <span class="prioridad-num">${i + 1}</span>
+      <span class="prioridad-info fila-clicable"><b>Orden ${o.orden}-${p.suborden}</b> — ${o.cliente || '—'} ${p.pieza ? '· ' + p.pieza : ''} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></span>
+    </div>`).join('');
+
+  cont.querySelectorAll('.prioridad-info').forEach(info => {
+    info.addEventListener('click', () => {
+      const orden = parseInt(info.closest('.prioridad-row').dataset.orden, 10);
+      mostrarDetalleOrden(orden);
+    });
+  });
+
+  if(!puede) return;
+  cont.querySelectorAll('.prioridad-row').forEach(row => {
+    row.addEventListener('dragstart', () => {
+      prioridadAreaDragRow = row;
+      row.classList.add('dragging');
+    });
+    row.addEventListener('dragend', () => {
+      row.classList.remove('dragging');
+      persistirPrioridadArea(area);
+    });
+    row.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      const enCurso = cont.querySelector('.dragging');
+      if(!enCurso || enCurso === row) return;
+      const rect = row.getBoundingClientRect();
+      const despuesDelPunto = (e.clientY - rect.top) > rect.height / 2;
+      row.parentNode.insertBefore(enCurso, despuesDelPunto ? row.nextSibling : row);
+    });
+  });
+}
+
+async function persistirPrioridadArea(area){
+  const cont = document.getElementById('opp-prioridad-area-list');
+  if(!cont) return;
+  const filas = Array.from(cont.querySelectorAll('.prioridad-row')).map((row, i) => ({
+    area,
+    orden_prod: parseInt(row.dataset.orden, 10),
+    suborden: parseInt(row.dataset.suborden, 10),
+    orden: i + 1
+  }));
+  cont.querySelectorAll('.prioridad-num').forEach((el, i) => { el.textContent = i + 1; });
+  if(!filas.length) return;
+  try{
+    const { data, error } = await sb.from('prioridad_area').upsert(filas, { onConflict: 'area,orden_prod,suborden' }).select();
+    if(error) throw error;
+    (data || []).forEach(row => {
+      const idx = DB.prioridad_area.findIndex(x => x.area === row.area && x.orden_prod === row.orden_prod && x.suborden === row.suborden);
+      if(idx >= 0) DB.prioridad_area[idx] = row; else DB.prioridad_area.push(row);
+    });
+    toast('Prioridad de ' + area + ' actualizada');
+  }catch(err){
+    console.error(err);
+    toast('No se pudo guardar la prioridad de esta área — intenta de nuevo');
   }
 }
 
@@ -2008,6 +2130,8 @@ export function initOppForm(onChange){
   wireNuevoInline('opp-producto', 'opp-producto-nuevo-wrap', 'opp-producto-nuevo-nombre', 'opp-producto-nuevo-add', 'productos', p => DB.productos.push(p));
   on('opp-producto', 'change', () => { renderProductoRef(); refreshPiezasDatalist(); });
   on('opp-tipo-trabajo', 'change', aplicarTipoTrabajo);
+  poblarSelectPrioridadArea();
+  on('opp-prioridad-area-select', 'change', renderPrioridadArea);
   resetOppForm();
   on('opp-add-pieza', 'click', () => addPiezaCard());
   on('opp-save', 'click', saveOpp);

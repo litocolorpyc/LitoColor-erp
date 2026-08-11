@@ -214,6 +214,7 @@ select, input, textarea{ font-family:inherit; font-size:13px; padding:7px 9px; b
 
 /* Prioridad de producción: lista arrastrable */
 #opp-prioridad-list{ display:flex; flex-direction:column; gap:6px; max-height:340px; overflow-y:auto; }
+#opp-prioridad-area-list{ display:flex; flex-direction:column; gap:6px; max-height:340px; overflow-y:auto; }
 .prioridad-row{ display:flex; align-items:center; gap:10px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--card,#fff); font-size:13px; }
 .prioridad-row[draggable="true"]{ cursor:grab; }
 .prioridad-row.dragging{ opacity:0.4; border-style:dashed; }
