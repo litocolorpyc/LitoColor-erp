@@ -1864,7 +1864,14 @@ async function cancelarOrden(orden){
 // Solo se compara contra materiales "en seguimiento" (con stock_actual o
 // stock_minimo mayor a 0 ya configurado en Maestros) — de lo contrario los
 // 226 papeles precargados en 0/0 dispararían la alerta en cada orden.
-function alertarStockPapelInsuficiente(piezasPayload){
+//
+// Además del aviso inmediato (alert()), queda GUARDADA en
+// alertas_faltante_material — así sigue visible en Alertas aunque se
+// cierre el mensaje, hasta que alguien reponga el stock de esa materia
+// prima (ver materiasCtl en js/maestros.js, que la resuelve sola). Cada
+// guardado de la orden reemplaza sus alertas anteriores por las actuales
+// (si ya no falta, o falta menos, no debe quedar una alerta vieja colgada).
+async function alertarStockPapelInsuficiente(orden, piezasPayload){
   const necesidad = {};
   piezasPayload.forEach(p => {
     if(!p.papel || !p.pliegos) return;
@@ -1874,12 +1881,35 @@ function alertarStockPapelInsuficiente(piezasPayload){
     const mat = DB.materias_primas.find(m => m.nombre === papel);
     if(!mat || !((mat.stock_actual||0) > 0 || (mat.stock_minimo||0) > 0)) return null; // no está en seguimiento
     const stock = mat.stock_actual || 0;
-    return { papel, pliegosNecesarios, stock, unidad: mat.unidad || 'pliegos', falta: pliegosNecesarios - stock };
+    return { mat, papel, pliegosNecesarios, stock, unidad: mat.unidad || 'pliegos', falta: pliegosNecesarios - stock };
   }).filter(f => f && f.falta > 0);
 
   if(faltantes.length){
     const detalle = faltantes.map(f => `• ${f.papel}: hay ${fmtNum(f.stock,0)}, se necesitan ${fmtNum(f.pliegosNecesarios,0)} ${f.unidad} (faltan ${fmtNum(f.falta,0)})`).join('\n');
     alert(`⚠️ Stock insuficiente para esta orden — considera comprar:\n\n${detalle}`);
+  }
+
+  try{
+    // limpia lo que esta orden tenía guardado antes — se vuelve a armar
+    // desde cero con los faltantes actuales.
+    const previas = DB.alertas_faltante_material.filter(a => a.orden === orden);
+    if(previas.length){
+      await sb.from('alertas_faltante_material').delete().eq('orden', orden);
+      previas.forEach(a => {
+        const idx = DB.alertas_faltante_material.indexOf(a);
+        if(idx >= 0) DB.alertas_faltante_material.splice(idx, 1);
+      });
+    }
+    if(faltantes.length){
+      const rows = faltantes.map(f => ({
+        orden, materia_prima_codigo: f.mat.codigo, cantidad_faltante: f.falta, unidad: f.unidad
+      }));
+      const { data, error } = await sb.from('alertas_faltante_material').insert(rows).select();
+      if(error) throw error;
+      DB.alertas_faltante_material.push(...(data || []));
+    }
+  }catch(err){
+    console.error('No se pudo guardar la alerta de faltante de material:', err);
   }
 }
 
@@ -1976,7 +2006,7 @@ async function saveOpp(){
     if(errPiezas) throw errPiezas;
 
     toast((editingOrden===orden ? 'Orden actualizada: ' : 'Orden guardada: ') + orden + ' con ' + piezasPayload.length + ' pieza(s)');
-    alertarStockPapelInsuficiente(piezasPayload);
+    await alertarStockPapelInsuficiente(orden, piezasPayload);
 
     const { data: o1 } = await sb.from('opp_ordenes').select('*').order('orden', { ascending: false });
     const { data: o2 } = await sb.from('opp_piezas').select('*');

@@ -58,6 +58,19 @@ function calcularAlertas(){
     }
   });
 
+  // D) materia prima faltante para una orden — queda visible acá hasta
+  // que se repone el stock de esa materia prima (ver js/ordenes.js,
+  // alertarStockPapelInsuficiente, y js/maestros.js, materiasCtl).
+  DB.alertas_faltante_material.forEach(a => {
+    const o = DB.opp_ordenes.find(x => x.orden === a.orden);
+    const mat = DB.materias_primas.find(m => m.codigo === a.materia_prima_codigo);
+    alertas.push({
+      severidad: 'alta',
+      icono: '📦',
+      mensaje: `La orden <b>${a.orden}</b> (${o?.cliente || 'sin cliente'}) necesita <b>${a.cantidad_faltante} ${a.unidad || ''}</b> más de <b>${mat?.nombre || a.materia_prima_codigo}</b> — falta reponer stock en Materias primas.`
+    });
+  });
+
   const peso = { alta: 0, media: 1 };
   alertas.sort((a,b) => peso[a.severidad] - peso[b.severidad]);
   return alertas;

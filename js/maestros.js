@@ -60,7 +60,7 @@ function wireCatalog(opts){
       }
       resetForm();
       render();
-      if(opts.onChange) opts.onChange();
+      if(opts.onChange) opts.onChange(data[0]);
     }catch(err){
       console.error(err);
       toast('Error al guardar — revisa la consola');
@@ -171,6 +171,30 @@ function poblarChecksAreasMaterial(){
     `<label><input type="checkbox" value="${a}"${actuales.has(a)?' checked':''}> ${a}</label>`
   ).join('') || '<span class="card-hint">no hay áreas cargadas todavía (Máquinas/Actividades)</span>';
   document.getElementById('m-mpa-hint').textContent = '';
+}
+
+// Cuando se repone stock de una materia prima (agregarla/editarla acá con
+// un stock_actual más alto), revisa si alguna orden estaba esperando ese
+// material (ver alertarStockPapelInsuficiente en js/ordenes.js) y, si el
+// nuevo stock ya la cubre, la marca resuelta — deja de salir en Alertas.
+async function resolverAlertasFaltanteMateriaPrima(row){
+  if(!row || row.stock_actual == null) return;
+  const pendientes = DB.alertas_faltante_material.filter(a => a.materia_prima_codigo === row.codigo && a.cantidad_faltante <= row.stock_actual);
+  if(!pendientes.length) return;
+  try{
+    const { error } = await sb.from('alertas_faltante_material')
+      .update({ resuelta: true, resuelta_en: new Date().toISOString() })
+      .in('id', pendientes.map(a => a.id));
+    if(error) throw error;
+    const ordenes = [...new Set(pendientes.map(a => a.orden))];
+    pendientes.forEach(a => {
+      const idx = DB.alertas_faltante_material.indexOf(a);
+      if(idx >= 0) DB.alertas_faltante_material.splice(idx, 1);
+    });
+    toast(`Stock repuesto — ya no falta ${row.nombre} para la(s) orden(es) ${ordenes.join(', ')}`);
+  }catch(err){
+    console.error('No se pudo resolver la alerta de faltante:', err);
+  }
 }
 
 async function guardarAreasMaterial(){
@@ -344,7 +368,7 @@ export function initMaestros(onChange){
         r.costo_unitario!=null?fmtCOP(r.costo_unitario):'—',
         areas.length ? areas.join(', ') : '<span class="card-hint">ninguna configurada</span>'];
     },
-    onChange: () => { if(onChange) onChange(); poblarSelectMaterialAreas(); }
+    onChange: (row) => { if(onChange) onChange(); poblarSelectMaterialAreas(); resolverAlertasFaltanteMateriaPrima(row); }
   });
 
   insumosCtl = wireCatalog({
