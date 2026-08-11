@@ -239,10 +239,10 @@ function runningCardHTML(row){
     </div>
     <div class="form-row">
       <div class="field full">
-        <label>¿Quedó terminado este proceso (${row.area || '—'})?</label>
+        <label>¿Quedó terminado ${row.subproceso ? `este subproceso (${row.subproceso})` : `este proceso (${row.area || '—'})`}?</label>
         <select class="rc-proceso-completo">
-          <option value="Si" selected>Sí, quedó terminado por completo</option>
-          <option value="No">No, voy a pausar (continúa después)</option>
+          <option value="No">No, continuaré después</option>
+          <option value="Si" selected>Sí, terminé este proceso</option>
         </select>
         <span class="card-hint">Si eliges "No", esta orden NO va a contar este proceso como terminado hasta que lo finalices de verdad. Un operario no puede tener dos actividades corriendo a la vez — pausa esta para poder iniciar otra.</span>
       </div>
@@ -262,6 +262,9 @@ function runningCardHTML(row){
         <input type="text" class="rc-consumo" placeholder="ej. 2 planchas, 150 g" value="${row.consumo_mp || ''}" style="display:${unidadActual ? 'none' : 'block'}">
       </div>
     </div>
+    ${row.actividad === 'Remisión y Despacho' ? `<div class="form-row">
+      <div class="field full"><label>Número de remisión <span class="card-hint">(al terminar esta actividad, la orden queda Cerrada)</span></label><input type="text" class="rc-numero-remision" placeholder="ej. REM-00123" value="${row.numero_remision || ''}"></div>
+    </div>` : ''}
     <div class="field full"><label>Comentario</label><textarea class="rc-comentario" rows="2">${row.comentario || ''}</textarea></div>
     <button type="button" class="btn-primary btn-clock rc-finish">⏹ Finalizar esta actividad</button>
   </div>`;
@@ -658,6 +661,18 @@ async function finishActivity(id, horaIni, fecha){
     return;
   }
 
+  // "Remisión y Despacho" cierra la orden — se pide el número de remisión
+  // acá mismo (por ahora manual; la generación automática de la remisión
+  // completa queda pendiente para más adelante).
+  const rowActual = DB.produccion.find(r => r.id === id);
+  const esRemisionYDespacho = !!rowActual && rowActual.actividad === 'Remisión y Despacho';
+  const remisionInput = card.querySelector('.rc-numero-remision');
+  if(esRemisionYDespacho && !esPausa && (!remisionInput || !remisionInput.value.trim())){
+    toast('Escribe el número de remisión antes de finalizar — esto cierra la orden');
+    if(remisionInput) remisionInput.focus();
+    return;
+  }
+
   btn.disabled = true; btn.textContent = esPausa ? 'Pausando…' : 'Finalizando…';
   try{
     const now = new Date();
@@ -674,6 +689,7 @@ async function finishActivity(id, horaIni, fecha){
     const consumoMp = usaConsumoNumerico
       ? (consumoNum.value ? consumoNum.value + (consumoNum.dataset.unidad ? ' ' + consumoNum.dataset.unidad : '') : null)
       : (card.querySelector('.rc-consumo').value.trim() || null);
+    const numeroRemision = esRemisionYDespacho ? (remisionInput.value.trim() || null) : null;
     const updates = {
       hora_fin: horaFin,
       cantidad: parseFloat(card.querySelector('.rc-cantidad').value || 0),
@@ -683,6 +699,7 @@ async function finishActivity(id, horaIni, fecha){
       reproceso: card.querySelector('.rc-reproceso').value,
       proceso_completo: !esPausa,
       motivo_pausa: esPausa ? motivoPausa : null,
+      numero_remision: numeroRemision,
       tiempo_hr: hrs,
       valor_actividad: hrs * rate
     };
@@ -704,7 +721,24 @@ async function finishActivity(id, horaIni, fecha){
         avisoConsumo = avisoConsumoNoReflejado(resultado, materiaPrima);
       }
     }
-    toast((esPausa ? `Actividad pausada (${motivoPausa}) · ${fmtNum(hrs,2)} h registradas` : 'Actividad finalizada · ' + fmtNum(hrs,2) + ' h registradas') + avisoConsumo, avisoConsumo ? 7000 : undefined);
+
+    let avisoCierre = '';
+    if(esRemisionYDespacho && !esPausa && numeroRemision && data[0].orden != null){
+      try{
+        const { error: errOrden } = await sb.from('opp_ordenes')
+          .update({ estado: 'Cerrada', numero_remision: numeroRemision }).eq('orden', data[0].orden);
+        if(errOrden) throw errOrden;
+        const o = DB.opp_ordenes.find(x => x.orden === data[0].orden);
+        if(o){ o.estado = 'Cerrada'; o.numero_remision = numeroRemision; }
+        avisoCierre = ` · Orden ${data[0].orden} CERRADA (remisión ${numeroRemision})`;
+      }catch(err){
+        console.error('No se pudo cerrar la orden:', err);
+        avisoCierre = ' · ⚠️ No se pudo cerrar la orden — revisa la consola';
+      }
+    }
+
+    const avisoExtra = avisoConsumo + avisoCierre;
+    toast((esPausa ? `Actividad pausada (${motivoPausa}) · ${fmtNum(hrs,2)} h registradas` : 'Actividad finalizada · ' + fmtNum(hrs,2) + ' h registradas') + avisoExtra, avisoExtra ? 7000 : undefined);
 
     clearInterval(timerIntervals.get(id));
     timerIntervals.delete(id);

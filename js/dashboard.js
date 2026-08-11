@@ -1,7 +1,7 @@
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
 import { fmtCOP, fmtNum, areaColor, rangoFechas, rangoAnterior, deltaBadge, exportarExcel, toast } from './helpers.js';
-import { mostrarDetalleOrden, tipoTrabajoLabel, renderOppRecent, subprocesosDeArea } from './ordenes.js';
+import { mostrarDetalleOrden, tipoTrabajoLabel, renderOppRecent, subprocesosDeArea, getOrdenDetalleActual } from './ordenes.js';
 import { puedeEditarProduccion } from './auth.js';
 import { listaAreasDisponibles, materialSelectOptionsHTML, unidadNumericaDelMaterial, parseCantidadConsumo, descontarInventarioYCargarCosto, revertirConsumoDeRegistro, avisoConsumoNoReflejado } from './registrar.js';
 import { renderInventario } from './inventario.js';
@@ -522,6 +522,9 @@ function abrirEdicionRegistro(id){
   document.getElementById('ole-comentario').value = row.comentario || '';
   document.getElementById('ole-reproceso').value = row.reproceso === 'Si' ? 'Si' : 'No';
   document.getElementById('ole-proceso-completo').value = row.procesoCompleto === false ? 'No' : 'Si';
+  document.getElementById('ole-terminado-label').textContent = row.subproceso
+    ? `¿Quedó terminado este subproceso (${row.subproceso})?`
+    : `¿Quedó terminado este proceso (${row.area || '—'})?`;
   poblarSelectMotivoPausaEdicion(row.motivoPausa || null);
   actualizarWrapMotivoPausa();
   document.getElementById('ole-proceso-completo').onchange = actualizarWrapMotivoPausa;
@@ -636,12 +639,23 @@ async function guardarEdicionRegistro(){
     renderGerencial();
     renderOppRecent();
     renderInventario();
+    refrescarDetalleOrdenSiEstaAbierta(data[0].orden);
   }catch(err){
     console.error(err);
     toast('Error al guardar la corrección — revisa la consola');
   }finally{
     btn.disabled = false; btn.textContent = 'Guardar cambios';
   }
+}
+
+// Corregir/eliminar un registro (arriba) recalcula solo el estado en
+// memoria (DB.produccion, DB.costos_movimientos, stock) — pero si el
+// usuario tenía abierto el Detalle de esa misma orden (Órdenes > Historial
+// de producción), ese panel no se repintaba solo: había que F5 para verlo
+// reflejado. Esto lo refresca automático, sin tocar el detalle si es de
+// OTRA orden distinta a la que se acaba de corregir.
+function refrescarDetalleOrdenSiEstaAbierta(orden){
+  if(orden != null && getOrdenDetalleActual() === orden) mostrarDetalleOrden(orden);
 }
 
 async function eliminarRegistroLog(id){
@@ -669,6 +683,7 @@ async function eliminarRegistroLog(id){
     renderGerencial();
     renderOppRecent();
     renderInventario();
+    refrescarDetalleOrdenSiEstaAbierta(row.orden);
   }catch(err){
     console.error(err);
     toast('Error al eliminar — revisa la consola');

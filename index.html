@@ -251,7 +251,7 @@
         </div>
         <span class="card-hint">Al cambiar el insumo o la cantidad, el inventario se ajusta solo: se devuelve lo que este registro había descontado y se aplica lo nuevo.</span>
         <div class="form-row">
-          <div class="field"><label>¿Quedó terminado este proceso?</label><select id="ole-proceso-completo"><option value="Si">Sí, terminado</option><option value="No">No, quedó pausado</option></select></div>
+          <div class="field"><label id="ole-terminado-label">¿Quedó terminado este proceso?</label><select id="ole-proceso-completo"><option value="No">No, continuaré después</option><option value="Si" selected>Sí, terminé este proceso</option></select></div>
           <div class="field" id="ole-motivo-pausa-wrap" style="display:none"><label>Motivo de la pausa</label><select id="ole-motivo-pausa"></select></div>
         </div>
         <div class="field full"><label>Comentario</label><textarea id="ole-comentario" rows="2"></textarea></div>
@@ -483,6 +483,7 @@
           <label class="litografia-only-check"><input type="checkbox" class="f-proc" value="Plastificado"> Plastificado</label>
           <label class="litografia-only-check"><input type="checkbox" class="f-proc" value="Engomadora"> Engomadora</label>
           <label><input type="checkbox" class="f-proc" value="Terminado" checked> Terminado</label>
+          <label><input type="checkbox" class="f-proc" value="Remisión y Despacho" checked> Remisión y Despacho</label>
         </div>
         <div class="field full">
           <label>Orden en que se hacen <span class="card-hint">(arrastra ⠿ para cambiar la secuencia de esta pieza)</span></label>
@@ -1147,9 +1148,12 @@
       <div class="card">
         <div class="card-head"><h3>Inventario de materia prima</h3><span class="card-hint">papel (Materias primas) e insumos por área — el consumo del operario descuenta solo, y crear una orden avisa si falta stock</span></div>
         <div class="kpi-row" id="inv-kpis"></div>
+        <div class="form-row" style="margin-top:10px">
+          <div class="field"><label>Buscar por producto o código</label><input type="text" id="inv-buscar" placeholder="ej. Propalcote, Cote-350-C2-1, Colbón…"></div>
+        </div>
         <div class="table-wrap" style="margin-top:12px">
           <table id="tbl-inventario">
-            <thead><tr><th>Tipo</th><th>Nombre</th><th>Categoría / área</th><th class="num">Stock actual</th><th class="num">Mínimo</th><th class="num">Costo/unidad</th><th>Estado</th><th>Órdenes esperando este material</th></tr></thead>
+            <thead><tr><th>Tipo</th><th>Código</th><th>Nombre</th><th>Categoría / área</th><th class="num">Stock actual</th><th class="num">Mínimo</th><th class="num">Costo/unidad</th><th>Estado</th><th>Órdenes esperando este material</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>

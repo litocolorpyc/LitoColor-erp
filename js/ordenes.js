@@ -1092,6 +1092,12 @@ export function renderRadarHistorico(){
 let chartDetalle = null;
 let ordenDetalleActual = null; // recuerda qué orden está abierta en el detalle, para el botón de imprimir
 
+// Para que dashboard.js pueda refrescar SOLO si la orden que se acaba de
+// corregir (Ajustar consumo, Corregir registro) es la que está abierta
+// ahora mismo en "Detalle de la orden" — evita pisar el detalle de otra
+// orden que el usuario pueda tener a la vista.
+export function getOrdenDetalleActual(){ return ordenDetalleActual; }
+
 // El botón "Ajustar" del Historial de producción abre "Corregir registro"
 // (Operario), que vive en otro módulo/pestaña — ordenes.js no puede
 // importar dashboard.js directo (dashboard.js ya importa de ordenes.js, y
@@ -1227,6 +1233,7 @@ function estadoRegistroHTML(r){
   else if(r.procesoCompleto === false) chips.push(`<span class="estado-chip estado-chip-warn">⏸ pausa${r.motivoPausa ? ' — ' + r.motivoPausa : ''}</span>`);
   else chips.push('<span class="estado-chip done">✓ terminado</span>');
   if(r.reproceso === 'Si') chips.push('<span class="estado-chip pending">↺ reproceso</span>');
+  if(r.numeroRemision) chips.push(`<span class="estado-chip done">🚚 remisión ${r.numeroRemision}</span>`);
   return chips.join(' ');
 }
 

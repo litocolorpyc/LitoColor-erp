@@ -18,16 +18,27 @@ function ordenesEsperando(materiaPrimaCodigo){
 function filasInventario(){
   const filas = [];
   DB.materias_primas.filter(m => m.activo !== false).forEach(m => filas.push({
-    tipo: 'Materia prima', nombre: m.nombre, grupo: m.categoria || '—', unidad: m.unidad || 'pliegos',
+    tipo: 'Materia prima', codigo: m.codigo || null, nombre: m.nombre, grupo: m.categoria || '—', unidad: m.unidad || 'pliegos',
     stock: m.stock_actual || 0, minimo: m.stock_minimo || 0, costo: m.costo_unitario != null ? m.costo_unitario : null,
     esperando: ordenesEsperando(m.codigo)
   }));
   DB.insumos_area.filter(m => m.activo !== false).forEach(m => filas.push({
-    tipo: 'Insumo de área', nombre: m.nombre, grupo: m.area || '—', unidad: m.unidad || 'unidad',
+    tipo: 'Insumo de área', codigo: null, nombre: m.nombre, grupo: m.area || '—', unidad: m.unidad || 'unidad',
     stock: m.stock_actual || 0, minimo: m.stock_minimo || 0, costo: m.costo_unitario != null ? m.costo_unitario : null,
     esperando: []
   }));
   return filas;
+}
+
+// Pedido: filtrar el inventario por producto (nombre) o por código. Al
+// buscar, se busca en TODO el catálogo (no solo "en seguimiento") — así
+// se puede encontrar un material aunque todavía no tenga stock/mínimo
+// configurado, para ver o cargar sus datos.
+let filtroInventario = '';
+function coincideConFiltro(f){
+  if(!filtroInventario) return true;
+  const t = filtroInventario.toLowerCase();
+  return (f.nombre||'').toLowerCase().includes(t) || (f.codigo||'').toLowerCase().includes(t);
 }
 
 export function renderInventario(){
@@ -43,7 +54,8 @@ export function renderInventario(){
   // filtro, los 226 papeles precargados (todos en 0/0 por default)
   // saldrían de entrada como si no hubiera ni una hoja, PERO un negativo
   // nunca se puede perder de vista aunque nunca se le haya puesto mínimo.
-  const enSeguimiento = filas.filter(f => f.minimo > 0 || f.stock !== 0 || f.esperando.length > 0);
+  const base = filtroInventario ? filas.filter(coincideConFiltro) : filas;
+  const enSeguimiento = filtroInventario ? base : base.filter(f => f.minimo > 0 || f.stock !== 0 || f.esperando.length > 0);
   const negativos = enSeguimiento.filter(f => f.stock < 0);
   const bajoMinimo = enSeguimiento.filter(f => f.stock < 0 || (f.minimo > 0 && f.stock < f.minimo));
   const esperando = enSeguimiento.filter(f => f.esperando.length > 0);
@@ -73,14 +85,14 @@ export function renderInventario(){
       ? '<span class="estado-chip pending">🔴 Stock negativo</span>'
       : (bajo ? '<span class="estado-chip pending">⚠ Bajo mínimo</span>' : '<span class="estado-chip done">✓ OK</span>');
     return `<tr style="${bajo ? 'background:var(--bg-warning,rgba(163,45,45,.06))' : ''}">
-      <td>${f.tipo}</td><td>${f.nombre}</td><td>${f.grupo}</td>
+      <td>${f.tipo}</td><td>${f.codigo || '—'}</td><td>${f.nombre}</td><td>${f.grupo}</td>
       <td class="num" style="${negativo?'color:var(--bad);font-weight:600':''}">${fmtNum(f.stock,2)} ${f.unidad}</td>
       <td class="num">${fmtNum(f.minimo,2)}</td>
       <td class="num">${f.costo != null ? fmtCOP(f.costo) : '—'}</td>
       <td>${estadoHTML}</td>
       <td>${esperandoHTML}</td>
     </tr>`;
-  }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--ink-faint)">Todavía no configuraste stock ni mínimo para ningún material — hazlo desde "Materias primas" o "Materiales por área"</td></tr>';
+  }).join('') || `<tr><td colspan="9" style="text-align:center;color:var(--ink-faint)">${filtroInventario ? 'Ningún material coincide con "' + filtroInventario + '"' : 'Todavía no configuraste stock ni mínimo para ningún material — hazlo desde "Materias primas" o "Materiales por área"'}</td></tr>`;
 
   tbody.querySelectorAll('[data-orden]').forEach(el => {
     el.addEventListener('click', () => irAOrdenYVerDetalleDesdeInventario(parseInt(el.dataset.orden, 10)));
@@ -98,4 +110,11 @@ function irAOrdenYVerDetalleDesdeInventario(orden){
 
 export function initInventario(){
   renderInventario();
+  const buscar = document.getElementById('inv-buscar');
+  if(buscar){
+    buscar.addEventListener('input', () => {
+      filtroInventario = buscar.value.trim();
+      renderInventario();
+    });
+  }
 }

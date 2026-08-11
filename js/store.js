@@ -40,7 +40,12 @@ export function normProd(r){
     // Maestros, ej. área "Terminado" → "Doblar pestañas"/"Engomado") —
     // solo aplica si el área tiene subprocesos definidos. Ver
     // areasCompletadasPorPieza() en ordenes.js.
-    subproceso: r.subproceso
+    subproceso: r.subproceso,
+    // Número de remisión — solo cuando este registro es la actividad
+    // "Remisión y Despacho" que cerró la orden (ver finishActivity en
+    // js/registrar.js). Por ahora es manual; la generación automática de
+    // la remisión completa queda pendiente para más adelante.
+    numeroRemision: r.numero_remision
   };
 }
 
