@@ -416,6 +416,7 @@ function mostrarDetalleProduccionArea(area){
 }
 
 // ---------- OPERARIO ----------
+let rangoOp = rangoFechas('todo');
 export function populateOperarioSelect(){
   const sel = document.getElementById('op-select');
   const names = new Set(DB.personal.filter(p=>p.activo).map(p=>p.nombre));
@@ -425,7 +426,14 @@ export function populateOperarioSelect(){
 }
 export function renderOperario(){
   const sel = document.getElementById('op-select').value;
-  const recs = DB.produccion.filter(r=> sel==='__ALL__' ? true : (r.operario||'').trim().startsWith(sel.split(' ')[0]) || r.operario===sel );
+  const { desde, hasta } = rangoOp;
+  // Pedido: "el jefe de producción debe ver TODOS los registros de un
+  // operario y poder filtrarlos por rango de fechas" — para poder
+  // encontrar y ajustar (Editar) cualquiera, no solo los últimos 15.
+  const recs = DB.produccion.filter(r =>
+    (sel==='__ALL__' ? true : (r.operario||'').trim().startsWith(sel.split(' ')[0]) || r.operario===sel)
+    && enRango(r.fecha, desde, hasta)
+  );
   const horas = recs.reduce((s,r)=>s+(r.tiempoHr||0),0);
   const valor = recs.reduce((s,r)=>s+(r.valorActividad||0),0);
   document.getElementById('op-chart-hint').textContent = sel==='__ALL__' ? 'de toda la planta' : 'de '+sel;
@@ -443,14 +451,20 @@ export function renderOperario(){
   const puedeEditar = puedeEditarProduccion();
   document.getElementById('op-log-th-acciones').style.display = puedeEditar ? '' : 'none';
 
-  const recent = recs.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')).slice(0,15);
+  const ordenados = recs.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'') || (b.horaIni||'').localeCompare(a.horaIni||''));
+  const TOPE = 500; // no debería llegar acá en uso normal — solo evita renderizar miles de filas de una vez si el rango es enorme
+  const recent = ordenados.slice(0, TOPE);
+  const hint = document.getElementById('op-log-hint');
+  if(hint) hint.textContent = ordenados.length > TOPE
+    ? `mostrando ${TOPE} de ${ordenados.length} — angosta el rango de fechas para ver el resto`
+    : `${ordenados.length} registro(s) del rango elegido arriba`;
   document.querySelector('#tbl-op-log tbody').innerHTML = recent.map(r=>{
     const acciones = puedeEditar ? `<td><div class="row-actions">
         <button type="button" class="row-btn" data-editar-reg="${r.id}">Editar</button>
         <button type="button" class="row-btn row-btn-danger" data-eliminar-reg="${r.id}">Eliminar</button>
       </div></td>` : '';
     return `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td class="${r.orden!=null?'fila-clicable':''}" data-orden="${r.orden??''}">${r.orden??'—'}</td><td class="num">${fmtNum(r.cantidad,0)}</td><td class="num">${fmtNum(r.tiempoHr,2)}</td><td class="num">${fmtCOP(r.valorActividad)}</td>${acciones}</tr>`;
-  }).join('') || `<tr><td colspan="${puedeEditar?7:6}" style="text-align:center;color:var(--ink-faint)">Sin registros</td></tr>`;
+  }).join('') || `<tr><td colspan="${puedeEditar?7:6}" style="text-align:center;color:var(--ink-faint)">Sin registros en este rango</td></tr>`;
 
   document.querySelectorAll('#tbl-op-log tbody td[data-orden]').forEach(td => {
     if(!td.dataset.orden) return;
@@ -773,6 +787,7 @@ export function abrirEdicionRegistroDesdeOrden(id){
 export function initDashboardFilters(){
   wireRangePresets('ger-presets', 'ger-desde', 'ger-hasta', () => rangoGer, r => rangoGer = r, renderGerencial);
   wireRangePresets('prod-presets', 'prod-desde', 'prod-hasta', () => rangoProd, r => rangoProd = r, renderProduccion);
+  wireRangePresets('op-presets', 'op-desde', 'op-hasta', () => rangoOp, r => rangoOp = r, renderOperario);
   wireExportButtons();
   wireEdicionRegistro();
   const btnCerrarProdArea = document.getElementById('prod-area-detalle-cerrar');

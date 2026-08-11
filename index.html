@@ -213,6 +213,18 @@
         <label for="op-select">Operario</label>
         <select id="op-select"></select>
       </div>
+      <div class="date-range-row">
+        <div class="preset-row" id="op-presets">
+          <button type="button" class="preset-btn" data-preset="7d">7 días</button>
+          <button type="button" class="preset-btn" data-preset="30d">30 días</button>
+          <button type="button" class="preset-btn" data-preset="mes">Este mes</button>
+          <button type="button" class="preset-btn" data-preset="trimestre">Trimestre</button>
+          <button type="button" class="preset-btn" data-preset="anio">Este año</button>
+          <button type="button" class="preset-btn active" data-preset="todo">Todo</button>
+        </div>
+        <div class="field" style="max-width:140px"><label>Desde</label><input type="date" id="op-desde"></div>
+        <div class="field" style="max-width:140px"><label>Hasta</label><input type="date" id="op-hasta"></div>
+      </div>
       <div class="kpi-row" id="op-kpis"></div>
       <div class="grid-2">
         <div class="card">
@@ -220,7 +232,7 @@
           <canvas id="chart-op-area" height="220"></canvas>
         </div>
         <div class="card">
-          <div class="card-head"><h3>Bitácora reciente</h3><span class="card-hint">últimos 15 registros</span></div>
+          <div class="card-head"><h3>Bitácora</h3><span class="card-hint" id="op-log-hint">todos los registros del rango elegido arriba</span></div>
           <div class="table-wrap">
             <table id="tbl-op-log">
               <thead><tr><th>Fecha</th><th>Actividad</th><th>Orden</th><th class="num">Cant.</th><th class="num">Hrs</th><th class="num">Valor</th><th id="op-log-th-acciones" style="display:none">Acciones</th></tr></thead>
@@ -995,6 +1007,7 @@
         <p><b>Buscar/Editar/Duplicar/Cancelar:</b> en "Buscar y administrar órdenes". "Duplicar" crea una orden NUEVA con los mismos datos — útil cuando un cliente repite un pedido. "Cancelar" no borra historial, solo retira.</p>
         <p><b>Ver detalle:</b> muestra absolutamente todo — ficha técnica completa de cada pieza (tamaño, papel, tintas, corte, acabados…), procesos con su check, materiales consumidos, horas por operario/máquina, y el comparativo de Presupuesto vs. Real. Tiene un botón <b>"🖨 Imprimir"</b> para cuando no hay pantalla a mano en planta — abre una hoja limpia lista para imprimir.</p>
         <p><b>Historial de producción y ajuste de consumos:</b> dentro del detalle de la orden, la tabla "Historial de producción" lista cada registro con su Materia prima y Consumo. <b>Solo Jefe de Producción, Gerencia o Admin</b> ven un botón <b>"Ajustar"</b> en cada fila — abre "Corregir registro" (en Operario) con ese registro puntual, donde se puede cambiar el insumo consumido y la cantidad. Al guardar, el inventario se ajusta solo: se devuelve al stock lo que ese registro había descontado antes y se aplica de nuevo con los valores corregidos — así Inventario, Materias primas/Materiales por área y los costos de la orden quedan siempre correlacionados con lo que dice el registro.</p>
+        <p><b>Ver y corregir TODOS los registros de un operario:</b> en Operario, la tarjeta "Bitácora" ya no se limita a los últimos 15 — con el filtro de fechas de arriba (mismo estilo que Producción/Gerencial) se puede ver cualquier rango, incluso "Todo". Eso sirve para encontrar y corregir cualquier registro viejo (botón "Editar"), no solo los recientes.</p>
         <table>
           <thead><tr><th>Estado</th><th>Significa</th></tr></thead>
           <tbody>
