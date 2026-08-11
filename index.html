@@ -58,6 +58,7 @@
       <div class="sidebar-group">
         <div class="sidebar-group-label">Maestros</div>
         <button class="tab-btn" data-tab="m-empleados" role="tab">Empleados</button>
+        <button class="tab-btn" data-tab="m-areas" role="tab">Áreas</button>
         <button class="tab-btn" data-tab="m-maquinas" role="tab">Máquinas</button>
         <button class="tab-btn" data-tab="m-actividades" role="tab">Actividades</button>
         <button class="tab-btn" data-tab="m-motivos-pausa" role="tab">Motivos de pausa</button>
@@ -462,6 +463,10 @@
           <label class="litografia-only-check"><input type="checkbox" class="f-proc" value="Engomadora"> Engomadora</label>
           <label><input type="checkbox" class="f-proc" value="Terminado" checked> Terminado</label>
         </div>
+        <div class="field full">
+          <label>Orden en que se hacen <span class="card-hint">(arrastra ⠿ para cambiar la secuencia de esta pieza)</span></label>
+          <div class="opp-procesos-orden"></div>
+        </div>
 
         <div class="litografia-only">
           <div class="opp-calc-divider">Cálculo de imposición</div>
@@ -584,6 +589,23 @@
         <div class="table-wrap" style="margin-top:12px">
           <table id="tbl-m-empleados">
             <thead><tr><th>Nombre</th><th>Cargo</th><th class="num">Valor/hora</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-m-areas">
+      <div class="card">
+        <div class="card-head"><h3>Áreas</h3><span class="card-hint">las áreas de producción (Diseño, Litografía, Guillotina, Terminado, etc.) — las usan Máquinas, Actividades, Materiales por área, Subprocesos y el checklist de procesos al crear una orden · "Retirar" no borra nada</span></div>
+        <div class="form-row">
+          <div class="field"><label>Área</label><input type="text" id="m-area-nombre" placeholder="ej. Litografia"></div>
+          <div class="field"><label>Orden <span class="card-hint">(secuencia por defecto — menor va primero)</span></label><input type="number" id="m-area-orden" min="0" placeholder="ej. 3"></div>
+        </div>
+        <div class="form-foot"><span id="m-area-mode"></span><button type="button" class="btn-primary" id="m-area-save">Agregar área</button></div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table id="tbl-m-areas">
+            <thead><tr><th>Área</th><th>Orden</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -946,6 +968,7 @@
         <div class="help-tip"><b>Tip:</b> el campo "Proveedor" te sugiere primero los proveedores del tipo más relevante según el tipo de trabajo (ej. "Proveedor de Maquila" para Trabajo Externo) — pero puedes elegir cualquiera. Si escribes uno que no existe, se crea solo.</div>
         <h4>Crear / Consultar una orden</h4>
         <p><b>Crear:</b> llena Orden, Cliente/Producto (listas desplegables, con "+ Nuevo…" si no existe), y cada Pieza. Al elegir el Producto, "Nombre de la pieza" sugiere las piezas ya usadas antes para ese producto — si escribes una nueva, queda registrada sola para la próxima vez. El "Pliego" solo permite 70x100 (el más común, viene por defecto) o 60x90.</p>
+        <p><b>Orden de los procesos:</b> debajo de "Procesos que requiere esta pieza" hay una lista ⠿ arrastrable con los procesos que marcaste — ahí elegís en qué secuencia se van a trabajar (por defecto sale en el orden del maestro Áreas). Ese orden es el que ve el operario y el que decide cuál es "lo próximo pendiente" cuando le asignás la pieza desde Prioridad de producción.</p>
         <p><b>Importar desde Excel:</b> si ya tienes la orden en el Excel "formulario" que usa producción (bloques de columnas, uno por pieza), usa el botón <b>"⬆ Importar desde Excel"</b> junto a "Nueva orden" — llena el formulario solo (cliente, producto, y cada pieza con papel, tintas, tamaños, acabados). No guarda nada automáticamente: siempre revisas y le das click a "Guardar orden completa", igual que si la digitaras a mano. Si el archivo trae varias órdenes juntas, te pregunta cuál importar. Este importador es para órdenes de <b>Litografía</b> (el formato clásico de planta).</p>
         <p><b>Si escribes el número de una orden que ya existe</b> en "Orden N°", el sistema la detecta sola y carga todo (cliente, producto, piezas) en modo edición — no hace falta ir a buscarla en la tabla.</p>
         <p><b>Consultar orden:</b> arriba del todo en Órdenes hay una tarjeta para escribir cualquier número de orden y ver su detalle completo sin tener que buscarla en la tabla de abajo.</p>
@@ -976,7 +999,8 @@
 
       <div class="card" id="ayuda-admin">
         <div class="card-head"><h3>Para Administradora</h3></div>
-        <p>Todos los maestros (Empleados, Máquinas, Actividades, Motivos de pausa, Subprocesos, Categorías de materia prima, Materias primas, Materiales por área, Clientes, Proveedores, Productos, Piezas por producto) funcionan igual: llena el formulario y "Agregar"; "Editar" carga la fila para corregirla; "Retirar" desactiva sin borrar nada (y se puede "Reactivar"). La excepción es "Áreas que consumen una materia prima" (dentro de Materias primas), que no agrega filas sino que marca/desmarca casillas.</p>
+        <p>Todos los maestros (Empleados, Áreas, Máquinas, Actividades, Motivos de pausa, Subprocesos, Categorías de materia prima, Materias primas, Materiales por área, Clientes, Proveedores, Productos, Piezas por producto) funcionan igual: llena el formulario y "Agregar"; "Editar" carga la fila para corregirla; "Retirar" desactiva sin borrar nada (y se puede "Reactivar"). La excepción es "Áreas que consumen una materia prima" (dentro de Materias primas), que no agrega filas sino que marca/desmarca casillas.</p>
+        <p><b>Áreas</b> es el maestro base: define qué es un área de producción y en qué orden se hacen por defecto (Diseño antes que Terminado, etc.) — Máquinas, Actividades, Materiales por área, Subprocesos, y el checklist de procesos al crear una orden, todos usan estos mismos nombres.</p>
         <p><b>Proveedores:</b> ahora tienen un campo "Tipo de proveedor" (ej. "Proveedor de Insumos", "Proveedor de Maquila") — es texto libre con sugerencias, no una lista cerrada. Vale la pena categorizar los que ya existen: eso hace que, al elegir un proveedor desde una orden, el sistema sugiera primero el tipo más relevante para ese trabajo.</p>
         <p><b>Importar recibo de caja:</b> en Costos > Registrar un costo hay una tarjeta para subir el PDF del recibo de caja que descarga la administradora desde Siigo. El sistema intenta leer el número de recibo, fecha, NIT y cada línea automáticamente — siempre se revisa/corrige en una tabla antes de guardar, y por cada línea se puede elegir a qué orden se asocia y escribir una observación. <b>Solo funciona automático con el PDF real</b> (el que tiene texto, no una foto); con fotos o capturas, la tabla se llena a mano.</p>
       </div>

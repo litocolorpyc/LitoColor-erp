@@ -106,11 +106,18 @@ function toggleSinOrden(){
 
 function limpiarErrorCampo(el){ el.classList.remove('campo-requerido-error'); }
 
+// Fuente de verdad: el maestro "Áreas" (con su orden por defecto). Se le
+// suman las áreas de Máquinas/Actividades que todavía no estén cargadas
+// ahí, para no perder ninguna que ya esté en uso — quedan al final,
+// ordenadas alfabéticamente, hasta que alguien las agregue al maestro.
 export function listaAreasDisponibles(){
-  return Array.from(new Set([
+  const nombres = Array.from(new Set([
+    ...DB.areas.filter(a=>a.activo!==false).map(a=>a.nombre),
     ...DB.maquinas.map(m=>m.area),
     ...DB.actividades.filter(a=>a.activo!==false).map(a=>a.area)
-  ])).filter(Boolean).sort();
+  ])).filter(Boolean);
+  const ordenMap = new Map(DB.areas.map(a => [a.nombre, a.orden ?? 999]));
+  return nombres.sort((a,b) => (ordenMap.get(a) ?? 999) - (ordenMap.get(b) ?? 999) || a.localeCompare(b));
 }
 
 export function populateReg(){

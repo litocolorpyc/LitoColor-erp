@@ -119,6 +119,7 @@ function wireCatalog(opts){
 
 export function renderMaestros(){
   empleadosCtl.render();
+  areasCtl.render();
   maquinasCtl.render();
   actividadesCtl.render();
   motivosPausaCtl.render();
@@ -226,7 +227,7 @@ function poblarDatalistProductosMaestro(){
   dl.innerHTML = DB.productos.filter(p=>p.activo!==false).map(p => `<option value="${p.nombre}">`).join('');
 }
 
-let empleadosCtl, maquinasCtl, actividadesCtl, motivosPausaCtl, subprocesosCtl, categoriasMateriaPrimaCtl, materiasCtl, insumosCtl, clientesCtl, proveedoresCtl, productosCtl, piezasProductoCtl;
+let empleadosCtl, maquinasCtl, areasCtl, actividadesCtl, motivosPausaCtl, subprocesosCtl, categoriasMateriaPrimaCtl, materiasCtl, insumosCtl, clientesCtl, proveedoresCtl, productosCtl, piezasProductoCtl;
 
 export function initMaestros(onChange){
   empleadosCtl = wireCatalog({
@@ -239,6 +240,22 @@ export function initMaestros(onChange){
     ],
     renderCols: r => [r.nombre, r.cargo||'—', r.valor_hora!=null?fmtCOP(r.valor_hora):'—'],
     onChange
+  });
+
+  // Fuente de verdad de qué es un "área" en todo el sistema — máquinas,
+  // actividades, insumos, subprocesos, materias primas y el checklist de
+  // procesos al crear una orden usan estos mismos nombres. El campo
+  // "Orden" es la secuencia por defecto (Diseño antes que Terminado, etc.)
+  // — ver "Procesos que requiere esta pieza" en Órdenes.
+  areasCtl = wireCatalog({
+    table: 'areas', key: 'id', data: DB.areas, tableSel: '#tbl-m-areas',
+    saveBtnId: 'm-area-save', modeId: 'm-area-mode', addLabel: 'Agregar área',
+    fields: [
+      { id:'m-area-nombre', col:'nombre', required:true },
+      { id:'m-area-orden', col:'orden', type:'number' }
+    ],
+    renderCols: r => [r.nombre, r.orden ?? '—'],
+    onChange: () => { if(onChange) onChange(); poblarDatalistProcesosMaestro(); }
   });
 
   maquinasCtl = wireCatalog({

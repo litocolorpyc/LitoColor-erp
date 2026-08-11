@@ -60,6 +60,65 @@ function refreshProveedoresDatalist(){
   if(hint) hint.textContent = relevantes.length ? `sugerido primero: ${relevantes.join(' / ')}` : '';
 }
 
+// ---------- orden en que se hacen los procesos de una pieza ----------
+// Los procesos que requiere una pieza (los checkboxes de arriba) ahora
+// también tienen un ORDEN elegible al crear/editar la orden — antes
+// procesos_requeridos salía siempre en el mismo orden fijo de los
+// checkboxes en el HTML. Se arma como una lista aparte, arrastrable
+// (mismo patrón que "Prioridad de producción"), sincronizada con lo que
+// esté marcado; el orden por defecto de un proceso recién marcado sale
+// del maestro "Áreas" (columna Orden).
+function ordenPorDefectoArea(area){
+  const a = DB.areas.find(x => x.nombre === area);
+  return (a && a.orden != null) ? a.orden : 999;
+}
+
+function wireDragOrdenProcesos(cont){
+  let arrastrando = null;
+  cont.querySelectorAll('.opp-proceso-orden-row').forEach(row => {
+    row.addEventListener('dragstart', () => { arrastrando = row; row.classList.add('dragging'); });
+    row.addEventListener('dragend', () => row.classList.remove('dragging'));
+    row.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if(!arrastrando || arrastrando === row) return;
+      const rect = row.getBoundingClientRect();
+      const despuesDelPunto = (e.clientY - rect.top) > rect.height / 2;
+      row.parentNode.insertBefore(arrastrando, despuesDelPunto ? row.nextSibling : row);
+    });
+  });
+}
+
+// Reconstruye la lista arrastrable a partir de los checkboxes marcados
+// ahora mismo. `ordenPreferido` (opcional) es una secuencia ya guardada
+// (ej. al editar una pieza existente) que manda la primera vez; después,
+// se respeta lo que el usuario ya tenía arrastrado en pantalla y los
+// procesos recién marcados se agregan al final según el maestro Áreas.
+function refrescarOrdenProcesos(node, ordenPreferido){
+  const cont = node.querySelector('.opp-procesos-orden');
+  if(!cont) return;
+  const marcados = Array.from(node.querySelectorAll('.f-proc:checked')).map(cb => cb.value);
+  let orden;
+  if(Array.isArray(ordenPreferido) && ordenPreferido.length){
+    orden = ordenPreferido.filter(p => marcados.includes(p));
+    marcados.forEach(p => { if(!orden.includes(p)) orden.push(p); });
+  } else {
+    const filasActuales = Array.from(cont.querySelectorAll('[data-proc]')).map(r => r.dataset.proc);
+    orden = filasActuales.filter(p => marcados.includes(p));
+    const nuevos = marcados.filter(p => !orden.includes(p)).sort((a,b) => ordenPorDefectoArea(a) - ordenPorDefectoArea(b));
+    orden = [...orden, ...nuevos];
+  }
+
+  cont.innerHTML = orden.map(p => `<div class="opp-proceso-orden-row" draggable="true" data-proc="${p}">
+      <span class="prioridad-handle">⠿</span><span>${p}</span>
+    </div>`).join('') || '<span class="card-hint">marca al menos un proceso arriba</span>';
+  wireDragOrdenProcesos(cont);
+}
+
+// El orden final que se guarda en procesos_requeridos.
+function procesosOrdenados(node){
+  return Array.from(node.querySelectorAll('.opp-procesos-orden [data-proc]')).map(r => r.dataset.proc);
+}
+
 // Los checkboxes de proceso marcados "solo Litografía" (Corte inicial,
 // Litografía, Guillotina) se ocultan por CSS para otros tipos de trabajo,
 // pero si se quedan marcados igual entran a procesos_requeridos: la pieza
@@ -82,6 +141,7 @@ function aplicarTipoTrabajo(){
   piezasList.classList.toggle('tipo-otros', !esLitografia);
   piezasList.querySelectorAll('.opp-pieza-card').forEach(node => {
     sincronizarProcesosLitografia(node);
+    refrescarOrdenProcesos(node);
     recalcPieza(node);
   });
   const hint = document.getElementById('opp-tipo-trabajo-hint');
@@ -136,7 +196,7 @@ function addPiezaCard(prefill){
     el.addEventListener('change', recalc);
   });
   node.querySelectorAll('.f-proc').forEach(cb => {
-    cb.addEventListener('change', () => { cb.dataset.touched = '1'; });
+    cb.addEventListener('change', () => { cb.dataset.touched = '1'; refrescarOrdenProcesos(node); });
   });
 
   document.getElementById('opp-piezas-list').appendChild(node);
@@ -160,6 +220,7 @@ function addPiezaCard(prefill){
 
   sincronizarProcesosLitografia(node);
   if(prefill) fillPiezaCard(node, prefill);
+  refrescarOrdenProcesos(node, Array.isArray(prefill?.procesos_requeridos) ? prefill.procesos_requeridos : null);
   recalcPieza(node);
   updateOppPreview();
   return node;
@@ -1241,7 +1302,10 @@ export function imprimirDetalleOrden(orden){
     const recsPieza = registros.filter(r => r.op === p.op || (r.suborden === p.suborden));
     const requeridos = Array.isArray(p.procesos_requeridos) ? p.procesos_requeridos : [];
     const completados = areasCompletadasPorPieza(p);
-    const procesosTxt = requeridos.map(a => `${completados.has(a) ? '✓' : '☐'} ${a}`).join('&nbsp;&nbsp;&nbsp;') || 'sin procesos definidos';
+    // white-space:nowrap por proceso — si no, al imprimir el navegador puede
+    // cortar la línea justo entre el ☐/✓ y el nombre del proceso, y quedan
+    // en renglones (o páginas) distintos.
+    const procesosTxt = requeridos.map(a => `<span style="white-space:nowrap">${completados.has(a) ? '✓' : '☐'} ${a}</span>`).join('&nbsp;&nbsp;&nbsp;') || 'sin procesos definidos';
     const materiales = [...new Set(recsPieza.map(r => [r.materiaPrima, r.consumoMP].filter(Boolean).join(' — ')).filter(Boolean))];
 
     const filasOM = agruparPorAreaOperarioMaquinaPrint(recsPieza);
@@ -1739,7 +1803,7 @@ async function saveOpp(){
         orden, suborden, op: orden + '-' + suborden,
         pieza: node.querySelector('.f-pieza').value.trim() || null,
         cantidad: parseFloat(node.querySelector('.f-cantidad').value) || null,
-        procesos_requeridos: Array.from(node.querySelectorAll('.f-proc:checked')).map(cb => cb.value)
+        procesos_requeridos: procesosOrdenados(node)
       };
 
       if(!esLitografia){
