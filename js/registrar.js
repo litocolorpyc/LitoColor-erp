@@ -558,10 +558,19 @@ function buscarMaterialPorNombre(area, nombre){
 // (Operario > "Corregir registro"), se puede encontrar y revertir el
 // costo exacto que había generado (ver revertirConsumoDeRegistro más
 // abajo) en vez de dejarlo huérfano o duplicado.
+//
+// Devuelve un estado ({ descontado, costeado, motivo }) en vez de
+// tragarse el resultado — antes, si el nombre escrito no coincidía EXACTO
+// con ningún material del catálogo (típico al usar "Otro / no está en la
+// lista…" y escribir el nombre distinto al real), no se descontaba nada Y
+// nadie se enteraba; quien registró el consumo veía "Actividad finalizada"
+// como si todo hubiera quedado bien. Los llamadores (finishActivity acá
+// abajo, y guardarEdicionRegistro en dashboard.js) avisan con un toast
+// cuando algo no se pudo reflejar.
 export async function descontarInventarioYCargarCosto({ nombre, area, cantidad, orden, suborden, fecha, produccionId }){
-  if(!nombre || !cantidad || cantidad <= 0) return;
+  if(!nombre || !cantidad || cantidad <= 0) return { descontado:false, costeado:false, motivo:null };
   const encontrado = buscarMaterialPorNombre(area, nombre);
-  if(!encontrado) return; // "Otro" escrito a mano, sin catálogo — no hay de dónde descontar
+  if(!encontrado) return { descontado:false, costeado:false, motivo:'sin_catalogo' }; // "Otro" escrito a mano que no calza con ningún material real
   const { tabla, mat, key } = encontrado;
 
   try{
@@ -571,12 +580,12 @@ export async function descontarInventarioYCargarCosto({ nombre, area, cantidad, 
     Object.assign(mat, data[0]);
   }catch(err){
     console.error('No se pudo descontar del inventario:', err);
-    return;
+    return { descontado:false, costeado:false, motivo:'error_guardando' };
   }
 
-  if(!mat.costo_unitario) return;
+  if(!mat.costo_unitario) return { descontado:true, costeado:false, motivo:'sin_costo_unitario' };
   const concepto = DB.costos_conceptos.find(c => c.nombre === 'Consumo de materia prima (automático)');
-  if(!concepto) return; // migración no aplicada todavía — no bloquea el resto
+  if(!concepto) return { descontado:true, costeado:false, motivo:'sin_concepto' }; // migración no aplicada todavía — no bloquea el resto
   try{
     const row = {
       concepto_id: concepto.id, tipo: 'Variable', fecha: fecha || fechaHoyLocal(),
@@ -589,7 +598,20 @@ export async function descontarInventarioYCargarCosto({ nombre, area, cantidad, 
     DB.costos_movimientos.unshift(data[0]);
   }catch(err){
     console.error('No se pudo cargar el costo del material consumido:', err);
+    return { descontado:true, costeado:false, motivo:'error_guardando' };
   }
+  return { descontado:true, costeado:true, motivo:null };
+}
+
+// Texto para avisarle a quien registró el consumo que algo no quedó
+// reflejado — se agrega al toast de "Actividad finalizada"/"Registro
+// corregido" en vez de perderse en la consola.
+export function avisoConsumoNoReflejado(resultado, nombre){
+  if(!resultado || !resultado.motivo) return '';
+  if(resultado.motivo === 'sin_catalogo') return ` ⚠️ "${nombre}" no coincide exacto con ningún material del maestro — no se descontó del inventario. Corrígelo desde "Ajustar" en el Historial de la orden.`;
+  if(resultado.motivo === 'sin_costo_unitario') return ` ⚠️ Se descontó del inventario, pero "${nombre}" no tiene costo por unidad configurado — este consumo no se refleja en los costos de la orden. Cárgale un costo en Maestros.`;
+  if(resultado.motivo === 'error_guardando') return ` ⚠️ Hubo un error guardando el consumo de "${nombre}" — revisa la consola.`;
+  return '';
 }
 
 // Contrario de descontarInventarioYCargarCosto: le devuelve la cantidad al
@@ -670,17 +692,19 @@ async function finishActivity(id, horaIni, fecha){
 
     const idx = DB.produccion.findIndex(r => r.id === id);
     if(idx >= 0) DB.produccion[idx] = normProd(data[0]);
-    toast(esPausa ? `Actividad pausada (${motivoPausa}) · ${fmtNum(hrs,2)} h registradas` : 'Actividad finalizada · ' + fmtNum(hrs,2) + ' h registradas');
 
+    let avisoConsumo = '';
     if(usaConsumoNumerico && materiaPrima){
       const cantidadConsumida = parseFloat(consumoNum.value);
       if(cantidadConsumida > 0){
-        await descontarInventarioYCargarCosto({
+        const resultado = await descontarInventarioYCargarCosto({
           nombre: materiaPrima, area: card.dataset.area, cantidad: cantidadConsumida,
           orden: data[0].orden, suborden: data[0].suborden, fecha: data[0].fecha, produccionId: data[0].id
         });
+        avisoConsumo = avisoConsumoNoReflejado(resultado, materiaPrima);
       }
     }
+    toast((esPausa ? `Actividad pausada (${motivoPausa}) · ${fmtNum(hrs,2)} h registradas` : 'Actividad finalizada · ' + fmtNum(hrs,2) + ' h registradas') + avisoConsumo, avisoConsumo ? 7000 : undefined);
 
     clearInterval(timerIntervals.get(id));
     timerIntervals.delete(id);

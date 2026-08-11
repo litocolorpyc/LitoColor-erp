@@ -3,7 +3,7 @@ import { DB, normProd } from './store.js';
 import { fmtCOP, fmtNum, areaColor, rangoFechas, rangoAnterior, deltaBadge, exportarExcel, toast } from './helpers.js';
 import { mostrarDetalleOrden, tipoTrabajoLabel, renderOppRecent, subprocesosDeArea } from './ordenes.js';
 import { puedeEditarProduccion } from './auth.js';
-import { listaAreasDisponibles, materialSelectOptionsHTML, unidadNumericaDelMaterial, parseCantidadConsumo, descontarInventarioYCargarCosto, revertirConsumoDeRegistro } from './registrar.js';
+import { listaAreasDisponibles, materialSelectOptionsHTML, unidadNumericaDelMaterial, parseCantidadConsumo, descontarInventarioYCargarCosto, revertirConsumoDeRegistro, avisoConsumoNoReflejado } from './registrar.js';
 import { renderInventario } from './inventario.js';
 
 // Cambia a la pestaña de Órdenes y abre el detalle completo de una orden —
@@ -617,17 +617,19 @@ async function guardarEdicionRegistro(){
     if(row.materiaPrima && !isNaN(cantidadAnterior) && cantidadAnterior > 0){
       await revertirConsumoDeRegistro(row.materiaPrima, row.area, cantidadAnterior, id);
     }
+    let avisoConsumo = '';
     if(usaConsumoNumericoNuevo && materiaNueva){
       const cantidadNueva = parseFloat(consumoNumEl.value);
       if(cantidadNueva > 0){
-        await descontarInventarioYCargarCosto({
+        const resultado = await descontarInventarioYCargarCosto({
           nombre: materiaNueva, area: areaEditada, cantidad: cantidadNueva,
           orden: data[0].orden, suborden: data[0].suborden, fecha: data[0].fecha, produccionId: id
         });
+        avisoConsumo = avisoConsumoNoReflejado(resultado, materiaNueva);
       }
     }
 
-    toast('Registro corregido');
+    toast('Registro corregido' + avisoConsumo, avisoConsumo ? 7000 : undefined);
     cerrarEdicionRegistro();
     renderOperario();
     renderProduccion();

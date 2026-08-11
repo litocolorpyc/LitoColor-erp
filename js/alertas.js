@@ -98,6 +98,41 @@ function calcularAlertas(){
     });
   });
 
+  // F) materiales que SÍ se están consumiendo pero no tienen costo por
+  // unidad configurado — el stock se descuenta igual, pero ese consumo
+  // real no se refleja en los costos de la orden (Rentabilidad/Gerencial)
+  // hasta que alguien le cargue un costo en Maestros. Sin esta alerta,
+  // ese hueco en los costos podía pasar desapercibido — ver
+  // descontarInventarioYCargarCosto en js/registrar.js.
+  const nombresConsumidos = new Set(DB.produccion.map(r => r.materiaPrima).filter(Boolean));
+  DB.materias_primas.filter(m => nombresConsumidos.has(m.nombre) && !m.costo_unitario).forEach(m => {
+    alertas.push({
+      severidad: 'media',
+      icono: '💸',
+      mensaje: `<b>${m.nombre}</b> se está registrando como consumo, pero no tiene <b>costo por unidad</b> configurado — ese gasto no está entrando a los costos de la orden. Cárgaselo en Maestros &gt; Materias primas.`
+    });
+  });
+  DB.insumos_area.filter(m => nombresConsumidos.has(m.nombre) && !m.costo_unitario).forEach(m => {
+    alertas.push({
+      severidad: 'media',
+      icono: '💸',
+      mensaje: `<b>${m.nombre}</b> (${m.area || 'sin área'}) se está registrando como consumo, pero no tiene <b>costo por unidad</b> configurado — ese gasto no está entrando a los costos de la orden. Cárgaselo en Maestros &gt; Materiales por área.`
+    });
+  });
+
+  // G) registros con "Insumo consumido" que no calza con ningún material
+  // del catálogo (típico de usar "Otro / no está en la lista…" con un
+  // nombre distinto al real) — no se descontó del inventario ni se
+  // costeó nunca. Se corrige desde el Historial de la orden > "Ajustar".
+  const nombresCatalogo = new Set([...DB.materias_primas.map(m=>m.nombre), ...DB.insumos_area.map(m=>m.nombre)]);
+  DB.produccion.filter(r => r.materiaPrima && !nombresCatalogo.has(r.materiaPrima)).forEach(r => {
+    alertas.push({
+      severidad: 'media',
+      icono: '❓',
+      mensaje: `El registro de <b>${r.operario || 'un operario'}</b> en la orden <b>${r.orden ?? '—'}</b> (${(r.fecha||'').slice(0,10)}) anotó <b>"${r.materiaPrima}"</b> como insumo, que no existe igual en ningún maestro — no se descontó del inventario ni se costeó. Corrígelo desde el Historial de esa orden &gt; "Ajustar".`
+    });
+  });
+
   const peso = { alta: 0, media: 1 };
   alertas.sort((a,b) => peso[a.severidad] - peso[b.severidad]);
   return alertas;

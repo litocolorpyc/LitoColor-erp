@@ -18,12 +18,12 @@ export function fechaHoyLocal(fecha){
 export function fmtCOP(n){ if(n==null||isNaN(n)) return '—'; return '$' + Math.round(n).toLocaleString('es-CO'); }
 export function fmtNum(n,d){ if(n==null||isNaN(n)) return '—'; return Number(n).toLocaleString('es-CO',{maximumFractionDigits:d==null?1:d}); }
 
-export function toast(msg){
+export function toast(msg, duracionMs){
   const t = document.getElementById('toast');
   if(!t) return;
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), 2200);
+  setTimeout(()=>t.classList.remove('show'), duracionMs || 2200);
 }
 
 export function setNote(msg, isError){
