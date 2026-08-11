@@ -310,6 +310,10 @@ let ultimaProduccionArea = [];
 export function renderProduccion(){
   const { desde, hasta } = rangoProd;
   const esTodo = desde === '2024-01-01';
+  // Días del rango elegido (incluye ambos extremos) — para "Horas
+  // prom./día" en la tabla de abajo. Se usan los días DEL RANGO, no solo
+  // los que tuvieron movimiento, para poder comparar áreas entre sí.
+  const diasEnRango = Math.max(1, Math.round((new Date(hasta) - new Date(desde)) / 86400000) + 1);
   const codeMap = buildCodeMap();
   const produccion = DB.produccion.filter(r => enRango(r.fecha, desde, hasta));
   const ant = rangoAnterior(desde, hasta);
@@ -337,9 +341,34 @@ export function renderProduccion(){
   produccion.forEach(r=>{ const a=r.area||'General'; areaMap[a]=areaMap[a]||{h:0,p:0,c:0,n:0}; areaMap[a].h+=(r.tiempoHr||0); areaMap[a].p+=(r.cantidad||0); areaMap[a].c+=(r.valorActividad||0); areaMap[a].n+=1; });
   const areas = Object.keys(areaMap).sort((a,b)=>areaMap[b].h-areaMap[a].h);
   ultimaProduccionArea = areas.map(a => ({ area:a, horas:areaMap[a].h, piezas:areaMap[a].p, costo:areaMap[a].c, registros:areaMap[a].n }));
+
+  // Qué órdenes/subórdenes componen cada barra de "Horas por área" — para
+  // poder desplegarlas al hacer click (ver mostrarDetalleProduccionArea).
+  // El registro "sin orden" (trabajo suelto) no se puede abrir en detalle
+  // de orden, así que no entra en este desglose.
+  const detallePorAreaAcumulado = {};
+  produccion.forEach(r => {
+    if(r.orden == null) return;
+    const a = r.area || 'General';
+    const key = r.orden + '-' + (r.suborden ?? '');
+    detallePorAreaAcumulado[a] = detallePorAreaAcumulado[a] || {};
+    const grp = detallePorAreaAcumulado[a][key] = detallePorAreaAcumulado[a][key] ||
+      { orden: r.orden, suborden: r.suborden ?? null, cliente: r.cliente || null, pieza: r.trabajo || null, horas:0, cantidad:0, registros:0 };
+    grp.horas += (r.tiempoHr||0);
+    grp.cantidad += (r.cantidad||0);
+    grp.registros += 1;
+    if(!grp.cliente && r.cliente) grp.cliente = r.cliente;
+    if(!grp.pieza && r.trabajo) grp.pieza = r.trabajo;
+  });
+  detalleProdPorArea = Object.fromEntries(Object.entries(detallePorAreaAcumulado)
+    .map(([a, byKey]) => [a, Object.values(byKey).sort((x,y) => y.horas - x.horas)]));
+
   makeChart('chart-prod-area', { type:'bar', data:{ labels:areas,
     datasets:[{ label:'Horas', data: areas.map(a=>areaMap[a].h), backgroundColor: areas.map(a=>areaColor(a)) }]},
-    options: baseBarOpts(false,true) });
+    options: { ...baseBarOpts(false,true),
+      onClick: (evt, elements) => { if(elements.length) mostrarDetalleProduccionArea(areas[elements[0].index]); },
+      onHover: (evt, elements, chart) => { chart.canvas.style.cursor = elements.length ? 'pointer' : 'default'; }
+    } });
 
   const catMap = {};
   produccion.forEach(r=>{ const c=codeMap[codeFromLabel(r.actividad)]; const cat = c?c.categoria:'Sin clasificar'; catMap[cat]=(catMap[cat]||0)+(r.tiempoHr||0); });
@@ -350,8 +379,40 @@ export function renderProduccion(){
 
   document.querySelector('#tbl-prod-area tbody').innerHTML = areas.map(a=>{
     const d=areaMap[a];
-    return `<tr><td><span class="badge" style="background:${areaColor(a)}22;color:${areaColor(a)}">${a}</span></td><td class="num">${fmtNum(d.h)}</td><td class="num">${fmtNum(d.p,0)}</td><td class="num">${fmtCOP(d.c)}</td><td class="num">${d.n}</td></tr>`;
-  }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--ink-faint)">Sin datos en este rango</td></tr>';
+    const promDia = d.h / diasEnRango;
+    const promRegistro = d.n > 0 ? d.h / d.n : 0;
+    return `<tr class="fila-clicable" data-area="${a}"><td><span class="badge" style="background:${areaColor(a)}22;color:${areaColor(a)}">${a}</span></td><td class="num">${fmtNum(d.h)}</td><td class="num">${fmtNum(d.p,0)}</td><td class="num">${fmtCOP(d.c)}</td><td class="num">${d.n}</td><td class="num">${fmtNum(promDia,2)}</td><td class="num">${fmtNum(promRegistro,2)}</td></tr>`;
+  }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint)">Sin datos en este rango</td></tr>';
+  document.querySelectorAll('#tbl-prod-area [data-area]').forEach(tr => {
+    tr.addEventListener('click', () => mostrarDetalleProduccionArea(tr.dataset.area));
+  });
+}
+
+// Pedido: "que cuando se presione la barra del área, despliegue una
+// pantalla con los datos de las órdenes y subórdenes asociadas y que
+// cuando presione una orden, toda la información de la orden" — se
+// arma con detalleProdPorArea (calculado arriba, en el mismo rango de
+// fechas elegido) y reutiliza mostrarDetalleOrden para el detalle completo.
+let detalleProdPorArea = {};
+function mostrarDetalleProduccionArea(area){
+  const filas = detalleProdPorArea[area] || [];
+  document.getElementById('prod-area-detalle-titulo').textContent = `Órdenes de ${area}`;
+  document.querySelector('#tbl-prod-area-detalle tbody').innerHTML = filas.map(f => `<tr class="fila-clicable" data-orden="${f.orden}">
+      <td>${f.orden}${f.suborden!=null ? '-' + f.suborden : ''}</td>
+      <td>${f.cliente || '—'}</td>
+      <td>${f.pieza || '—'}</td>
+      <td class="num">${fmtNum(f.horas,2)}</td>
+      <td class="num">${fmtNum(f.cantidad,0)}</td>
+      <td class="num">${f.registros}</td>
+    </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin órdenes asociadas en este rango (puede ser trabajo "sin orden asignada")</td></tr>';
+
+  document.querySelectorAll('#tbl-prod-area-detalle [data-orden]').forEach(tr => {
+    tr.addEventListener('click', () => irAOrdenYVerDetalle(parseInt(tr.dataset.orden, 10)));
+  });
+
+  const card = document.getElementById('prod-area-detalle-card');
+  card.style.display = '';
+  card.scrollIntoView({ behavior:'smooth' });
 }
 
 // ---------- OPERARIO ----------
@@ -714,6 +775,10 @@ export function initDashboardFilters(){
   wireRangePresets('prod-presets', 'prod-desde', 'prod-hasta', () => rangoProd, r => rangoProd = r, renderProduccion);
   wireExportButtons();
   wireEdicionRegistro();
+  const btnCerrarProdArea = document.getElementById('prod-area-detalle-cerrar');
+  if(btnCerrarProdArea) btnCerrarProdArea.addEventListener('click', () => {
+    document.getElementById('prod-area-detalle-card').style.display = 'none';
+  });
 }
 
 function wireExportButtons(){

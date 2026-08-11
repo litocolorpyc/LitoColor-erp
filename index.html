@@ -171,7 +171,7 @@
       <div class="kpi-row" id="prod-kpis"></div>
       <div class="grid-2">
         <div class="card">
-          <div class="card-head"><h3>Horas por área</h3><span class="card-hint">total registrado</span></div>
+          <div class="card-head"><h3>Horas por área</h3><span class="card-hint">total registrado — click en una barra para ver sus órdenes</span></div>
           <canvas id="chart-prod-area" height="220"></canvas>
         </div>
         <div class="card">
@@ -184,15 +184,27 @@
         <div class="form-foot" style="margin-top:0;margin-bottom:10px"><span></span><button type="button" class="btn-secondary" id="export-produccion" style="margin:0">⬇ Exportar a Excel</button></div>
         <div class="table-wrap">
           <table id="tbl-prod-area">
-            <thead><tr><th>Área</th><th class="num">Horas</th><th class="num">Cantidad reportada *</th><th class="num">Costo M.O. **</th><th class="num">Registros ***</th></tr></thead>
+            <thead><tr><th>Área</th><th class="num">Horas</th><th class="num">Cantidad reportada *</th><th class="num">Costo M.O. **</th><th class="num">Registros ***</th><th class="num">Horas prom./día ****</th><th class="num">Horas prom./registro</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
         <p class="card-hint" style="margin-top:10px;line-height:1.5">
           * "Cantidad reportada" NO son piezas físicas terminadas — es el número que el operario escribió en "Cantidad producida" al finalizar su actividad en esa área, y cada área cuenta una unidad distinta de la misma orden (ej. pliegos cortados en Corte inicial, pliegos impresos en Litografía, piezas ya cortadas en Guillotina, unidades terminadas en Terminado). Por eso esta columna sirve para ver el volumen dentro de UN área, no para sumarla entre áreas ni para leerla como "piezas producidas".<br>
           ** "Costo M.O." es el costo de mano de obra (horas × tarifa del operario) acumulado en esa área.<br>
-          *** "Registros" es cuántas veces se registró una actividad en esa área (una persona puede registrar varias veces el mismo día) — mide frecuencia de uso, no volumen de piezas.
+          *** "Registros" es cuántas veces se registró una actividad en esa área (una persona puede registrar varias veces el mismo día) — mide frecuencia de uso, no volumen de piezas.<br>
+          **** "Horas prom./día" reparte las horas totales del área entre los días del rango de fechas elegido arriba (no solo los días con movimiento) — así se compara entre áreas con la misma vara. "Horas prom./registro" es cuánto dura en promedio cada vez que alguien registra esa área.
         </p>
+      </div>
+
+      <div class="card" id="prod-area-detalle-card" style="display:none">
+        <div class="card-head"><h3 id="prod-area-detalle-titulo">Órdenes de esta área</h3><span class="card-hint"><button type="button" class="row-btn" id="prod-area-detalle-cerrar">Cerrar ✕</button></span></div>
+        <p class="card-hint">Del rango de fechas elegido arriba. Click en una fila para abrir el detalle completo de esa orden.</p>
+        <div class="table-wrap">
+          <table id="tbl-prod-area-detalle">
+            <thead><tr><th>Orden</th><th>Cliente</th><th>Pieza</th><th class="num">Horas</th><th class="num">Cantidad</th><th class="num">Registros</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -1021,6 +1033,7 @@
         <p><b>Gerencial:</b> ingresos, costo de mano de obra, margen — con comparación automática vs. el periodo anterior, filtros de fecha, y rentabilidad por orden (la vista principal) y por producto (agrupada, para un rango de fechas).</p>
         <p><b>Presupuesto vs. Real (por orden):</b> en el detalle de cada orden, solo Gerente/Jefe de Producción/Admin pueden cargar Costo, Imprevistos, Precio de venta antes y con IVA — el sistema calcula solo el Total Costo, la Rentabilidad esperada, y compara contra el costo real de mano de obra y el ingreso facturado.</p>
         <p><b>Prioridad de producción:</b> desde Órdenes, arrastra las filas de la tarjeta "Prioridad de producción" para decidir en qué orden se debe trabajar — se guarda solo, sin botón aparte.</p>
+        <p><b>Horas por área (Producción):</b> hacé click en una barra del gráfico (o en una fila de la tabla "Producción por área", debajo) para desplegar las órdenes y subórdenes que componen esas horas, en el rango de fechas elegido — y click en una de esas órdenes para abrir su detalle completo.</p>
         <p><b>Exportar:</b> casi toda tabla tiene "⬇ Exportar a Excel". El botón "⬇ Respaldo completo" descarga Pedidos, Producción, Órdenes, Empleados, Máquinas y Clientes en un solo archivo.</p>
         <p><b>Usuarios:</b> para dar acceso a alguien nuevo, ponle correo y rol ahí, y dile que use "¿Primera vez? Crea tu contraseña aquí" en el login — sin pedir ningún SQL.</p>
       </div>

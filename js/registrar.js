@@ -22,8 +22,15 @@ function renderRecentReg(){
   if(hint) hint.textContent = 'de ' + nombre;
   const recent = DB.produccion.filter(r => r.operario === nombre).slice(0,12);
   tbody.innerHTML = recent.map(r=>{
-    const estado = !r.horaIni ? '<span class="estado-chip pending">📌 Asignada</span>'
-      : (r.horaFin ? '<span class="estado-chip done">✓ Completo</span>' : '<span class="estado-chip estado-chip-warn">⏱ En curso</span>');
+    // Ojo: horaFin queda seteada TANTO al finalizar de verdad como al
+    // pausar (ver finishActivity) — el que distingue una cosa de la otra
+    // es procesoCompleto. Antes esto solo miraba horaFin, así que una
+    // actividad pausada aparecía acá como "✓ Completo".
+    let estado;
+    if(!r.horaIni) estado = '<span class="estado-chip pending">📌 Asignada</span>';
+    else if(!r.horaFin) estado = '<span class="estado-chip estado-chip-warn">⏱ En curso</span>';
+    else if(r.procesoCompleto === false) estado = `<span class="estado-chip estado-chip-warn">⏸ Pausada${r.motivoPausa ? ' — ' + r.motivoPausa : ''}</span>`;
+    else estado = '<span class="estado-chip done">✓ Completo</span>';
     const pieza = r.op ? r.op : (r.orden ? '<span style="color:var(--ink-faint)">sin pieza</span>' : '—');
     return `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td>${r.orden??'—'}</td><td>${pieza}</td><td>${estado}</td></tr>`;
   }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--ink-faint)">Sin registros todavía</td></tr>';
