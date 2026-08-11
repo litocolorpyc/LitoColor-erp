@@ -138,28 +138,40 @@ export function populateReg(){
 
 // Arma el <select> de insumos disponibles para el área de esta actividad,
 // con una opción "Otro" para cuando el insumo no está en el maestro todavía.
-function materialSelectOptionsHTML(area, valorActual, papelSugerido){
-  const opcionesInsumo = DB.insumos_area.filter(m => m.area === area && m.activo !== false);
-  // Materias primas (papel, cartulina, laminado, argolla, pegante, etc.)
-  // vinculadas a esta área desde Maestros > Materias primas > "Áreas que
-  // consumen" — una materia prima puede quedar disponible en varias áreas
-  // a la vez (a diferencia de su categoría, que es una sola). Antes SOLO
-  // Guillotina/Corte inicial "veían" materias primas, y únicamente el
-  // papel puntual de esa orden (ver "sugerido" más abajo, que sigue igual).
+// El desplegable de "Insumo consumido" junta TRES fuentes, en este orden:
+//   1) los materiales de la ORDEN — el papel de cualquiera de sus piezas
+//      (materialesOrden), sin importar el área que se esté trabajando: si
+//      estás en Plastificado o Terminado también puede hacer falta anotar
+//      el papel de la orden, no solo en Guillotina/Corte inicial como era
+//      antes.
+//   2) las materias primas vinculadas a esta área desde Maestros >
+//      Materias primas > "Áreas que consumen" (una materia prima puede
+//      quedar disponible en varias áreas a la vez).
+//   3) los insumos por defecto de esta área (Maestros > Materiales por
+//      área — planchas, tinta, colbón, grapas, etc.).
+function materialSelectOptionsHTML(area, valorActual, materialesOrden){
+  const opcionesInsumo = DB.insumos_area.filter(m => m.area === area && m.activo !== false)
+    .map(m => ({ nombre: m.nombre, unidad: m.unidad }));
   const codigosVinculados = new Set(DB.materias_primas_areas.filter(x => x.area === area).map(x => x.materia_prima_codigo));
   const nombresYaListados = new Set(opcionesInsumo.map(m => m.nombre));
-  const opcionesMP = DB.materias_primas.filter(m => codigosVinculados.has(m.codigo) && !nombresYaListados.has(m.nombre));
-  const opciones = [...opcionesInsumo, ...opcionesMP];
-  const yaListado = opciones.some(m => m.nombre === papelSugerido);
-  // En Guillotina/Corte inicial, el papel que ya quedó definido en la
-  // orden para esa pieza es el insumo más probable — se sugiere de
-  // primero aunque todavía no esté cargado como insumo en el maestro.
-  const sugerido = (papelSugerido && ['Guillotina', 'Corte inicial'].includes(area) && !yaListado) ? papelSugerido : null;
-  const coincide = opciones.some(m => m.nombre === valorActual) || valorActual === sugerido;
+  const opcionesMPArea = DB.materias_primas.filter(m => codigosVinculados.has(m.codigo) && !nombresYaListados.has(m.nombre))
+    .map(m => ({ nombre: m.nombre, unidad: m.unidad || 'pliegos' }));
+  opcionesMPArea.forEach(m => nombresYaListados.add(m.nombre));
+
+  const opcionesOrden = (materialesOrden || [])
+    .filter(nombre => nombre && !nombresYaListados.has(nombre))
+    .map(nombre => {
+      const mat = DB.materias_primas.find(m => m.nombre === nombre);
+      return { nombre, unidad: (mat && mat.unidad) || 'pliegos', deOrden: true };
+    });
+
+  const opciones = [...opcionesOrden, ...opcionesMPArea, ...opcionesInsumo];
+  const coincide = opciones.some(m => m.nombre === valorActual);
   const otroSeleccionado = !!valorActual && !coincide;
   const opts = ['<option value="">— Sin insumo registrado —</option>'];
-  if(sugerido) opts.push(`<option value="${sugerido}"${sugerido===valorActual?' selected':''}>${sugerido} (papel de esta orden)</option>`);
-  opts.push(...opciones.map(m => `<option value="${m.nombre}"${m.nombre===valorActual?' selected':''}>${m.nombre}${m.unidad?' ('+m.unidad+')':''}</option>`));
+  opts.push(...opciones.map(m =>
+    `<option value="${m.nombre}"${m.nombre===valorActual?' selected':''}>${m.nombre}${m.deOrden ? ' (de esta orden)' : (m.unidad?' ('+m.unidad+')':'')}</option>`
+  ));
   opts.push(`<option value="__otro__"${otroSeleccionado?' selected':''}>Otro / no está en la lista…</option>`);
   return opts.join('');
 }
@@ -209,8 +221,12 @@ function runningCardHTML(row){
   if(!row.hora_ini) return runningCardPendienteHTML(row);
   const otroSeleccionado = !!row.materia_prima && !DB.insumos_area.some(m => m.area === row.area && m.nombre === row.materia_prima);
   const unidadActual = row.materia_prima ? unidadNumericaDelMaterial(row.area, row.materia_prima) : null;
-  const piezaDeEsteRegistro = row.op ? DB.opp_piezas.find(p => p.op === row.op) : null;
-  const papelSugerido = piezaDeEsteRegistro ? piezaDeEsteRegistro.papel : null;
+  // Todos los papeles/materias primas usados en CUALQUIER pieza de esta
+  // orden — no solo el de la pieza puntual de este registro — para que
+  // estén disponibles como insumo sin importar qué área se esté trabajando.
+  const materialesOrden = row.orden != null
+    ? [...new Set(DB.opp_piezas.filter(p => p.orden === row.orden).map(p => p.papel).filter(Boolean))]
+    : [];
   return `<div class="reg-running-card" data-id="${row.id}" data-area="${row.area || ''}">
     <div class="reg-running-row"><span>Orden / Pieza</span><b>${row.orden || '—'}${row.op ? ' / ' + row.op : ''}</b></div>
     <div class="reg-running-row"><span>Actividad</span><b>${row.actividad || '—'}</b></div>
@@ -237,7 +253,7 @@ function runningCardHTML(row){
     <div class="form-row">
       <div class="field">
         <label>Insumo consumido <span class="card-hint">(del área ${row.area || '—'})</span></label>
-        <select class="rc-materia-select">${materialSelectOptionsHTML(row.area, row.materia_prima, papelSugerido)}</select>
+        <select class="rc-materia-select">${materialSelectOptionsHTML(row.area, row.materia_prima, materialesOrden)}</select>
         <input type="text" class="rc-materia-otro" placeholder="especifica el insumo" style="display:${otroSeleccionado?'block':'none'};margin-top:5px" value="${otroSeleccionado ? row.materia_prima : ''}">
       </div>
       <div class="field">
