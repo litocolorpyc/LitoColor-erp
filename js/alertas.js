@@ -32,15 +32,21 @@ function calcularAlertas(){
     }
   });
 
-  // B) actividades en curso por más de 4 horas (probable olvido de finalizar)
+  // B) actividades en curso por más de 4 horas (probable olvido de
+  // finalizar). Desde que un operario no puede tener dos actividades
+  // corriendo a la vez, una de estas sesiones olvidadas le bloquea
+  // CUALQUIER actividad nueva hasta que alguien la cierre — no es solo un
+  // dato sucio, es un bloqueo real. Se corrige desde Operario > "Corregir
+  // registro" (Jefe/Gerencia/Admin), poniéndola como terminada o pausada.
   DB.produccion.filter(r => !r.horaFin).forEach(r => {
     const horas = horasDesde(r.fecha, r.horaIni);
     if(horas !== null && horas >= 4){
       const opp = r.opp && /^\d+-\d+$/.test(r.opp) ? r.opp : (r.orden ?? 'general');
+      const tiempoTxt = horas >= 48 ? `${Math.floor(horas/24)} días` : `${horas.toFixed(1)} h`;
       alertas.push({
         severidad: horas >= 8 ? 'alta' : 'media',
         icono: '⏱️',
-        mensaje: `<b>${r.operario || 'Un operario'}</b> tiene una actividad abierta hace <b>${horas.toFixed(1)} h</b> sin finalizar (orden ${opp}, ${r.actividad || r.area || ''}). Puede que haya olvidado darle "Finalizar".`
+        mensaje: `<b>${r.operario || 'Un operario'}</b> tiene una actividad abierta hace <b>${tiempoTxt}</b> sin finalizar (orden ${opp}, ${r.actividad || r.area || ''}) — mientras siga así, no puede iniciar ninguna otra actividad. Corrígela desde Operario &gt; "Corregir registro".`
       });
     }
   });

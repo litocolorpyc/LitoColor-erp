@@ -354,11 +354,20 @@ async function refreshRunningSessions(){
 // en vivo (no la memoria local) para cubrir el caso de que haya iniciado
 // algo desde otro dispositivo/pestaña.
 async function actividadEnCursoDelOperario(nombre){
-  const { data, error } = await sb.from('produccion').select('id,actividad,area')
+  const { data, error } = await sb.from('produccion').select('id,actividad,area,orden,fecha,hora_ini')
     .eq('operario', nombre).is('hora_fin', null).not('hora_ini', 'is', null)
     .limit(1);
   if(error){ console.error(error); return null; } // no bloquear por un error de red, solo no se pudo verificar
   return (data && data[0]) || null;
+}
+
+// Mensaje de bloqueo con fecha/orden de la sesión que quedó abierta — para
+// que se note de una si es de HOY (una actividad real que hay que pausar)
+// o una sesión vieja olvidada (hay que pedirle a Jefe/Gerencia/Admin que
+// la cierre desde "Corregir registro", en Operario).
+function mensajeActividadEnCurso(enCurso){
+  const cuando = enCurso.fecha === fechaHoyLocal() ? `hoy ${enCurso.hora_ini || ''}` : `el ${enCurso.fecha || '—'}`;
+  return `Ya tienes "${enCurso.actividad || enCurso.area || 'una actividad'}" en curso desde ${cuando}${enCurso.orden ? ' (orden ' + enCurso.orden + ')' : ''} — finalízala o pausala antes de iniciar otra. Si es una sesión vieja que quedó olvidada, pídele a tu Jefe/Gerencia/Admin que la cierre desde "Corregir registro".`;
 }
 
 async function startActivity(){
@@ -407,7 +416,7 @@ async function startActivity(){
   try{
     const enCurso = await actividadEnCursoDelOperario(nombre);
     if(enCurso){
-      toast(`Ya tienes "${enCurso.actividad || enCurso.area || 'una actividad'}" en curso — finalízala o pausala antes de iniciar otra`);
+      toast(mensajeActividadEnCurso(enCurso));
       document.getElementById('reg-running-list').scrollIntoView({ behavior:'smooth' });
       return;
     }
@@ -480,7 +489,7 @@ async function empezarActividadAsignada(id){
   try{
     const enCurso = await actividadEnCursoDelOperario(nombre);
     if(enCurso){
-      toast(`Ya tienes "${enCurso.actividad || enCurso.area || 'una actividad'}" en curso — finalízala o pausala antes de empezar otra`);
+      toast(mensajeActividadEnCurso(enCurso));
       return;
     }
     const now = new Date();
