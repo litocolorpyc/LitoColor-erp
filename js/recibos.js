@@ -154,6 +154,9 @@ function tipoDeConcepto(conceptoId){
 }
 let itemsActuales = [];
 let cabeceraTotalesActuales = {};
+// Si no es null, "Guardar recibo" corrige ESTE documento ya guardado en
+// vez de crear uno nuevo — ver editarRecibo() más abajo.
+let reciboEditandoId = null;
 // IVA%/Retención% de ESTE documento — se piden una sola vez (modal) y se
 // aplican a todas sus líneas para calcular el costo neto que se descarga
 // al inventario (pedido: "el costo del material se ingresa al inventario
@@ -476,11 +479,102 @@ function limpiarFormularioRecibo(){
   ivaPctAplicado = 0;
   retencionPctAplicado = 0;
   pctSugeridos = { iva: null, rete: null };
+  reciboEditandoId = null;
   document.getElementById('recibo-iva-pct').value = '';
   document.getElementById('recibo-retencion-pct').value = '';
+  document.getElementById('recibo-guardar').textContent = 'Guardar recibo';
+  const avisoEdicion = document.getElementById('recibo-editando-aviso');
+  if(avisoEdicion) avisoEdicion.style.display = 'none';
   renderTablaItems();
   actualizarResumen();
   document.getElementById('recibo-review').style.display = 'none';
+}
+
+// Recarga en el formulario una compra ya guardada, tal cual quedó, para
+// corregirla — misma pantalla que se usa para cargar una nueva, solo que
+// "Guardar recibo" va a actualizar este documento en vez de crear otro.
+async function editarRecibo(reciboId){
+  const recibo = DB.recibos_caja.find(r => r.id === reciboId);
+  if(!recibo) return;
+  try{
+    const { data: items, error } = await sb.from('recibos_caja_items').select('*').eq('recibo_id', reciboId).order('id');
+    if(error) throw error;
+
+    reciboEditandoId = reciboId;
+    document.getElementById('recibo-file').value = '';
+    document.getElementById('recibo-numero').value = recibo.numero_recibo || '';
+    document.getElementById('recibo-fecha').value = recibo.fecha || '';
+    document.getElementById('recibo-nit').value = recibo.nit || '';
+    document.getElementById('recibo-tercero').value = recibo.tercero || '';
+    cabeceraTotalesActuales = {
+      total_bruto: recibo.total_bruto, iva: recibo.iva, retefuente: recibo.retefuente, valor_total: recibo.valor_total
+    };
+    itemsActuales = (items||[]).map(it => ({
+      codigo: it.codigo || '', descripcion: it.descripcion || '', cantidad: it.cantidad || 0,
+      valor_unitario: it.valor_unitario || 0, iva_pct: it.iva_pct, retencion_pct: it.retencion_pct,
+      valor_credito: it.valor_credito || 0, valor_debito: it.valor_debito || 0,
+      valor_neto_unitario: it.valor_neto_unitario || 0,
+      material_tabla: it.material_tabla || null, material_key: it.material_key || null,
+      orden: it.orden || null, suborden: it.suborden || null, observacion: it.observacion || '',
+      concepto_id: it.concepto_id || null, tipo_costo: it.tipo_costo || null
+    }));
+    ivaPctAplicado = recibo.iva_pct_aplicado || 0;
+    retencionPctAplicado = recibo.retencion_pct_aplicado || 0;
+    pctSugeridos = calcularPctSugeridos(itemsActuales, cabeceraTotalesActuales);
+    document.getElementById('recibo-iva-pct').value = ivaPctAplicado || '';
+    document.getElementById('recibo-retencion-pct').value = retencionPctAplicado || '';
+
+    document.getElementById('recibo-review').style.display = '';
+    document.getElementById('recibo-guardar').textContent = 'Guardar cambios';
+    const avisoEdicion = document.getElementById('recibo-editando-aviso');
+    if(avisoEdicion){
+      avisoEdicion.style.display = '';
+      avisoEdicion.textContent = `Editando "${recibo.numero_recibo || reciboId}" — al guardar se corrige este documento (no se crea uno nuevo). "Limpiar" cancela la edición.`;
+    }
+    renderTablaItems();
+    actualizarResumen();
+    document.getElementById('recibo-import-card').scrollIntoView({ behavior:'smooth', block:'start' });
+  }catch(err){
+    console.error(err);
+    toast('No se pudo cargar el documento para editar — revisa la consola');
+  }
+}
+
+// Deshace lo que UNA compra ya guardada le sumó al inventario y borra sus
+// líneas y los costos que había generado — SIN borrar el documento en sí
+// (eliminarRecibo lo borra después de llamar esto; guardarRecibo lo llama
+// antes de volver a insertar las líneas corregidas). Centraliza la lógica
+// para que borrar y editar queden consistentes entre sí.
+async function revertirEfectosRecibo(reciboId){
+  const { data: items, error: errItems } = await sb.from('recibos_caja_items').select('*').eq('recibo_id', reciboId);
+  if(errItems) throw errItems;
+
+  for(const it of (items||[])){
+    if(!it.material_tabla || !it.material_key || !it.cantidad || it.cantidad <= 0) continue;
+    try{
+      const tabla = it.material_tabla;
+      const keyCol = tabla === 'materias_primas' ? 'codigo' : 'id';
+      const keyVal = tabla === 'materias_primas' ? it.material_key : parseInt(it.material_key, 10);
+      const mat = tabla === 'materias_primas'
+        ? DB.materias_primas.find(m => m.codigo === it.material_key)
+        : DB.insumos_area.find(m => String(m.id) === it.material_key);
+      if(!mat) continue;
+      const nuevoStock = (mat.stock_actual || 0) - it.cantidad;
+      const { data, error } = await sb.from(tabla).update({ stock_actual: nuevoStock }).eq(keyCol, keyVal).select();
+      if(error) throw error;
+      Object.assign(mat, data[0]);
+    }catch(err){
+      console.error('No se pudo devolver al inventario "' + it.descripcion + '":', err);
+    }
+  }
+
+  const { error: errDelItems } = await sb.from('recibos_caja_items').delete().eq('recibo_id', reciboId);
+  if(errDelItems) throw errDelItems;
+
+  const { error: errDelCostos } = await sb.from('costos_movimientos').delete().eq('recibo_id', reciboId);
+  if(errDelCostos) throw errDelCostos;
+  let idx;
+  while((idx = DB.costos_movimientos.findIndex(m => m.recibo_id === reciboId)) >= 0) DB.costos_movimientos.splice(idx, 1);
 }
 
 async function guardarRecibo(){
@@ -512,7 +606,7 @@ async function guardarRecibo(){
   // archivo) — por si la persona corrigió el número a mano, o ignoró el
   // aviso de la pantalla anterior. Aquí sí se detiene hasta que confirme.
   if(numero){
-    const existente = DB.recibos_caja.find(r => r.numero_recibo === numero);
+    const existente = DB.recibos_caja.find(r => r.numero_recibo === numero && r.id !== reciboEditandoId);
     if(existente){
       const fechaExistente = existente.cargado_en ? new Date(existente.cargado_en).toLocaleString('es-CO') : 'antes';
       const continuar = confirm(
@@ -527,9 +621,10 @@ async function guardarRecibo(){
   const valorTotal = cabeceraTotalesActuales.valor_total || itemsActuales.reduce((s,it)=>s+(it.valor_credito||0),0);
   const user = getCurrentUser();
 
+  const esEdicion = reciboEditandoId != null;
   btn.disabled = true; btn.textContent = 'Guardando…';
   try{
-    const { data: recibo, error: errRecibo } = await sb.from('recibos_caja').insert([{
+    const camposRecibo = {
       numero_recibo: numero || null, fecha, nit, tercero,
       valor_total: valorTotal || null,
       tipo_documento: 'Compra',
@@ -538,11 +633,26 @@ async function guardarRecibo(){
       retefuente: cabeceraTotalesActuales.retefuente ?? null,
       iva_pct_aplicado: ivaPctAplicado || null,
       retencion_pct_aplicado: retencionPctAplicado || null,
-      archivo_nombre: document.getElementById('recibo-file').files[0]?.name || null,
       cargado_por: user ? user.nombre : null
-    }]).select();
-    if(errRecibo) throw errRecibo;
-    const reciboId = recibo[0].id;
+    };
+
+    let reciboId, reciboGuardado;
+    if(esEdicion){
+      // Deshace lo que la versión ANTERIOR de este documento había sumado
+      // al inventario y borra sus líneas/costos viejos, antes de guardar
+      // la versión corregida — así no queda duplicado ni desfasado.
+      reciboId = reciboEditandoId;
+      await revertirEfectosRecibo(reciboId);
+      const { data, error } = await sb.from('recibos_caja').update(camposRecibo).eq('id', reciboId).select();
+      if(error) throw error;
+      reciboGuardado = data[0];
+    } else {
+      camposRecibo.archivo_nombre = document.getElementById('recibo-file').files[0]?.name || null;
+      const { data, error } = await sb.from('recibos_caja').insert([camposRecibo]).select();
+      if(error) throw error;
+      reciboGuardado = data[0];
+      reciboId = reciboGuardado.id;
+    }
 
     const payloadItems = itemsActuales.map(it => ({
       recibo_id: reciboId, codigo: it.codigo || null, descripcion: it.descripcion || null,
@@ -551,7 +661,8 @@ async function guardarRecibo(){
       valor_debito: it.valor_debito || 0, valor_credito: it.valor_credito || 0,
       valor_neto_unitario: it.valor_neto_unitario || null,
       material_tabla: it.material_tabla || null, material_key: it.material_key || null,
-      orden: it.orden || null, suborden: it.suborden || null, observacion: it.observacion || null
+      orden: it.orden || null, suborden: it.suborden || null, observacion: it.observacion || null,
+      concepto_id: it.concepto_id || null, tipo_costo: it.tipo_costo || null
     }));
     const { error: errItems } = await sb.from('recibos_caja_items').insert(payloadItems);
     if(errItems) throw errItems;
@@ -621,13 +732,19 @@ async function guardarRecibo(){
     }
 
     const sinConcepto = itemsActuales.length - conCosto.length;
-    toast('Documento ' + (numero || reciboId) + ' guardado con ' + payloadItems.length + ' línea(s)'
+    toast('Documento ' + (numero || reciboId) + (esEdicion ? ' actualizado con ' : ' guardado con ') + payloadItems.length + ' línea(s)'
       + (movimientosCreados ? ` · ${movimientosCreados} línea(s) ya cuentan como costo real` : '')
       + (sinConcepto ? ` · ${sinConcepto} sin concepto, no se contaron en Costos` : '')
       + (materialesActualizados ? ` · ${materialesActualizados} material(es) de inventario actualizados (stock + costo neto)` : '')
       + (materialesFallidos.length ? ` · ⚠️ no se pudo actualizar: ${materialesFallidos.join(', ')}` : ''),
       materialesFallidos.length ? 7000 : undefined);
-    DB.recibos_caja.unshift(recibo[0]);
+
+    if(esEdicion){
+      const idx = DB.recibos_caja.findIndex(r => r.id === reciboId);
+      if(idx>=0) DB.recibos_caja[idx] = reciboGuardado; else DB.recibos_caja.unshift(reciboGuardado);
+    } else {
+      DB.recibos_caja.unshift(reciboGuardado);
+    }
     limpiarFormularioRecibo();
     renderRecibosCargados();
   }catch(err){
@@ -655,9 +772,15 @@ export function renderRecibosCargados(){
     <td>${r.tercero || '—'}</td>
     <td class="num">${fmtCOP(r.valor_total||0)}</td>
     <td>${r.cargado_por || '—'}</td>
-    <td><button type="button" class="row-btn row-btn-danger" data-del-recibo="${r.id}">Eliminar</button></td>
+    <td><div class="row-actions">
+      <button type="button" class="row-btn" data-edit-recibo="${r.id}">Editar</button>
+      <button type="button" class="row-btn row-btn-danger" data-del-recibo="${r.id}">Eliminar</button>
+    </div></td>
   </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin compras cargadas todavía</td></tr>';
 
+  tbody.querySelectorAll('[data-edit-recibo]').forEach(b => b.addEventListener('click', () => {
+    editarRecibo(parseInt(b.dataset.editRecibo, 10));
+  }));
   tbody.querySelectorAll('[data-del-recibo]').forEach(b => b.addEventListener('click', () => {
     eliminarRecibo(parseInt(b.dataset.delRecibo, 10));
   }));
@@ -674,42 +797,16 @@ async function eliminarRecibo(reciboId){
   if(!seguro) return;
 
   try{
-    const { data: items, error: errItems } = await sb.from('recibos_caja_items').select('*').eq('recibo_id', reciboId);
-    if(errItems) throw errItems;
-
-    // Devuelve el stock que esta compra había sumado (misma cantidad, en
-    // sentido contrario) a cada material que quedó ligado.
-    for(const it of (items||[])){
-      if(!it.material_tabla || !it.material_key || !it.cantidad || it.cantidad <= 0) continue;
-      try{
-        const tabla = it.material_tabla;
-        const keyCol = tabla === 'materias_primas' ? 'codigo' : 'id';
-        const keyVal = tabla === 'materias_primas' ? it.material_key : parseInt(it.material_key, 10);
-        const mat = tabla === 'materias_primas'
-          ? DB.materias_primas.find(m => m.codigo === it.material_key)
-          : DB.insumos_area.find(m => String(m.id) === it.material_key);
-        if(!mat) continue;
-        const nuevoStock = (mat.stock_actual || 0) - it.cantidad;
-        const { data, error } = await sb.from(tabla).update({ stock_actual: nuevoStock }).eq(keyCol, keyVal).select();
-        if(error) throw error;
-        Object.assign(mat, data[0]);
-      }catch(err){
-        console.error('No se pudo devolver al inventario "' + it.descripcion + '":', err);
-      }
-    }
-
-    const { error: errDelItems } = await sb.from('recibos_caja_items').delete().eq('recibo_id', reciboId);
-    if(errDelItems) throw errDelItems;
-
-    const { error: errDelCostos } = await sb.from('costos_movimientos').delete().eq('recibo_id', reciboId);
-    if(errDelCostos) throw errDelCostos;
-    let idx;
-    while((idx = DB.costos_movimientos.findIndex(m => m.recibo_id === reciboId)) >= 0) DB.costos_movimientos.splice(idx, 1);
+    await revertirEfectosRecibo(reciboId);
 
     const { error: errDelRecibo } = await sb.from('recibos_caja').delete().eq('id', reciboId);
     if(errDelRecibo) throw errDelRecibo;
     const i = DB.recibos_caja.findIndex(r => r.id === reciboId);
     if(i >= 0) DB.recibos_caja.splice(i, 1);
+
+    // Si justo se estaba editando este mismo documento, limpia el
+    // formulario — si no, quedaría "editando" un documento que ya no existe.
+    if(reciboEditandoId === reciboId) limpiarFormularioRecibo();
 
     renderInventario();
     renderMovimientosRecientes();
