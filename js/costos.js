@@ -106,19 +106,71 @@ function poblarSelectConcepto(){
   if(valorPrevio) sel.value = valorPrevio;
 }
 
+let editingMovimientoId = null;
+
 export function renderMovimientosRecientes(){
   const tbody = document.querySelector('#tbl-costos-recientes tbody');
   if(!tbody) return;
   const conceptoNombre = id => { const c = DB.costos_conceptos.find(x=>x.id===id); return c ? c.nombre : '—'; };
   const recientes = [...DB.costos_movimientos].sort((a,b)=> b.fecha.localeCompare(a.fecha) || b.id - a.id).slice(0,20);
-  tbody.innerHTML = recientes.map(m => `<tr>
+  tbody.innerHTML = recientes.map(m => {
+    // Solo se puede editar/borrar desde acá lo que se registró a mano en
+    // este mismo formulario — lo que viene de una compra importada
+    // (recibo_id) o de un consumo automático de producción (produccion_id)
+    // tiene su propio dueño (el documento / el registro de producción) y
+    // corregirlo solo acá lo dejaría desincronizado con ese origen.
+    const editable = m.recibo_id == null && m.produccion_id == null;
+    return `<tr>
     <td>${(m.fecha||'').slice(0,10)}</td>
     <td><span class="badge" style="background:${m.tipo==='Fijo'?'#2E8FC022':'#D8854A22'};color:${m.tipo==='Fijo'?'#2E8FC0':'#D8854A'}">${m.tipo}</span></td>
     <td>${conceptoNombre(m.concepto_id)}</td>
     <td>${m.proveedor || '—'}</td>
     <td>${m.orden != null ? m.orden + (m.suborden != null ? '-' + m.suborden : '') : '—'}</td>
     <td class="num">${fmtCOP(m.valor)}</td>
-  </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin movimientos todavía</td></tr>';
+    <td>${editable ? `<div class="row-actions">
+      <button type="button" class="row-btn" data-edit-mov="${m.id}">Editar</button>
+      <button type="button" class="row-btn row-btn-danger" data-del-mov="${m.id}">Eliminar</button>
+    </div>` : ''}</td>
+  </tr>`;
+  }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint)">Sin movimientos todavía</td></tr>';
+
+  tbody.querySelectorAll('[data-edit-mov]').forEach(b => b.addEventListener('click', () => {
+    const m = DB.costos_movimientos.find(x => x.id === parseInt(b.dataset.editMov, 10));
+    if(!m) return;
+    editingMovimientoId = m.id;
+    document.getElementById('rc-fecha').value = (m.fecha||'').slice(0,10);
+    document.getElementById('rc-concepto').value = m.concepto_id;
+    document.getElementById('rc-valor').value = m.valor;
+    document.getElementById('rc-proveedor').value = m.proveedor || '';
+    document.getElementById('rc-orden').value = m.orden || '';
+    document.getElementById('rc-suborden').value = m.suborden || '';
+    document.getElementById('rc-comentario').value = m.comentario || '';
+    document.getElementById('rc-save').textContent = 'Guardar cambios';
+    window.scrollTo({ top: document.getElementById('rc-fecha').getBoundingClientRect().top + window.scrollY - 80, behavior: 'smooth' });
+  }));
+  tbody.querySelectorAll('[data-del-mov]').forEach(b => b.addEventListener('click', async () => {
+    const m = DB.costos_movimientos.find(x => x.id === parseInt(b.dataset.delMov, 10));
+    if(!m) return;
+    if(!confirm(`¿Eliminar este costo de ${fmtCOP(m.valor)} (${m.comentario||conceptoNombre(m.concepto_id)})? No se puede deshacer.`)) return;
+    const { error } = await sb.from('costos_movimientos').delete().eq('id', m.id);
+    if(error){ console.error(error); toast('No se pudo eliminar — revisa la consola'); return; }
+    const idx = DB.costos_movimientos.findIndex(x => x.id === m.id);
+    if(idx>=0) DB.costos_movimientos.splice(idx,1);
+    if(editingMovimientoId === m.id) resetFormMovimiento();
+    renderMovimientosRecientes();
+    renderResumenCostosMes();
+    toast('Costo eliminado');
+  }));
+}
+
+function resetFormMovimiento(){
+  editingMovimientoId = null;
+  document.getElementById('rc-valor').value = '';
+  document.getElementById('rc-proveedor').value = '';
+  document.getElementById('rc-comentario').value = '';
+  document.getElementById('rc-orden').value = '';
+  document.getElementById('rc-suborden').value = '';
+  document.getElementById('rc-save').textContent = 'Guardar costo';
 }
 
 export function renderResumenCostosMes(){
@@ -165,15 +217,19 @@ async function guardarMovimiento(){
     }
 
     const row = { concepto_id: conceptoId, tipo: concepto.tipo, fecha, valor, proveedor, comentario, orden, suborden };
-    const { data, error } = await sb.from('costos_movimientos').insert([row]).select();
-    if(error) throw error;
-    DB.costos_movimientos.unshift(data[0]);
-    toast('Costo registrado');
-    document.getElementById('rc-valor').value = '';
-    document.getElementById('rc-proveedor').value = '';
-    document.getElementById('rc-comentario').value = '';
-    document.getElementById('rc-orden').value = '';
-    document.getElementById('rc-suborden').value = '';
+    if(editingMovimientoId){
+      const { data, error } = await sb.from('costos_movimientos').update(row).eq('id', editingMovimientoId).select();
+      if(error) throw error;
+      const idx = DB.costos_movimientos.findIndex(m => m.id === editingMovimientoId);
+      if(idx>=0) DB.costos_movimientos[idx] = data[0];
+      toast('Costo actualizado');
+    } else {
+      const { data, error } = await sb.from('costos_movimientos').insert([row]).select();
+      if(error) throw error;
+      DB.costos_movimientos.unshift(data[0]);
+      toast('Costo registrado');
+    }
+    resetFormMovimiento();
     renderMovimientosRecientes();
     renderResumenCostosMes();
   }catch(err){

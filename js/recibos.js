@@ -161,6 +161,36 @@ let cabeceraTotalesActuales = {};
 let ivaPctAplicado = 0;
 let retencionPctAplicado = 0;
 
+// El IVA%/Retención% que YA viene leído por línea en el PDF (columnas
+// "IVA %"/"Reten. %" de la tabla de Siigo) — puramente informativo hasta
+// ahora, nunca se usaba para nada. Eso hacía fácil pasar por alto el modal
+// (la tabla ya mostraba 19%/4% por línea, así que se veía "completo" aunque
+// el % del documento completo — el que sí se descuenta del costo — hubiera
+// quedado en 0). Ahora se usa para PRELLENAR el modal con lo detectado, en
+// vez de dejarlo en blanco.
+let pctSugeridos = { iva: null, rete: null };
+
+function moda(valores){
+  if(!valores.length) return null;
+  const cuenta = {};
+  valores.forEach(v => { cuenta[v] = (cuenta[v]||0) + 1; });
+  return parseFloat(Object.keys(cuenta).sort((a,b) => cuenta[b]-cuenta[a])[0]);
+}
+
+function calcularPctSugeridos(items, cabecera){
+  const ivaVals = items.map(it => it.iva_pct).filter(v => v != null && !isNaN(v));
+  const reteVals = items.map(it => it.retencion_pct).filter(v => v != null && !isNaN(v));
+  let iva = moda(ivaVals);
+  let rete = moda(reteVals);
+  if(iva == null && cabecera && cabecera.iva && cabecera.total_bruto){
+    iva = Math.round((cabecera.iva / cabecera.total_bruto) * 100 * 100) / 100;
+  }
+  if(rete == null && cabecera && cabecera.retefuente && cabecera.total_bruto){
+    rete = Math.round((cabecera.retefuente / cabecera.total_bruto) * 100 * 100) / 100;
+  }
+  return { iva, rete };
+}
+
 // unitario YA INCLUYE IVA → se le quita el IVA y se le suma la retención.
 function calcularNeto(valorUnitario){
   const v = valorUnitario || 0;
@@ -200,17 +230,44 @@ function buscarMaterialParaLinea(descripcion){
   return null;
 }
 
-function opcionesMaterialInventario(tablaSel, keySel){
-  const opts = ['<option value="">— sin coincidencia, elegí uno —</option>'];
-  DB.materias_primas.filter(m=>m.activo!==false).forEach(m => {
-    const sel = tablaSel==='materias_primas' && keySel===m.codigo;
-    opts.push(`<option value="materias_primas|${m.codigo}"${sel?' selected':''}>📄 ${m.nombre} (${m.codigo})</option>`);
-  });
-  DB.insumos_area.filter(m=>m.activo!==false).forEach(m => {
-    const sel = tablaSel==='insumos_area' && keySel===String(m.id);
-    opts.push(`<option value="insumos_area|${m.id}"${sel?' selected':''}>🧰 ${m.nombre} (${m.area||'—'})</option>`);
-  });
-  return opts.join('');
+// Cuántas palabras comparte la descripción de la factura con el nombre de
+// un material — no decide nada solo, solo ordena la lista para que, cuando
+// no hubo coincidencia automática (ej. "BOND BLANCO 75 60 X90" vs "Bond 75
+// gr 60x90"), los candidatos más parecidos aparezcan primero en vez de
+// tener que buscar a mano entre ~200 materiales.
+function puntajeSimilitud(descripcion, nombre){
+  const palabrasDesc = new Set(normalizarNombreMaterial(descripcion).split(' ').filter(Boolean));
+  const palabrasNom = normalizarNombreMaterial(nombre).split(' ').filter(Boolean);
+  let comunes = 0;
+  palabrasNom.forEach(p => { if(palabrasDesc.has(p)) comunes++; });
+  return comunes;
+}
+
+function opcionesMaterialInventario(tablaSel, keySel, descripcion){
+  const todos = [
+    ...DB.materias_primas.filter(m=>m.activo!==false).map(m => ({ tabla:'materias_primas', key:m.codigo, nombre:m.nombre, etiqueta:`📄 ${m.nombre} (${m.codigo})` })),
+    ...DB.insumos_area.filter(m=>m.activo!==false).map(m => ({ tabla:'insumos_area', key:String(m.id), nombre:m.nombre, etiqueta:`🧰 ${m.nombre} (${m.area||'—'})` }))
+  ];
+  const opcion = m => {
+    const sel = tablaSel===m.tabla && keySel===m.key;
+    return `<option value="${m.tabla}|${m.key}"${sel?' selected':''}>${m.etiqueta}</option>`;
+  };
+
+  if(descripcion){
+    const puntuados = todos.map(m => ({ ...m, puntaje: puntajeSimilitud(descripcion, m.nombre) }))
+      .filter(m => m.puntaje > 0)
+      .sort((a,b) => b.puntaje - a.puntaje)
+      .slice(0, 8);
+    if(puntuados.length){
+      const restoKeys = new Set(puntuados.map(m => m.tabla+'|'+m.key));
+      const resto = todos.filter(m => !restoKeys.has(m.tabla+'|'+m.key));
+      const etiquetaGrupo = ('Parecidos a: ' + descripcion.slice(0,40)).replace(/"/g, "'");
+      return '<option value="">— sin coincidencia, elegí uno —</option>'
+        + `<optgroup label="${etiquetaGrupo}">` + puntuados.map(opcion).join('') + '</optgroup>'
+        + '<optgroup label="Todos los materiales">' + resto.map(opcion).join('') + '</optgroup>';
+    }
+  }
+  return '<option value="">— sin coincidencia, elegí uno —</option>' + todos.map(opcion).join('');
 }
 
 function opcionesOrden(ordenSeleccionada){
@@ -247,7 +304,7 @@ function renderTablaItems(){
       <td><input type="number" class="ri-reten num" value="${it.retencion_pct||0}" style="width:55px"></td>
       <td><input type="number" class="ri-credito num" value="${it.valor_credito||0}" style="width:100px"></td>
       <td class="num" title="unitario − IVA% + Retención% de esta factura">${fmtCOP(it.valor_neto_unitario||0)}</td>
-      <td><select class="ri-material" title="${sinMaterial?'Sin coincidencia — elegí el material real para que actualice el inventario':'Se va a sumar la cantidad al stock y actualizar el costo por unidad de este material'}">${opcionesMaterialInventario(it.material_tabla, it.material_key)}</select></td>
+      <td><select class="ri-material" title="${sinMaterial?'Sin coincidencia — elegí el material real para que actualice el inventario':'Se va a sumar la cantidad al stock y actualizar el costo por unidad de este material'}">${opcionesMaterialInventario(it.material_tabla, it.material_key, it.descripcion)}</select></td>
       <td><select class="ri-orden">${opcionesOrden(it.orden)}</select></td>
       <td><input type="number" class="ri-suborden" value="${it.suborden||''}" placeholder="sub." title="Suborden / pieza (ej. el 2 de OP5955-2)" style="width:55px"></td>
       <td><select class="ri-concepto">${opcionesConcepto(it.concepto_id)}</select></td>
@@ -353,22 +410,50 @@ async function manejarArchivo(file){
     it.material_key = match ? match.key : null;
   });
 
+  pctSugeridos = calcularPctSugeridos(itemsActuales, cabeceraTotalesActuales);
   mostrarModalIva();
 }
 
 // Pide el IVA%/Retención% de ESTE documento (una vez, se aplica a todas
 // las líneas) — aparece apenas se carga el archivo, antes de mostrar la
-// tabla de revisión final con los costos netos ya calculados.
+// tabla de revisión final con los costos netos ya calculados. Se prellena
+// con lo que el propio PDF ya trae por línea (pctSugeridos) para que no
+// quede en blanco/0 por descuido — igual se puede corregir a mano.
 function mostrarModalIva(){
-  document.getElementById('recibo-iva-modal-pct').value = ivaPctAplicado || '';
-  document.getElementById('recibo-retencion-modal-pct').value = retencionPctAplicado || '';
+  document.getElementById('recibo-iva-modal-pct').value = ivaPctAplicado || pctSugeridos.iva || '';
+  document.getElementById('recibo-retencion-modal-pct').value = retencionPctAplicado || pctSugeridos.rete || '';
+  const nota = document.getElementById('recibo-iva-modal-nota');
+  if(nota){
+    nota.textContent = (pctSugeridos.iva != null || pctSugeridos.rete != null)
+      ? `Detectado en el documento: IVA ${pctSugeridos.iva ?? '—'}% · Retención ${pctSugeridos.rete ?? '—'}% — ya lo dejamos escrito abajo, confírmalo o corrígelo.`
+      : 'No se detectó IVA%/Retención% en el texto del documento — escríbelo a mano (revisa la factura física).';
+  }
   document.getElementById('recibo-iva-modal').style.display = 'flex';
   document.getElementById('recibo-iva-modal-pct').focus();
 }
 
 function aplicarModalIva(){
-  ivaPctAplicado = parseFloat(document.getElementById('recibo-iva-modal-pct').value) || 0;
-  retencionPctAplicado = parseFloat(document.getElementById('recibo-retencion-modal-pct').value) || 0;
+  const ivaInput = document.getElementById('recibo-iva-modal-pct').value;
+  const reteInput = document.getElementById('recibo-retencion-modal-pct').value;
+  const iva = parseFloat(ivaInput) || 0;
+  const rete = parseFloat(reteInput) || 0;
+
+  // Antes se podía aplicar 0%/0% sin ningún aviso aunque la factura
+  // mostrara IVA/Retención reales por línea — así fue como quedó guardado
+  // en null el 12ago26. Ahora, si se intenta aplicar 0 habiendo una
+  // sugerencia distinta de 0, se pide confirmar explícitamente.
+  const dudaIva = iva === 0 && pctSugeridos.iva > 0;
+  const dudaRete = rete === 0 && pctSugeridos.rete > 0;
+  if(dudaIva || dudaRete){
+    const seguir = confirm(
+      `El documento muestra IVA ${pctSugeridos.iva ?? 0}% / Retención ${pctSugeridos.rete ?? 0}% en sus líneas, pero vas a aplicar ${iva}% / ${rete}% — el costo que baja al inventario NO va a descontar impuestos.\n\n` +
+      `Aceptar = aplicar ${iva}%/${rete}% de todos modos · Cancelar = volver a escribir el %`
+    );
+    if(!seguir) return;
+  }
+
+  ivaPctAplicado = iva;
+  retencionPctAplicado = rete;
   document.getElementById('recibo-iva-pct').value = ivaPctAplicado;
   document.getElementById('recibo-retencion-pct').value = retencionPctAplicado;
   recalcularNetos();
@@ -390,6 +475,7 @@ function limpiarFormularioRecibo(){
   cabeceraTotalesActuales = {};
   ivaPctAplicado = 0;
   retencionPctAplicado = 0;
+  pctSugeridos = { iva: null, rete: null };
   document.getElementById('recibo-iva-pct').value = '';
   document.getElementById('recibo-retencion-pct').value = '';
   renderTablaItems();
@@ -405,6 +491,22 @@ async function guardarRecibo(){
   const tercero = document.getElementById('recibo-tercero').value.trim() || null;
 
   if(!itemsActuales.length){ toast('Agrega al menos una línea antes de guardar'); return; }
+
+  // Antes se podía guardar el documento entero sin que nada avisara que
+  // había líneas con cantidad sin ligar a un material real — así fue como
+  // el papel del 12ago26 quedó guardado como costo pero nunca sumó al
+  // inventario. Ahora se detiene a preguntar, mostrando cuáles son.
+  const sinMaterialConCantidad = itemsActuales.filter(it => (it.cantidad||0) > 0 && (!it.material_tabla || !it.material_key));
+  if(sinMaterialConCantidad.length){
+    const listado = sinMaterialConCantidad.slice(0, 8).map(it => `• ${it.descripcion || it.codigo || '(sin descripción)'}`).join('\n')
+      + (sinMaterialConCantidad.length > 8 ? `\n… y ${sinMaterialConCantidad.length - 8} más` : '');
+    const seguir = confirm(
+      `${sinMaterialConCantidad.length} línea(s) con cantidad no están ligadas a ningún "Material del inventario" — NO van a sumar stock ni actualizar costo:\n\n${listado}\n\n` +
+      `Si alguna es papel u otro insumo real, elígelo antes de guardar.\n\n` +
+      `Aceptar = guardar de todos modos (sin tocar inventario en esas líneas) · Cancelar = volver a revisar`
+    );
+    if(!seguir) return;
+  }
 
   // Vuelve a revisar duplicados justo antes de guardar (no solo al leer el
   // archivo) — por si la persona corrigió el número a mano, o ignoró el
@@ -503,7 +605,8 @@ async function guardarRecibo(){
         proveedor: tercero,
         comentario: (numero ? numero + ' — ' : '') + (it.descripcion || ''),
         orden: it.orden || null,
-        suborden: it.suborden || null
+        suborden: it.suborden || null,
+        recibo_id: reciboId // permite borrar/corregir en bloque desde "Compras cargadas" si hace falta
       }));
       const { data: costosData, error: errCostos } = await sb.from('costos_movimientos').insert(payloadCostos).select();
       if(errCostos){
@@ -526,11 +629,96 @@ async function guardarRecibo(){
       materialesFallidos.length ? 7000 : undefined);
     DB.recibos_caja.unshift(recibo[0]);
     limpiarFormularioRecibo();
+    renderRecibosCargados();
   }catch(err){
     console.error(err);
     toast('Error al guardar el documento — revisa la consola');
   }finally{
     btn.disabled = false; btn.textContent = 'Guardar recibo';
+  }
+}
+
+// ---------- Compras cargadas: ver y corregir (borrar) ----------
+// Antes no había ninguna forma de deshacer un documento ya guardado — un
+// error de tecleo (ej. un cero de más) quedaba pegado para siempre, tanto
+// en el costo como en el inventario que hubiera actualizado. "Eliminar"
+// borra las líneas, le DEVUELVE al inventario lo que esa compra le había
+// sumado, borra los movimientos de costo que generó (via recibo_id) y
+// borra el documento — deja todo como si nunca se hubiera cargado.
+export function renderRecibosCargados(){
+  const tbody = document.querySelector('#tbl-recibos-cargados tbody');
+  if(!tbody) return;
+  const recientes = [...DB.recibos_caja].sort((a,b) => (b.cargado_en||'').localeCompare(a.cargado_en||'')).slice(0, 30);
+  tbody.innerHTML = recientes.map(r => `<tr data-id="${r.id}">
+    <td>${(r.fecha||'').slice(0,10) || '—'}</td>
+    <td>${r.numero_recibo || '—'}</td>
+    <td>${r.tercero || '—'}</td>
+    <td class="num">${fmtCOP(r.valor_total||0)}</td>
+    <td>${r.cargado_por || '—'}</td>
+    <td><button type="button" class="row-btn row-btn-danger" data-del-recibo="${r.id}">Eliminar</button></td>
+  </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin compras cargadas todavía</td></tr>';
+
+  tbody.querySelectorAll('[data-del-recibo]').forEach(b => b.addEventListener('click', () => {
+    eliminarRecibo(parseInt(b.dataset.delRecibo, 10));
+  }));
+}
+
+async function eliminarRecibo(reciboId){
+  const recibo = DB.recibos_caja.find(r => r.id === reciboId);
+  if(!recibo) return;
+  const seguro = confirm(
+    `¿Eliminar el documento "${recibo.numero_recibo || reciboId}" (${recibo.tercero || 'sin proveedor'})?\n\n` +
+    `Esto va a:\n· Devolver al inventario el stock que esta compra le sumó\n· Borrar los costos que generó\n· Borrar el documento y sus líneas\n\n` +
+    `No se puede deshacer.`
+  );
+  if(!seguro) return;
+
+  try{
+    const { data: items, error: errItems } = await sb.from('recibos_caja_items').select('*').eq('recibo_id', reciboId);
+    if(errItems) throw errItems;
+
+    // Devuelve el stock que esta compra había sumado (misma cantidad, en
+    // sentido contrario) a cada material que quedó ligado.
+    for(const it of (items||[])){
+      if(!it.material_tabla || !it.material_key || !it.cantidad || it.cantidad <= 0) continue;
+      try{
+        const tabla = it.material_tabla;
+        const keyCol = tabla === 'materias_primas' ? 'codigo' : 'id';
+        const keyVal = tabla === 'materias_primas' ? it.material_key : parseInt(it.material_key, 10);
+        const mat = tabla === 'materias_primas'
+          ? DB.materias_primas.find(m => m.codigo === it.material_key)
+          : DB.insumos_area.find(m => String(m.id) === it.material_key);
+        if(!mat) continue;
+        const nuevoStock = (mat.stock_actual || 0) - it.cantidad;
+        const { data, error } = await sb.from(tabla).update({ stock_actual: nuevoStock }).eq(keyCol, keyVal).select();
+        if(error) throw error;
+        Object.assign(mat, data[0]);
+      }catch(err){
+        console.error('No se pudo devolver al inventario "' + it.descripcion + '":', err);
+      }
+    }
+
+    const { error: errDelItems } = await sb.from('recibos_caja_items').delete().eq('recibo_id', reciboId);
+    if(errDelItems) throw errDelItems;
+
+    const { error: errDelCostos } = await sb.from('costos_movimientos').delete().eq('recibo_id', reciboId);
+    if(errDelCostos) throw errDelCostos;
+    let idx;
+    while((idx = DB.costos_movimientos.findIndex(m => m.recibo_id === reciboId)) >= 0) DB.costos_movimientos.splice(idx, 1);
+
+    const { error: errDelRecibo } = await sb.from('recibos_caja').delete().eq('id', reciboId);
+    if(errDelRecibo) throw errDelRecibo;
+    const i = DB.recibos_caja.findIndex(r => r.id === reciboId);
+    if(i >= 0) DB.recibos_caja.splice(i, 1);
+
+    renderInventario();
+    renderMovimientosRecientes();
+    renderResumenCostosMes();
+    renderRecibosCargados();
+    toast('Documento eliminado — inventario y costos revertidos');
+  }catch(err){
+    console.error(err);
+    toast('Error al eliminar el documento — revisa la consola');
   }
 }
 
@@ -542,10 +730,16 @@ export function initRecibosCaja(){
     if(file) manejarArchivo(file);
   });
   document.getElementById('recibo-add-item').addEventListener('click', () => {
+    // Si es la primera línea de un documento nuevo (sin archivo cargado —
+    // ej. una factura que no se puede leer sola), igual hay que preguntar
+    // el IVA%/Retención% antes de seguir — antes esto se saltaba por
+    // completo cuando se agregaba a mano en vez de subir un archivo.
+    const esPrimeraLinea = itemsActuales.length === 0;
     itemsActuales.push({ codigo:'', descripcion:'', cantidad:0, valor_unitario:0, iva_pct:0, retencion_pct:0, valor_credito:0, valor_debito:0, valor_neto_unitario:0, material_tabla:null, material_key:null, orden:null, suborden:null, observacion:'', concepto_id:null, tipo_costo:null });
     document.getElementById('recibo-review').style.display = '';
     renderTablaItems();
     actualizarResumen();
+    if(esPrimeraLinea) mostrarModalIva();
   });
   document.getElementById('recibo-guardar').addEventListener('click', guardarRecibo);
   document.getElementById('recibo-limpiar').addEventListener('click', () => {
@@ -554,4 +748,5 @@ export function initRecibosCaja(){
   });
   document.getElementById('recibo-editar-iva').addEventListener('click', mostrarModalIva);
   document.getElementById('recibo-iva-modal-aplicar').addEventListener('click', aplicarModalIva);
+  renderRecibosCargados();
 }

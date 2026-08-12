@@ -1171,6 +1171,7 @@
         <div class="modal-card">
           <h3>IVA y Retención de esta factura</h3>
           <p class="card-hint">Se aplican a todas las líneas del documento para calcular el <b>costo neto</b> que se descarga al inventario: unitario − IVA% + Retención%.</p>
+          <p class="card-hint" id="recibo-iva-modal-nota" style="display:block;margin-bottom:6px"></p>
           <div class="form-row">
             <div class="field"><label>IVA %</label><input type="number" id="recibo-iva-modal-pct" min="0" step="0.01" placeholder="ej. 19"></div>
             <div class="field"><label>Retención %</label><input type="number" id="recibo-retencion-modal-pct" min="0" step="0.01" placeholder="ej. 2.5"></div>
@@ -1179,10 +1180,20 @@
         </div>
       </div>
       <div class="card">
-        <div class="card-head"><h3>Últimos costos registrados</h3></div>
+        <div class="card-head"><h3>Últimos costos registrados</h3><span class="card-hint">"Editar"/"Eliminar" solo para los que se registraron a mano arriba — los que vienen de una compra importada se corrigen desde "Compras cargadas" abajo (para que también corrija el inventario)</span></div>
         <div class="table-wrap">
           <table id="tbl-costos-recientes">
-            <thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Proveedor</th><th>Orden</th><th class="num">Valor</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Proveedor</th><th>Orden</th><th class="num">Valor</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Compras cargadas</h3><span class="card-hint">"Eliminar" deshace todo lo que generó esa compra: le devuelve el stock al inventario, borra sus costos y borra el documento — para corregir un error de tecleo</span></div>
+        <div class="table-wrap">
+          <table id="tbl-recibos-cargados">
+            <thead><tr><th>Fecha</th><th>N° de compra</th><th>Proveedor</th><th class="num">Total</th><th>Cargado por</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
