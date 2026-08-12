@@ -194,10 +194,30 @@ function calcularPctSugeridos(items, cabecera){
   return { iva, rete };
 }
 
-// unitario YA INCLUYE IVA → se le quita el IVA y se le suma la retención.
-function calcularNeto(valorUnitario){
-  const v = valorUnitario || 0;
-  return v - (v * ivaPctAplicado / 100) + (v * retencionPctAplicado / 100);
+// El "Vr. Total" que trae la factura (columna Vr. Total / valor_credito) ya
+// viene con el ajuste de impuestos del documento aplicado — Siigo arma ese
+// total como Base + IVA − Retención (así cierra con la cabecera: Total Bruto
+// + IVA − Retefuente = Total a Pagar). Por eso el costo neto real de la
+// línea se saca DESHACIENDO ese ajuste sobre el total (dividiendo entre
+// 1 + IVA% − Retención%), no restándole/sumándole el % al "Vr. Unitario"
+// — ese valor unitario casi siempre YA es el costo base, y volver a
+// ajustarlo lo descuadra (bug reportado 12ago26: 4 planchas a 9.000 c/u
+// debían dar 36.000 de costo neto y el sistema daba 41.400 — ese 41.400
+// era el Vr. Total CRUDO de la factura, sin deshacerle el 19% IVA/4% Rete).
+function totalLineaFactura(it){
+  // Si la línea viene del PDF (o se corrigió a mano) ya trae su propio
+  // "Vr. Total" — se usa ese, que es el dato real de la factura. Si la
+  // línea se agregó manualmente y no tiene total cargado, se arma con
+  // unitario × cantidad como respaldo.
+  if(it.valor_credito) return it.valor_credito;
+  return (it.valor_unitario || 0) * (it.cantidad || 0);
+}
+function calcularNeto(it){
+  const total = totalLineaFactura(it);
+  const factor = 1 + (ivaPctAplicado / 100) - (retencionPctAplicado / 100);
+  const netoTotal = factor ? total / factor : total;
+  const cantidad = it.cantidad || 1;
+  return netoTotal / cantidad;
 }
 
 function normalizarNombreMaterial(s){
@@ -290,7 +310,7 @@ function opcionesConcepto(conceptoIdSeleccionado){
 // de este documento — se llama al aplicar el modal y cada vez que cambia
 // un "Vr. Unit." a mano.
 function recalcularNetos(){
-  itemsActuales.forEach(it => { it.valor_neto_unitario = calcularNeto(it.valor_unitario); });
+  itemsActuales.forEach(it => { it.valor_neto_unitario = calcularNeto(it); });
 }
 
 function renderTablaItems(){
@@ -306,7 +326,7 @@ function renderTablaItems(){
       <td><input type="number" class="ri-iva num" value="${it.iva_pct||0}" style="width:55px"></td>
       <td><input type="number" class="ri-reten num" value="${it.retencion_pct||0}" style="width:55px"></td>
       <td><input type="number" class="ri-credito num" value="${it.valor_credito||0}" style="width:100px"></td>
-      <td class="num" title="unitario − IVA% + Retención% de esta factura">${fmtCOP(it.valor_neto_unitario||0)}</td>
+      <td class="num" title="Vr. Total de la factura ÷ (1 + IVA% − Retención%) ÷ cantidad">${fmtCOP(it.valor_neto_unitario||0)}</td>
       <td><select class="ri-material" title="${sinMaterial?'Sin coincidencia — elegí el material real para que actualice el inventario':'Se va a sumar la cantidad al stock y actualizar el costo por unidad de este material'}">${opcionesMaterialInventario(it.material_tabla, it.material_key, it.descripcion)}</select></td>
       <td><select class="ri-orden">${opcionesOrden(it.orden)}</select></td>
       <td><input type="number" class="ri-suborden" value="${it.suborden||''}" placeholder="sub." title="Suborden / pieza (ej. el 2 de OP5955-2)" style="width:55px"></td>
@@ -320,18 +340,23 @@ function renderTablaItems(){
   tbody.querySelectorAll('tr').forEach(tr => {
     const i = parseInt(tr.dataset.i, 10);
     if(isNaN(i)) return;
-    tr.querySelector('.ri-codigo').addEventListener('input', e => itemsActuales[i].codigo = e.target.value);
-    tr.querySelector('.ri-desc').addEventListener('input', e => itemsActuales[i].descripcion = e.target.value);
-    tr.querySelector('.ri-cantidad').addEventListener('input', e => { itemsActuales[i].cantidad = parseFloat(e.target.value)||0; actualizarResumen(); });
-    tr.querySelector('.ri-unitario').addEventListener('input', e => {
-      itemsActuales[i].valor_unitario = parseFloat(e.target.value)||0;
-      itemsActuales[i].valor_neto_unitario = calcularNeto(itemsActuales[i].valor_unitario);
+    // Recalcula el costo neto de ESTA línea (depende del Vr. Total y de la
+    // cantidad, ver calcularNeto) y refresca la celda mostrada.
+    const actualizarNetoFila = () => {
+      itemsActuales[i].valor_neto_unitario = calcularNeto(itemsActuales[i]);
       tr.querySelector('td.num[title]').textContent = fmtCOP(itemsActuales[i].valor_neto_unitario);
       actualizarResumen();
+    };
+    tr.querySelector('.ri-codigo').addEventListener('input', e => itemsActuales[i].codigo = e.target.value);
+    tr.querySelector('.ri-desc').addEventListener('input', e => itemsActuales[i].descripcion = e.target.value);
+    tr.querySelector('.ri-cantidad').addEventListener('input', e => { itemsActuales[i].cantidad = parseFloat(e.target.value)||0; actualizarNetoFila(); });
+    tr.querySelector('.ri-unitario').addEventListener('input', e => {
+      itemsActuales[i].valor_unitario = parseFloat(e.target.value)||0;
+      actualizarNetoFila();
     });
     tr.querySelector('.ri-iva').addEventListener('input', e => { itemsActuales[i].iva_pct = parseFloat(e.target.value)||0; actualizarResumen(); });
     tr.querySelector('.ri-reten').addEventListener('input', e => { itemsActuales[i].retencion_pct = parseFloat(e.target.value)||0; actualizarResumen(); });
-    tr.querySelector('.ri-credito').addEventListener('input', e => { itemsActuales[i].valor_credito = parseFloat(e.target.value)||0; actualizarResumen(); });
+    tr.querySelector('.ri-credito').addEventListener('input', e => { itemsActuales[i].valor_credito = parseFloat(e.target.value)||0; actualizarNetoFila(); });
     tr.querySelector('.ri-material').addEventListener('change', e => {
       const [tabla, key] = e.target.value ? e.target.value.split('|') : [null, null];
       itemsActuales[i].material_tabla = tabla;
@@ -358,11 +383,11 @@ function actualizarResumen(){
   const hint = document.getElementById('recibo-total-hint');
   if(!hint) return;
   const totalItems = itemsActuales.reduce((s,it)=>s+(it.valor_credito||0),0);
-  const baseAprox = itemsActuales.reduce((s,it)=>s+((it.valor_unitario||0)*(it.cantidad||0)),0);
+  const totalNeto = itemsActuales.reduce((s,it)=>s+((it.valor_neto_unitario||0)*(it.cantidad||0)),0);
   const conOrden = itemsActuales.filter(it => it.orden).length;
   const conConcepto = itemsActuales.filter(it => it.concepto_id).length;
   const conMaterial = itemsActuales.filter(it => it.material_tabla && it.material_key).length;
-  hint.innerHTML = `Total de líneas: ${fmtCOP(totalItems)} · Base aprox. (unitario × cantidad): ${fmtCOP(baseAprox)}`
+  hint.innerHTML = `Total de líneas (Vr. Total factura, con IVA/Retención): ${fmtCOP(totalItems)} · Total neto (lo que cuenta como costo/inventario): ${fmtCOP(totalNeto)}`
     + (conOrden ? ` · ${conOrden}/${itemsActuales.length} línea(s) con orden asociada` : '')
     + ` · ${conConcepto}/${itemsActuales.length} línea(s) con concepto de costo (solo esas cuentan en Costos)`
     + ` · ${conMaterial}/${itemsActuales.length} línea(s) van a actualizar inventario`;
@@ -670,8 +695,9 @@ async function guardarRecibo(){
     // Pedido: "el costo del material se ingresa al inventario como valor
     // neto" — cada línea con un material ligado y cantidad > 0 suma esa
     // cantidad al stock y deja el costo por unidad en el valor neto recién
-    // calculado (unitario − IVA% + Retención%). Las líneas sin material
-    // ligado (sin coincidencia, sin revisar) NO tocan inventario.
+    // calculado (Vr. Total de la factura deshaciendo IVA%/Retención%, ver
+    // calcularNeto). Las líneas sin material ligado (sin coincidencia, sin
+    // revisar) NO tocan inventario.
     let materialesActualizados = 0;
     const materialesFallidos = [];
     for(const it of itemsActuales){
@@ -712,7 +738,11 @@ async function guardarRecibo(){
         concepto_id: it.concepto_id,
         tipo: it.tipo_costo || tipoDeConcepto(it.concepto_id) || 'Variable',
         fecha: fecha || fechaHoyLocal(),
-        valor: it.valor_credito || 0,
+        // Valor NETO de la línea (sin el IVA/Retención de la factura, ver
+        // calcularNeto) — no el Vr. Total crudo: el IVA no es un costo real
+        // (es recuperable) y la retención tampoco cambia el costo, solo el
+        // pago. Pedido explícito 12ago26.
+        valor: (it.valor_neto_unitario != null ? it.valor_neto_unitario * (it.cantidad || 0) : it.valor_credito) || 0,
         proveedor: tercero,
         comentario: (numero ? numero + ' — ' : '') + (it.descripcion || ''),
         orden: it.orden || null,
