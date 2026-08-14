@@ -642,6 +642,36 @@ function costoMaterialesDeOrden(orden){
   return DB.costos_movimientos.filter(m => m.orden === orden).reduce((s,m)=>s+(m.valor||0),0);
 }
 
+// Texto para una compra/costo asociado a una orden (costos_movimientos sin
+// produccion_id — viene de "Registrar costo" o de "Importar compra" en esa
+// misma pestaña). Para lo importado del PDF el comentario queda como
+// "Compra No. 1750 — Plancha CTP…" (ver guardarRecibo en recibos.js) — se
+// le quita el "Compra No. X — " de adelante para mostrar solo la
+// descripción del material (por nombre de columna, no por recibo_id: hay
+// movimientos viejos, de antes de que se guardara recibo_id, con el mismo
+// formato de comentario). Para lo cargado a mano el comentario ya es lo
+// que la persona escribió tal cual; si lo dejó vacío, se usa el nombre del
+// concepto de costo.
+function descripcionCompra(m){
+  const base = (m.comentario || '').replace(/^Compra\s*No\.?\s*\S+\s*—\s*/i, '').trim();
+  if(base) return base;
+  const concepto = DB.costos_conceptos.find(c => c.id === m.concepto_id);
+  return concepto ? concepto.nombre : 'Costo asociado';
+}
+
+// Compras/costos ligados DIRECTO a una orden (o a una pieza puntual de
+// ella) desde "Registrar costo" (a mano o importando el PDF de Siigo) —
+// distintos de los "Consumo automático" que genera Registrar al finalizar
+// una actividad (esos ya se excluyen: no tienen produccion_id). Pedido
+// explícito 14ago26: si una compra se asocia a una orden es porque ese
+// material completo va para ella, aunque nadie lo haya "consumido" todavía
+// desde Registrar.
+function comprasDeOrden(orden, suborden){
+  return DB.costos_movimientos.filter(m =>
+    m.orden === orden && m.suborden === (suborden ?? null) && m.produccion_id == null
+  );
+}
+
 // Lista de "Materiales consumidos" de una pieza, cada uno con su costo si
 // lo tiene. El costo sale de costos_movimientos: cada vez que se registra
 // un consumo numérico con costo_unitario configurado, se genera ahí un
@@ -651,7 +681,9 @@ function costoMaterialesDeOrden(orden){
 // material no tiene costo_unitario cargado o el consumo se escribió como
 // texto libre, no hay movimiento que sumar y el material sale sin costo
 // (nunca en $0, para no dar a entender que de verdad no costó nada).
-function materialesConsumidosConCosto(recsPieza){
+// También se suman las compras ligadas directo a esta pieza (ver
+// comprasDeOrden arriba).
+function materialesConsumidosConCosto(recsPieza, orden, suborden){
   const porDetalle = new Map(); // "nombre — cantidad" -> costo acumulado
   recsPieza.forEach(r => {
     const detalle = [r.materiaPrima, r.consumoMP].filter(Boolean).join(' — ');
@@ -660,6 +692,10 @@ function materialesConsumidosConCosto(recsPieza){
       .filter(m => m.produccion_id === r.id && (m.comentario || '').startsWith('Consumo automático'))
       .reduce((s,m) => s + (m.valor || 0), 0);
     porDetalle.set(detalle, (porDetalle.get(detalle) || 0) + costoReg);
+  });
+  comprasDeOrden(orden, suborden).forEach(m => {
+    const detalle = descripcionCompra(m) + ' — compra';
+    porDetalle.set(detalle, (porDetalle.get(detalle) || 0) + (m.valor || 0));
   });
   return Array.from(porDetalle.entries()).map(([detalle, costo]) =>
     costo > 0 ? `${detalle} (${fmtCOPlocal(costo)})` : detalle
@@ -1327,7 +1363,7 @@ export function mostrarDetalleOrden(orden){
     const completados = areasCompletadasPorPieza(p);
     const chips = requeridos.map(a => `<span class="estado-chip ${completados.has(a)?'done':'pending'}">${completados.has(a)?'✓':'·'} ${a}</span>`).join('') || '<span class="card-hint">sin procesos definidos</span>';
 
-    const materiales = materialesConsumidosConCosto(recsPieza);
+    const materiales = materialesConsumidosConCosto(recsPieza, orden, p.suborden);
 
     const ficha = [
       filaFicha('OP', p.op),
@@ -1374,6 +1410,15 @@ export function mostrarDetalleOrden(orden){
     </div>`;
   }).join('') || '<p class="card-hint">Esta orden no tiene piezas registradas (probablemente migrada del histórico sin detalle de OPP).</p>';
 
+  // Compras/costos que se asociaron a la orden completa desde "Registrar
+  // costo" pero sin marcarle una pieza puntual — no aparecen dentro de
+  // ninguna tarjeta de pieza (ver materialesConsumidosConCosto), así que se
+  // listan acá una sola vez para no perderlas.
+  const comprasSinPieza = comprasDeOrden(orden, null);
+  const comprasSinPiezaHTML = comprasSinPieza.length
+    ? `<div class="detalle-orden-obs"><b>Materiales/costos comprados para toda la orden</b> <span class="card-hint">(sin pieza puntual asignada)</span><br>${comprasSinPieza.map(m => `${descripcionCompra(m)} (${fmtCOPlocal(m.valor||0)})`).join(' · ')}</div>`
+    : '';
+
   const pres = DB.presupuesto_orden.find(p => p.orden === orden) || {};
   const puedeEditar = puedeEditarPresupuesto();
   const dis = puedeEditar ? '' : 'disabled';
@@ -1398,6 +1443,7 @@ export function mostrarDetalleOrden(orden){
     </div>
     ${areas.length ? '<canvas id="chart-detalle-area" height="90" style="margin-bottom:16px"></canvas>' : ''}
     ${o.observaciones ? `<div class="detalle-orden-obs"><b>Observaciones de la orden:</b> ${o.observaciones}</div>` : ''}
+    ${comprasSinPiezaHTML}
 
     <div class="card presupuesto-card" style="margin:0 0 16px">
       <div class="card-head"><h3>Presupuesto vs. Real</h3><span class="card-hint">${puedeEditar ? 'como lo entrega el gerente a producción' : 'solo gerente/jefe de producción pueden editar estos valores'}</span></div>
