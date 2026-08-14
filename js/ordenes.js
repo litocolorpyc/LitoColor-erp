@@ -642,6 +642,30 @@ function costoMaterialesDeOrden(orden){
   return DB.costos_movimientos.filter(m => m.orden === orden).reduce((s,m)=>s+(m.valor||0),0);
 }
 
+// Lista de "Materiales consumidos" de una pieza, cada uno con su costo si
+// lo tiene. El costo sale de costos_movimientos: cada vez que se registra
+// un consumo numérico con costo_unitario configurado, se genera ahí un
+// movimiento "Consumo automático — <material> (<cantidad>)" ligado al
+// produccion_id del registro (ver descontarInventarioYCargarCosto en
+// registrar.js) — acá se suman esos movimientos por registro. Si el
+// material no tiene costo_unitario cargado o el consumo se escribió como
+// texto libre, no hay movimiento que sumar y el material sale sin costo
+// (nunca en $0, para no dar a entender que de verdad no costó nada).
+function materialesConsumidosConCosto(recsPieza){
+  const porDetalle = new Map(); // "nombre — cantidad" -> costo acumulado
+  recsPieza.forEach(r => {
+    const detalle = [r.materiaPrima, r.consumoMP].filter(Boolean).join(' — ');
+    if(!detalle) return;
+    const costoReg = DB.costos_movimientos
+      .filter(m => m.produccion_id === r.id && (m.comentario || '').startsWith('Consumo automático'))
+      .reduce((s,m) => s + (m.valor || 0), 0);
+    porDetalle.set(detalle, (porDetalle.get(detalle) || 0) + costoReg);
+  });
+  return Array.from(porDetalle.entries()).map(([detalle, costo]) =>
+    costo > 0 ? `${detalle} (${fmtCOPlocal(costo)})` : detalle
+  );
+}
+
 // ---------- render: tablas y tableros ----------
 export function renderOppRecent(){
   renderOppLista(DB.opp_ordenes.slice(0, 20));
@@ -1303,7 +1327,7 @@ export function mostrarDetalleOrden(orden){
     const completados = areasCompletadasPorPieza(p);
     const chips = requeridos.map(a => `<span class="estado-chip ${completados.has(a)?'done':'pending'}">${completados.has(a)?'✓':'·'} ${a}</span>`).join('') || '<span class="card-hint">sin procesos definidos</span>';
 
-    const materiales = [...new Set(recsPieza.map(r => [r.materiaPrima, r.consumoMP].filter(Boolean).join(' — ')).filter(Boolean))];
+    const materiales = materialesConsumidosConCosto(recsPieza);
 
     const ficha = [
       filaFicha('OP', p.op),
