@@ -20,7 +20,7 @@ Usado por varios usuarios con distintos roles.
 - Carpeta local: `C:\Mis_Apps\LitoColor-erp`
 - GitHub: usar la cuenta **litocolorpyc@gmail.com** (ya configurada como `git config user.email` en esta carpeta — no hace falta cambiarla, pero si Claude ve otra cuenta activa debe avisar antes de hacer push)
 - Supabase: proyecto ya vinculado con `supabase link`, Reference ID **nvczpuelhdgrnghxzked**
-- Vercel: todavía no configurado en este proyecto (pendiente `vercel link`)
+- Vercel: sitio ya publicado en `https://lito-color-erp.vercel.app` — Vercel está conectado directo al repo de GitHub (no por `vercel link` local) y redespliega solo con cada `git push` a `main`. Confirmado 14ago26.
 
 ## Modo de trabajo: autónomo, sin pausas de aprobación
 
