@@ -674,6 +674,16 @@ async function guardarEdicionRegistro(){
     document.getElementById('ole-hora-ini').focus();
     return;
   }
+  // Este es justo el error que dejó a Teresa bloqueada el 14ago26: alguien
+  // marcó "Sí, terminé este proceso" pero dejó Hora fin vacía, así que el
+  // registro seguía viéndose "en curso" para Registrar. Si vas a marcar el
+  // proceso como terminado y la actividad ya tiene Hora inicio, exigimos
+  // Hora fin para no volver a dejar la misma trampa.
+  if(!esPausa && horaIniVal && !horaFinVal){
+    toast('Marcaste "Sí, terminé este proceso" pero Hora fin quedó vacía — complétala (o usa el botón "Usar hora actual") antes de guardar, si no, el operario sigue bloqueado');
+    document.getElementById('ole-hora-fin').focus();
+    return;
+  }
 
   const updates = {
     hora_ini: horaIniVal,
@@ -784,8 +794,14 @@ async function eliminarRegistroLog(id){
 function wireEdicionRegistro(){
   const btnCancelar = document.getElementById('ole-cancelar');
   const btnGuardar = document.getElementById('ole-guardar');
+  const btnHoraFinAhora = document.getElementById('ole-hora-fin-ahora');
   if(btnCancelar) btnCancelar.addEventListener('click', cerrarEdicionRegistro);
   if(btnGuardar) btnGuardar.addEventListener('click', guardarEdicionRegistro);
+  // Atajo para cerrar una labor que quedó abierta sin tener que saber/calcular
+  // la hora exacta — pone la hora de ahora mismo en el campo Hora fin.
+  if(btnHoraFinAhora) btnHoraFinAhora.addEventListener('click', () => {
+    document.getElementById('ole-hora-fin').value = new Date().toTimeString().slice(0,5);
+  });
 }
 
 // Botón "Ajustar" del Historial de producción (Detalle de la orden, en
