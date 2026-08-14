@@ -592,6 +592,9 @@ function abrirEdicionRegistro(id){
     poblarMaterialEdicion(areaSel.value, null, null, materialesOrden);
   };
 
+  document.getElementById('ole-hora-ini').value = row.horaIni || '';
+  document.getElementById('ole-hora-fin').value = row.horaFin || '';
+  document.getElementById('ole-hora-fin-hint').textContent = (row.horaIni && !row.horaFin) ? '⚠️ está vacía — esta actividad sigue bloqueando al operario' : '';
   document.getElementById('ole-cantidad').value = row.cantidad ?? '';
   document.getElementById('ole-horas').value = row.tiempoHr ?? '';
   document.getElementById('ole-comentario').value = row.comentario || '';
@@ -661,7 +664,20 @@ async function guardarEdicionRegistro(){
     ? (consumoNumEl.value ? consumoNumEl.value + (consumoNumEl.dataset.unidad ? ' ' + consumoNumEl.dataset.unidad : '') : null)
     : (document.getElementById('ole-consumo').value.trim() || null);
 
+  // Una actividad ASIGNADA (todavía no iniciada) puede tener las dos horas
+  // vacías — eso es normal. Lo que no vale es tener Hora fin sin Hora
+  // inicio (no puede haber terminado algo que nunca empezó).
+  const horaIniVal = document.getElementById('ole-hora-ini').value || null;
+  const horaFinVal = document.getElementById('ole-hora-fin').value || null;
+  if(horaFinVal && !horaIniVal){
+    toast('No puede haber Hora fin sin Hora inicio');
+    document.getElementById('ole-hora-ini').focus();
+    return;
+  }
+
   const updates = {
+    hora_ini: horaIniVal,
+    hora_fin: horaFinVal,
     area: areaEditada,
     actividad: document.getElementById('ole-actividad').value,
     maquina: document.getElementById('ole-maquina').value || null,
