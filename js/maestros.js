@@ -375,6 +375,7 @@ export function initMaestros(onChange){
       { id:'m-mp-categoria', col:'categoria' },
       { id:'m-mp-ancho', col:'pliego_ancho', type:'number' },
       { id:'m-mp-alto', col:'pliego_alto', type:'number' },
+      { id:'m-mp-formato', col:'formato' },
       { id:'m-mp-unidad', col:'unidad' },
       { id:'m-mp-stock', col:'stock_actual', type:'number' },
       { id:'m-mp-minimo', col:'stock_minimo', type:'number' },
@@ -385,7 +386,11 @@ export function initMaestros(onChange){
       // Una materia prima SÍ puede consumirla más de un área — ver el
       // bloque "Áreas que consumen una materia prima" más abajo.
       const areas = DB.materias_primas_areas.filter(x => x.materia_prima_codigo === r.codigo).map(x => x.area);
-      return [r.codigo, r.nombre, r.categoria||'—', r.pliego_ancho?r.pliego_ancho+'x'+r.pliego_alto:'—',
+      // Formato: si hay ancho x alto (papel) se muestra así; si no, se usa el
+      // texto libre (ej. "Tiras 64 loops", "25 cm") cargado para materiales
+      // que no se miden en pliegos — ver 20260820_nuevo_inventario_materias_primas.
+      const formatoTxt = r.pliego_ancho ? (r.pliego_ancho+'x'+r.pliego_alto) : (r.formato || '—');
+      return [r.codigo, r.nombre, r.categoria||'—', formatoTxt,
         `<span style="${bajo?'color:var(--bad);font-weight:600':''}">${fmtNum(r.stock_actual)} ${r.unidad||'pliegos'}</span>${bajo?' ⚠':''}`,
         r.costo_unitario!=null?fmtCOP(r.costo_unitario):'—',
         areas.length ? areas.join(', ') : '<span class="card-hint">ninguna configurada</span>'];
