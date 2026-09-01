@@ -572,6 +572,20 @@ function poblarSelectPiezaEdicion(orden, opActual){
   else { sel.disabled = false; hint.textContent = `(de la orden ${orden})`; }
 }
 
+// Todas las órdenes de OPP (no solo las "en curso" como en Registrar,
+// getOrdenesSeleccionables) — desde acá se puede estar corrigiendo un
+// registro viejo, y la orden correcta a la que había que moverlo bien
+// puede ya estar cerrada.
+function poblarSelectOrdenEdicion(ordenActual){
+  const sel = document.getElementById('ole-orden');
+  const ordenadas = [...DB.opp_ordenes].sort((a,b) => b.orden - a.orden);
+  sel.innerHTML = '<option value="">— Sin orden (trabajo sin orden asignada) —</option>' +
+    ordenadas.map(o => `<option value="${o.orden}"${o.orden===ordenActual?' selected':''}>${o.orden} — ${o.cliente || ''}${o.producto ? ' · ' + o.producto : ''}</option>`).join('');
+  if(ordenActual != null && !ordenadas.some(o => o.orden === ordenActual)){
+    sel.insertAdjacentHTML('afterbegin', `<option value="${ordenActual}" selected>${ordenActual} — (orden no encontrada en OPP)</option>`);
+  }
+}
+
 function abrirEdicionRegistro(id){
   const row = DB.produccion.find(r => r.id === id);
   if(!row){ toast('No se encontró ese registro'); return; }
@@ -580,15 +594,28 @@ function abrirEdicionRegistro(id){
   areaSel.innerHTML = listaAreasDisponibles().map(a=>`<option value="${a}"${a===row.area?' selected':''}>${a}</option>`).join('');
   poblarSelectActividadEdicion(row.area, row.actividad);
   poblarSelectMaquinaEdicion(row.area, row.maquina);
+  document.getElementById('ole-fecha').value = (row.fecha || '').slice(0,10);
+  const ordenSel = document.getElementById('ole-orden');
+  poblarSelectOrdenEdicion(row.orden);
   poblarSelectPiezaEdicion(row.orden, row.op);
   poblarSelectSubprocesoEdicion(row.area, row.subproceso);
-  const materialesOrden = materialesDeOrdenPara(row.orden);
+  let materialesOrden = materialesDeOrdenPara(row.orden);
   poblarMaterialEdicion(row.area, row.materiaPrima, row.consumoMP, materialesOrden);
   wireMaterialSelectEdicion();
   areaSel.onchange = () => {
     poblarSelectActividadEdicion(areaSel.value, null);
     poblarSelectMaquinaEdicion(areaSel.value, null);
     poblarSelectSubprocesoEdicion(areaSel.value, null);
+    poblarMaterialEdicion(areaSel.value, null, null, materialesOrden);
+  };
+  // Si se cambia la orden (ej. el operario había marcado la que no era),
+  // la Suborden/Pieza y los materiales "de esta orden" del desplegable de
+  // Insumo consumido tienen que refrescarse para la orden nueva — si no,
+  // quedarían apuntando a la pieza/papel de la orden vieja.
+  ordenSel.onchange = () => {
+    const nuevaOrden = ordenSel.value ? parseInt(ordenSel.value, 10) : null;
+    poblarSelectPiezaEdicion(nuevaOrden, null);
+    materialesOrden = materialesDeOrdenPara(nuevaOrden);
     poblarMaterialEdicion(areaSel.value, null, null, materialesOrden);
   };
 
@@ -632,6 +659,15 @@ async function guardarEdicionRegistro(){
   const piezaOpt = piezaSel.selectedOptions[0];
   const opValue = piezaSel.value || null;
   const subordenValue = (opValue && piezaOpt && piezaOpt.dataset.suborden) ? parseInt(piezaOpt.dataset.suborden, 10) : null;
+  const ordenSelValue = document.getElementById('ole-orden').value;
+  const ordenValue = ordenSelValue ? parseInt(ordenSelValue, 10) : null;
+  const fechaValue = document.getElementById('ole-fecha').value || null;
+
+  if(!fechaValue){
+    toast('La fecha no puede quedar vacía');
+    document.getElementById('ole-fecha').focus();
+    return;
+  }
 
   const esPausa = document.getElementById('ole-proceso-completo').value === 'No';
   const motivoPausa = document.getElementById('ole-motivo-pausa').value;
@@ -685,7 +721,27 @@ async function guardarEdicionRegistro(){
     return;
   }
 
+  // "cliente"/"trabajo" quedan GUARDADOS en cada fila de producción (no se
+  // calculan al vuelo desde la orden) — ver registrar.js, donde se llenan
+  // al crear el registro. Si acá se corrige la Orden (el caso del
+  // documento: "un operario coloco la orden que no era"), hay que
+  // recalcularlos igual que hace Registrar, si no, el historial seguiría
+  // mostrando el cliente/pieza de la orden VIEJA. Si la Orden NO cambió, se
+  // dejan intactos — un registro "sin orden" trae ahí el texto libre que
+  // escribió el operario (concepto) y este editor no tiene cómo re-teclear
+  // eso, así que tocarlo solo por abrir/guardar el formulario lo borraría.
+  let clienteNuevo = row.cliente, trabajoNuevo = row.trabajo;
+  if(ordenValue !== row.orden){
+    const ordenInfoNueva = ordenValue != null ? DB.opp_ordenes.find(o => o.orden === ordenValue) : null;
+    clienteNuevo = ordenValue != null ? (ordenInfoNueva ? ordenInfoNueva.cliente : null) : null;
+    trabajoNuevo = ordenValue != null ? (opValue ? piezaOpt.textContent.replace(/^\d+\.\s*/, '') : null) : null;
+  }
+
   const updates = {
+    fecha: fechaValue,
+    orden: ordenValue,
+    cliente: clienteNuevo,
+    trabajo: trabajoNuevo,
     hora_ini: horaIniVal,
     hora_fin: horaFinVal,
     area: areaEditada,
@@ -741,6 +797,10 @@ async function guardarEdicionRegistro(){
     renderOppRecent();
     renderInventario();
     refrescarDetalleOrdenSiEstaAbierta(data[0].orden);
+    // Si además la corrección MOVIÓ el registro a otra orden (campo Orden
+    // nuevo en "Corregir registro"), la orden de la que salió también
+    // cambió sus totales — si estaba abierta esa, hay que refrescarla igual.
+    if(row.orden !== data[0].orden) refrescarDetalleOrdenSiEstaAbierta(row.orden);
   }catch(err){
     console.error(err);
     toast('Error al guardar la corrección — revisa la consola');

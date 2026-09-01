@@ -77,6 +77,18 @@ export function deltaBadge(actual, anterior){
   return `<span class="delta-badge ${up?'up':'down'}">${up?'↑':'↓'} ${Math.abs(pct).toFixed(0)}%</span>`;
 }
 
+// Normaliza el nombre de un material para COMPARAR (no para mostrar):
+// mismo texto en minúsculas, sin espacios de más, y con el separador
+// decimal unificado a punto. Se necesita porque el catálogo de "Materias
+// primas" usa coma decimal ("1,5 mm") pero el campo "Papel" de las piezas
+// de una orden a veces se tipeó con punto ("1.5 mm") al importarlas desde
+// Excel — mismo material, texto distinto, y antes de esto una comparación
+// exacta (===) los trataba como si no existiera ninguno de los dos en el
+// maestro (ver buscarMaterialPorNombre en registrar.js).
+export function normNombreMaterial(s){
+  return String(s || '').trim().toLowerCase().replace(/(\d),(\d)/g, '$1.$2').replace(/\s+/g, ' ');
+}
+
 export function exportarExcel(nombreArchivo, hojas){
   const wb = XLSX.utils.book_new();
   hojas.forEach(h => {

@@ -246,8 +246,11 @@
         <div class="card-head"><h3>Corregir registro</h3><span class="card-hint">solo Jefe de Producción / Gerencia / Admin</span></div>
         <div class="detalle-orden-obs" id="op-log-editar-info" style="margin-bottom:12px"></div>
         <div class="form-row">
+          <div class="field"><label>Fecha</label><input type="date" id="ole-fecha"></div>
+          <div class="field"><label>Orden <span class="card-hint">si estaba en la que no era</span></label><select id="ole-orden"></select></div>
           <div class="field"><label>Suborden / Pieza <span class="card-hint" id="ole-pieza-hint"></span></label><select id="ole-pieza"></select></div>
         </div>
+        <span class="card-hint">Usa esto si el operario marcó la orden que no era, o si olvidó reportar y hay que dejar el registro con la fecha real del trabajo.</span>
         <div class="form-row">
           <div class="field"><label>Área</label><select id="ole-area"></select></div>
           <div class="field"><label>Actividad</label><select id="ole-actividad"></select></div>

@@ -2,7 +2,7 @@
 // así que cualquier corrección aquí aplica a las dos pantallas a la vez.
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
-import { toast, fmtNum, fechaHoyLocal } from './helpers.js';
+import { toast, fmtNum, fechaHoyLocal, normNombreMaterial } from './helpers.js';
 import { getOrdenesSeleccionables, subprocesosDeArea } from './ordenes.js';
 
 const timerIntervals = new Map();
@@ -164,9 +164,17 @@ export function materialSelectOptionsHTML(area, valorActual, materialesOrden){
   const opcionesMPArea = DB.materias_primas.filter(m => codigosVinculados.has(m.codigo) && !nombresYaListados.has(m.nombre))
     .map(m => ({ nombre: m.nombre, unidad: m.unidad || 'pliegos' }));
   opcionesMPArea.forEach(m => nombresYaListados.add(m.nombre));
+  // Comparación también NORMALIZADA (coma/punto decimal, mayúsculas, espacios)
+  // — evita mostrar como si fueran dos insumos distintos el mismo material
+  // ya listado arriba solo porque el texto de la orden se tipeó distinto
+  // (ver normNombreMaterial y el mismo respaldo en buscarMaterialPorNombre).
+  // Antes esto pasaba con "Carton Industrial 1,5 mm" (catálogo) vs
+  // "Carton Industrial 1.5 mm" (de la orden): salían dos opciones casi
+  // idénticas y el operario no tenía forma de saber cuál sí calculaba costo.
+  const nombresNormYaListados = new Set(Array.from(nombresYaListados, normNombreMaterial));
 
   const opcionesOrden = (materialesOrden || [])
-    .filter(nombre => nombre && !nombresYaListados.has(nombre))
+    .filter(nombre => nombre && !nombresYaListados.has(nombre) && !nombresNormYaListados.has(normNombreMaterial(nombre)))
     .map(nombre => {
       const mat = DB.materias_primas.find(m => m.nombre === nombre);
       return { nombre, unidad: (mat && mat.unidad) || 'pliegos', deOrden: true };
@@ -552,6 +560,16 @@ function buscarMaterialPorNombre(area, nombre){
   if(insumo) return { tabla: 'insumos_area', mat: insumo, key: 'id' };
   const mp = DB.materias_primas.find(m => m.nombre === nombre);
   if(mp) return { tabla: 'materias_primas', mat: mp, key: 'codigo' };
+  // Respaldo: mismo material pero con el separador decimal escrito distinto
+  // (catálogo en coma "1,5 mm", pieza de la orden en punto "1.5 mm" — caso
+  // real: orden 5999, "Carton Industrial"). Sin esto, el consumo quedaba
+  // "sin_catalogo" — no se descontaba del inventario NI se cargaba el
+  // costo — aunque el material sí existiera en el maestro.
+  const norm = normNombreMaterial(nombre);
+  const insumoNorm = DB.insumos_area.find(m => m.area === area && normNombreMaterial(m.nombre) === norm);
+  if(insumoNorm) return { tabla: 'insumos_area', mat: insumoNorm, key: 'id' };
+  const mpNorm = DB.materias_primas.find(m => normNombreMaterial(m.nombre) === norm);
+  if(mpNorm) return { tabla: 'materias_primas', mat: mpNorm, key: 'codigo' };
   return null;
 }
 
