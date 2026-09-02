@@ -9,7 +9,7 @@ export const DB = {
   productos: [], costos_conceptos: [], costos_movimientos: [], insumos_area: [],
   piezas_producto: [], presupuesto_orden: [], recibos_caja: [], motivos_pausa: [], subprocesos: [],
   categorias_materia_prima: [], materias_primas_areas: [], areas: [], prioridad_area: [],
-  alertas_faltante_material: []
+  alertas_faltante_material: [], inventario_ajustes: []
 };
 
 export function normProd(r){
@@ -90,9 +90,10 @@ export async function loadCatalogos(){
     sb.from('materias_primas_areas').select('*'),
     sb.from('areas').select('*').order('orden'),
     sb.from('prioridad_area').select('*'),
-    sb.from('alertas_faltante_material').select('*').eq('resuelta', false)
+    sb.from('alertas_faltante_material').select('*').eq('resuelta', false),
+    sb.from('inventario_ajustes').select('*').order('fecha', { ascending: false })
   ]);
-  const [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21] = results;
+  const [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22] = results;
   // Solo personal/maquinas/actividades/pedidos son indispensables para arrancar.
   // Las tablas más nuevas (materias_primas, clientes, proveedores, insumos_area)
   // pueden no existir todavía si no se ha corrido el SQL más reciente — no
@@ -124,6 +125,7 @@ export async function loadCatalogos(){
   DB.areas = p19.data || [];
   DB.prioridad_area = p20.data || [];
   DB.alertas_faltante_material = p21.data || [];
+  DB.inventario_ajustes = p22.data || [];
 }
 
 export async function loadProduccion(){

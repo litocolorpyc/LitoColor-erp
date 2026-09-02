@@ -1236,20 +1236,51 @@
         </div>
         <div class="table-wrap" style="margin-top:12px">
           <table id="tbl-inventario">
-            <thead><tr><th>Tipo</th><th>Código</th><th>Nombre</th><th>Categoría / área</th><th class="num">Stock actual</th><th class="num">Mínimo</th><th class="num">Costo/unidad</th><th>Estado</th><th>Órdenes esperando este material</th></tr></thead>
+            <thead><tr><th>Tipo</th><th>Código</th><th>Nombre</th><th>Categoría / área</th><th class="num">Stock actual</th><th class="num">Mínimo</th><th class="num">Costo/unidad</th><th>Estado</th><th>Órdenes esperando este material</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
         <p class="card-hint" style="margin-top:10px;line-height:1.5">
           Solo aparecen aquí los materiales a los que ya les pusiste un stock actual o un mínimo desde "Materias primas" o "Materiales por área" (o que tienen una orden esperándolos) — así los 226 papeles precargados no salen todos como alerta desde el día uno.<br>
-          Para registrar una compra (entrada de stock), edita el material desde esa misma pantalla y súmale la cantidad comprada al "Stock actual" — si eso alcanza para cubrir lo que estaba faltando, la(s) orden(es) que lo esperaban se liberan solas de esta columna y de Alertas.<br>
+          Para registrar una compra, usa "Importar compra" en Costos — así queda ligada a un proveedor y sale en el Kardex de abajo. El botón <b>"Ajustar"</b> de cada fila es para corregir el stock sin que sea una compra ni un consumo de producción: conteo físico puntual, sobrante, faltante/merma, daño, corrección de digitación, o <b>consumo indirecto</b> (insumos que se gastan sin ser para un trabajo puntual, ej. grasa de mantenimiento o aseo) — todo queda con motivo y usuario, y también sale en el Kardex.<br>
           <b>Órdenes esperando este material:</b> si al crear/editar una orden no alcanzaba el stock de un papel, queda anotado acá (y en Alertas) hasta que se repone — hacé click en la orden para abrir su detalle.<br>
           <b>Stock negativo:</b> si un operario registra un consumo mayor al stock cargado, el sistema <b>no lo bloquea</b> — así funciona la litografía en la práctica, el consumo real a veces se registra antes de que llegue la compra. El stock queda en negativo (número rojo, "🔴 Stock negativo") y sigue así hasta que se cargue la compra; también aparece en Alertas para que no se pierda de vista.
         </p>
       </div>
 
       <div class="card">
-        <div class="card-head"><h3>Movimientos de inventario</h3><span class="card-hint">cada entrada (compra importada) y salida (consumo registrado) de materiales — click en una fila para ver el detalle</span></div>
+        <div class="card-head">
+          <h3>Inventario físico</h3>
+          <span class="card-hint">conteo real de bodega contra el stock del sistema — cada diferencia queda guardada como ajuste, con motivo</span>
+        </div>
+        <p class="card-hint" id="inv-fisico-intro" style="line-height:1.5">
+          Usa el filtro "Buscar por producto o código" de arriba si quieres contar solo una parte del catálogo (ej. escribe "papel" o una categoría) — si lo dejas vacío, el conteo arranca con TODOS los materiales de "Materias primas" e "Insumos por área" activos, no solo los que ya están "en seguimiento".
+        </p>
+        <button type="button" class="btn-secondary" id="inv-fisico-iniciar">Iniciar conteo físico</button>
+        <div id="inv-fisico-panel" style="display:none;margin-top:12px">
+          <div class="form-row">
+            <div class="field" style="max-width:180px"><label>Fecha del conteo</label><input type="date" id="inv-fisico-fecha"></div>
+            <div class="field"><label>Responsable</label><input type="text" id="inv-fisico-responsable" placeholder="quién hizo el conteo"></div>
+          </div>
+          <span class="card-hint">Deja en blanco el "Conteo físico" de los materiales que NO vas a contar hoy — solo se guarda ajuste en las filas que llenes con un número distinto al stock del sistema.</span>
+          <div class="table-wrap" style="margin-top:10px;max-height:480px;overflow-y:auto">
+            <table id="tbl-inv-fisico">
+              <thead><tr><th>Código</th><th>Artículo</th><th>Grupo</th><th class="num">Stock sistema</th><th class="num">Conteo físico</th><th class="num">Diferencia</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="form-foot" style="margin-top:10px">
+            <span class="card-hint" id="inv-fisico-hint"></span>
+            <span style="display:flex;gap:8px">
+              <button type="button" class="btn-secondary" id="inv-fisico-cancelar">Cancelar</button>
+              <button type="button" class="btn-primary" id="inv-fisico-guardar">Guardar conteo</button>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Movimientos de inventario</h3><span class="card-hint">entradas (compras), salidas (consumo) y ajustes de inventario — click en una fila para ver el detalle</span></div>
         <div class="table-wrap">
           <table id="tbl-inv-movimientos">
             <thead><tr><th>Fecha</th><th>Código</th><th>Artículo</th><th class="num">Cantidad entra</th><th class="num">Cantidad sale</th><th class="num">Valor unitario</th><th class="num">Valor total</th></tr></thead>
@@ -1257,7 +1288,7 @@
           </table>
         </div>
         <p class="card-hint" style="margin-top:10px;line-height:1.5">
-          El filtro de "Buscar por producto o código" de arriba también aplica acá. Las <b>entradas</b> salen de las compras importadas en Costos &gt; "Importar compra" (una edición manual del "Stock actual" en Maestros no queda registrada como movimiento). Las <b>salidas</b> salen del consumo numérico que carga el operario al registrar producción (solo cuando el material tiene costo por unidad configurado se ve el valor).
+          El filtro de "Buscar por producto o código" de arriba también aplica acá. Las <b>entradas</b> salen de las compras importadas en Costos &gt; "Importar compra". Las <b>salidas</b> salen del consumo numérico que carga el operario al registrar producción (solo cuando el material tiene costo por unidad configurado se ve el valor). Los <b>ajustes</b> (botón "Ajustar" de la tabla de arriba, o un conteo de "Inventario físico") también salen acá, como entrada o salida según el signo de la diferencia.
         </p>
       </div>
     </section>
@@ -1268,6 +1299,43 @@
         <p id="inv-mov-modal-articulo" style="margin:2px 0 10px;font-size:14px"></p>
         <div id="inv-mov-modal-detalle"></div>
         <div class="form-foot"><span></span><button type="button" class="btn-secondary" id="inv-mov-modal-cerrar">Cerrar</button></div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="inv-ajuste-modal" style="display:none">
+      <div class="modal-card">
+        <h3>Ajustar inventario</h3>
+        <p id="inv-ajuste-modal-articulo" style="margin:2px 0 10px;font-size:14px"></p>
+        <p class="card-hint" id="inv-ajuste-modal-stock" style="margin-bottom:10px"></p>
+        <div class="form-row">
+          <div class="field"><label>Nuevo stock (conteo real)</label><input type="number" id="inv-ajuste-nuevo-stock" step="0.01"></div>
+          <div class="field"><label>Diferencia</label><input type="text" id="inv-ajuste-diferencia" disabled></div>
+        </div>
+        <div class="field full" style="margin-bottom:10px">
+          <label>Motivo</label>
+          <select id="inv-ajuste-motivo">
+            <option value="">— Elige un motivo —</option>
+            <option value="Consumo indirecto">Consumo indirecto (uso general, no ligado a una orden)</option>
+            <option value="Conteo físico puntual">Conteo físico puntual</option>
+            <option value="Sobrante">Sobrante encontrado en bodega</option>
+            <option value="Faltante / merma">Faltante / merma</option>
+            <option value="Daño o deterioro">Daño o deterioro</option>
+            <option value="Corrección de digitación">Corrección de digitación (error al cargar)</option>
+            <option value="Otro">Otro</option>
+          </select>
+        </div>
+        <div class="field full" id="inv-ajuste-area-wrap" style="margin-bottom:10px;display:none">
+          <label>Área / centro de costo <span class="card-hint">para poder agrupar después cuánto se gastó ahí</span></label>
+          <select id="inv-ajuste-area"></select>
+        </div>
+        <div class="field full" id="inv-ajuste-nota-wrap" style="margin-bottom:10px;display:none">
+          <label>Detalle del motivo</label>
+          <input type="text" id="inv-ajuste-nota" placeholder="explica brevemente">
+        </div>
+        <div class="form-foot">
+          <button type="button" class="btn-secondary" id="inv-ajuste-cancelar">Cancelar</button>
+          <button type="button" class="btn-primary" id="inv-ajuste-guardar">Guardar ajuste</button>
+        </div>
       </div>
     </div>
 

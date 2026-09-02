@@ -1,0 +1,14 @@
+-- LitoColor ERP — consumo indirecto de insumos (pedido del 02sep26).
+--
+-- Un insumo es "directo" cuando su consumo queda ligado a una Orden de
+-- producción (ya se ve así en produccion/costos_movimientos, y ahora en el
+-- Kardex de Inventario). "Indirecto" es lo que se gasta sin ser para un
+-- trabajo puntual (ej. grasa de mantenimiento, aseo) — hasta ahora esto no
+-- tenía ninguna forma de quedar controlado.
+--
+-- Se resuelve reusando "Ajustar inventario" (inventario_ajustes, creada en
+-- la migración anterior) con un motivo "Consumo indirecto" — pero para
+-- poder agrupar después cuánto se gastó en insumos indirectos POR área
+-- (Mantenimiento, Aseo, Administración…), hace falta guardar esa área
+-- aparte del texto libre del motivo.
+alter table inventario_ajustes add column if not exists area text;
