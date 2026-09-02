@@ -887,6 +887,27 @@ function wireEdicionRegistro(){
   if(horaFinInput) horaFinInput.addEventListener('change', recalcularHorasEdicion);
 }
 
+// La Bitácora del Operario puede tener cientos de registros (con el filtro
+// "Todo") y la página entera es la que hace scroll — sin esto, moverse del
+// primer al último registro (o volver) significaba arrastrar la barra de
+// scroll a mano. "Ir al final" está arriba de la tabla (útil antes de
+// bajar) y "Ir al inicio" queda debajo de la tabla (útil una vez que ya se
+// llegó abajo), cada uno donde hace falta.
+function wireScrollBitacora(){
+  const btnFinal = document.getElementById('op-log-ir-final');
+  const btnInicio = document.getElementById('op-log-ir-inicio');
+  if(btnFinal) btnFinal.addEventListener('click', () => {
+    const tabla = document.getElementById('tbl-op-log');
+    const filas = tabla ? tabla.querySelectorAll('tbody tr') : [];
+    const ultima = filas.length ? filas[filas.length - 1] : tabla;
+    if(ultima) ultima.scrollIntoView({ behavior:'smooth', block:'end' });
+  });
+  if(btnInicio) btnInicio.addEventListener('click', () => {
+    const card = document.getElementById('op-log-card');
+    if(card) card.scrollIntoView({ behavior:'smooth', block:'start' });
+  });
+}
+
 // Botón "Ajustar" del Historial de producción (Detalle de la orden, en
 // Órdenes) — cambia a la pestaña Operario y abre "Corregir registro" para
 // ese registro puntual. Se inyecta en ordenes.js desde app.js (ver
@@ -905,6 +926,7 @@ export function initDashboardFilters(){
   wireRangePresets('op-presets', 'op-desde', 'op-hasta', () => rangoOp, r => rangoOp = r, renderOperario);
   wireExportButtons();
   wireEdicionRegistro();
+  wireScrollBitacora();
   const btnCerrarProdArea = document.getElementById('prod-area-detalle-cerrar');
   if(btnCerrarProdArea) btnCerrarProdArea.addEventListener('click', () => {
     document.getElementById('prod-area-detalle-card').style.display = 'none';

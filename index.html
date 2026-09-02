@@ -231,13 +231,22 @@
           <div class="card-head"><h3>Horas por área</h3><span class="card-hint" id="op-chart-hint">de este operario</span></div>
           <canvas id="chart-op-area" height="220"></canvas>
         </div>
-        <div class="card">
-          <div class="card-head"><h3>Bitácora</h3><span class="card-hint" id="op-log-hint">todos los registros del rango elegido arriba</span></div>
+        <div class="card" id="op-log-card">
+          <div class="card-head">
+            <h3>Bitácora</h3>
+            <span style="display:flex;align-items:baseline;gap:10px">
+              <span class="card-hint" id="op-log-hint">todos los registros del rango elegido arriba</span>
+              <button type="button" class="btn-secondary" id="op-log-ir-final" style="padding:4px 10px;margin-top:0">Ir al final ⬇</button>
+            </span>
+          </div>
           <div class="table-wrap">
             <table id="tbl-op-log">
               <thead><tr><th>Fecha</th><th>Actividad</th><th>Orden</th><th class="num">Cant.</th><th class="num">Hrs</th><th class="num">Valor</th><th id="op-log-th-acciones" style="display:none">Acciones</th></tr></thead>
               <tbody></tbody>
             </table>
+          </div>
+          <div style="text-align:right;margin-top:8px">
+            <button type="button" class="btn-secondary" id="op-log-ir-inicio" style="padding:4px 10px;margin-top:0">⬆ Ir al inicio</button>
           </div>
         </div>
       </div>
