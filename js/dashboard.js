@@ -645,6 +645,24 @@ function cerrarEdicionRegistro(){
   document.getElementById('op-log-editar-card').style.display = 'none';
 }
 
+// "Horas trabajadas" (tiempo_hr) es un campo aparte de Hora inicio/Hora fin
+// — normalmente lo calcula solo registrar.js al finalizar la actividad
+// (finishActivity), pero acá en "Corregir registro" quedaba desconectado:
+// si el Jefe de Producción corregía Hora inicio u Hora fin a mano, el
+// campo Horas trabajadas se quedaba con el valor viejo y había que
+// recalcularlo y tipearlo aparte. Esto lo recalcula solo, igual que hace
+// registrar.js, cada vez que cambia alguna de las dos horas.
+function recalcularHorasEdicion(){
+  const fecha = document.getElementById('ole-fecha').value;
+  const horaIni = document.getElementById('ole-hora-ini').value;
+  const horaFin = document.getElementById('ole-hora-fin').value;
+  if(!fecha || !horaIni || !horaFin) return;
+  const ini = new Date(fecha + 'T' + horaIni);
+  const fin = new Date(fecha + 'T' + horaFin);
+  const hrs = Math.max(0, (fin.getTime() - ini.getTime()) / 3600000);
+  document.getElementById('ole-horas').value = hrs.toFixed(2);
+}
+
 async function guardarEdicionRegistro(){
   const btn = document.getElementById('ole-guardar');
   const id = parseInt(btn.dataset.id, 10);
@@ -861,7 +879,12 @@ function wireEdicionRegistro(){
   // la hora exacta — pone la hora de ahora mismo en el campo Hora fin.
   if(btnHoraFinAhora) btnHoraFinAhora.addEventListener('click', () => {
     document.getElementById('ole-hora-fin').value = new Date().toTimeString().slice(0,5);
+    recalcularHorasEdicion();
   });
+  const horaIniInput = document.getElementById('ole-hora-ini');
+  const horaFinInput = document.getElementById('ole-hora-fin');
+  if(horaIniInput) horaIniInput.addEventListener('change', recalcularHorasEdicion);
+  if(horaFinInput) horaFinInput.addEventListener('change', recalcularHorasEdicion);
 }
 
 // Botón "Ajustar" del Historial de producción (Detalle de la orden, en
