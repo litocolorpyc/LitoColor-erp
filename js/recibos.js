@@ -3,7 +3,7 @@ import { DB } from './store.js';
 import { toast, fmtCOP, fechaHoyLocal } from './helpers.js';
 import { getCurrentUser } from './auth.js';
 import { renderMovimientosRecientes, renderResumenCostosMes } from './costos.js';
-import { renderInventario } from './inventario.js';
+import { renderInventario, invalidarEntradasInventario } from './inventario.js';
 
 if(typeof pdfjsLib !== 'undefined'){
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -726,7 +726,11 @@ async function guardarRecibo(){
         materialesFallidos.push(it.descripcion || it.codigo || '(sin descripción)');
       }
     }
-    if(materialesActualizados) renderInventario();
+    // Las líneas de esta compra recién insertadas (payloadItems, arriba) son
+    // justo la fuente de las "Entradas" del Kardex de Inventario — sin
+    // invalidar el caché, la tabla de Movimientos seguiría mostrando la
+    // versión vieja hasta recargar la página.
+    if(materialesActualizados){ invalidarEntradasInventario(); renderInventario(); }
 
     // Esto es lo que faltaba antes: sin esto, el documento quedaba guardado
     // pero no contaba como costo real en ningún reporte. Cada línea con un
@@ -838,6 +842,7 @@ async function eliminarRecibo(reciboId){
     // formulario — si no, quedaría "editando" un documento que ya no existe.
     if(reciboEditandoId === reciboId) limpiarFormularioRecibo();
 
+    invalidarEntradasInventario();
     renderInventario();
     renderMovimientosRecientes();
     renderResumenCostosMes();

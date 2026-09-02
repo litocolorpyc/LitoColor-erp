@@ -1247,7 +1247,29 @@
           <b>Stock negativo:</b> si un operario registra un consumo mayor al stock cargado, el sistema <b>no lo bloquea</b> — así funciona la litografía en la práctica, el consumo real a veces se registra antes de que llegue la compra. El stock queda en negativo (número rojo, "🔴 Stock negativo") y sigue así hasta que se cargue la compra; también aparece en Alertas para que no se pierda de vista.
         </p>
       </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Movimientos de inventario</h3><span class="card-hint">cada entrada (compra importada) y salida (consumo registrado) de materiales — click en una fila para ver el detalle</span></div>
+        <div class="table-wrap">
+          <table id="tbl-inv-movimientos">
+            <thead><tr><th>Fecha</th><th>Código</th><th>Artículo</th><th class="num">Cantidad entra</th><th class="num">Cantidad sale</th><th class="num">Valor unitario</th><th class="num">Valor total</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="card-hint" style="margin-top:10px;line-height:1.5">
+          El filtro de "Buscar por producto o código" de arriba también aplica acá. Las <b>entradas</b> salen de las compras importadas en Costos &gt; "Importar compra" (una edición manual del "Stock actual" en Maestros no queda registrada como movimiento). Las <b>salidas</b> salen del consumo numérico que carga el operario al registrar producción (solo cuando el material tiene costo por unidad configurado se ve el valor).
+        </p>
+      </div>
     </section>
+
+    <div class="modal-overlay" id="inv-mov-modal" style="display:none">
+      <div class="modal-card">
+        <h3 id="inv-mov-modal-titulo">Movimiento</h3>
+        <p id="inv-mov-modal-articulo" style="margin:2px 0 10px;font-size:14px"></p>
+        <div id="inv-mov-modal-detalle"></div>
+        <div class="form-foot"><span></span><button type="button" class="btn-secondary" id="inv-mov-modal-cerrar">Cerrar</button></div>
+      </div>
+    </div>
 
   </main>
   </div>
