@@ -31,7 +31,7 @@ function filasInventario(){
     esperando: ordenesEsperando(m.codigo)
   }));
   DB.insumos_area.filter(m => m.activo !== false).forEach(m => filas.push({
-    tipo: 'Insumo de área', tabla: 'insumos_area', key: m.id,
+    tipo: 'Insumo de área' + (m.tipo_consumo === 'Indirecto' ? ' (Indirecto)' : ''), tabla: 'insumos_area', key: m.id,
     codigo: null, nombre: m.nombre, grupo: m.area || '—', unidad: m.unidad || 'unidad',
     stock: m.stock_actual || 0, minimo: m.stock_minimo || 0, costo: m.costo_unitario != null ? m.costo_unitario : null,
     esperando: []
@@ -200,17 +200,21 @@ function salidasDeInventario(){
       .filter(m => m.produccion_id === r.id && (m.comentario || '').startsWith('Consumo automático'))
       .reduce((s, m) => s + (m.valor || 0), 0);
     const matPrima = DB.materias_primas.find(m => m.nombre === r.materiaPrima);
+    // "Directo" = el costo de este consumo queda ligado a la orden (sale
+    // en "Materiales consumidos" del Detalle de la orden). Una materia
+    // prima SIEMPRE es directa — es el papel/insumo que la orden consume.
+    // Un insumo puede marcarse "Indirecto" en Maestros > Materiales por
+    // área (ej. grasa de mantenimiento): ahí el costo NO se le carga a la
+    // orden aunque el operario lo haya registrado mientras trabajaba en
+    // una — ver descontarInventarioYCargarCosto en registrar.js.
+    const insumo = !matPrima ? DB.insumos_area.find(m => m.nombre === r.materiaPrima) : null;
+    const esIndirecto = !!insumo && insumo.tipo_consumo === 'Indirecto';
     salidas.push({
       tipo: 'salida', fecha: r.fecha, codigo: matPrima ? matPrima.codigo || null : null,
       nombre: r.materiaPrima, cantidad,
       valorUnitario: valorTotal > 0 ? valorTotal / cantidad : null,
       valorTotal: valorTotal > 0 ? valorTotal : null,
-      // "Directo" = el consumo queda ligado a una Orden de producción real
-      // (sale en "Materiales consumidos" del Detalle de la orden).
-      // "Indirecto" = un registro "sin orden" en Registrar (ej. área
-      // Mantenimiento) — se sigue descontando del inventario igual, pero
-      // no es para un trabajo puntual.
-      directo: r.orden != null, orden: r.orden, trabajo: r.trabajo, area: r.area, actividad: r.actividad
+      directo: !esIndirecto, orden: r.orden, trabajo: r.trabajo, area: r.area, actividad: r.actividad
     });
   });
   return salidas;
@@ -302,7 +306,7 @@ function abrirModalMovimiento(m){
   } else {
     filas = [
       ['Fecha', (m.fecha || '').slice(0, 10) || '—'],
-      ['Tipo de consumo', m.directo ? 'Directo (ligado a una orden)' : `Indirecto (sin orden — ${m.area || 'área'}${m.actividad ? ' / ' + m.actividad : ''})`],
+      ['Tipo de consumo', m.directo ? 'Directo (el costo se carga a la orden)' : `Indirecto (gasto de planta, no se carga a ninguna orden — ${m.area || 'área'}${m.actividad ? ' / ' + m.actividad : ''})`],
       ['Orden de producción', m.orden != null ? m.orden : '—'],
       ['Trabajo', m.trabajo || '—'],
       ['Cantidad', fmtNum(m.cantidad, 2)],

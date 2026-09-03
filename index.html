@@ -866,17 +866,23 @@
         </div>
         <div class="form-row">
           <div class="field"><label>Unidad (opcional)</label><input type="text" id="m-ins-unidad" placeholder="ej. kg, rollo, caja, unidad"></div>
+          <div class="field"><label>Tipo de consumo <span class="card-hint">(¿se le carga el costo a la orden?)</span></label>
+            <select id="m-ins-tipo-consumo">
+              <option value="Directo">Directo — se carga a la orden en curso</option>
+              <option value="Indirecto">Indirecto — gasto de planta, sin orden</option>
+            </select>
+          </div>
         </div>
         <div class="form-row">
           <div class="field"><label>Stock actual <span class="card-hint">(inventario)</span></label><input type="number" id="m-ins-stock" min="0" placeholder="0"></div>
           <div class="field"><label>Stock mínimo <span class="card-hint">(para alertar)</span></label><input type="number" id="m-ins-minimo" min="0" placeholder="0"></div>
           <div class="field"><label>Costo por unidad</label><input type="number" id="m-ins-costo" min="0" placeholder="ej. 12000"></div>
         </div>
-        <span class="card-hint">Deja Stock/Mínimo en 0 si todavía no vas a llevar inventario de este insumo — así no sale como alerta.</span>
+        <span class="card-hint">Deja Stock/Mínimo en 0 si todavía no vas a llevar inventario de este insumo — así no sale como alerta. "Directo" es lo normal (ej. una plancha CTP de un trabajo puntual); usa "Indirecto" para insumos que se gastan sin ser de una orden específica (ej. grasa de mantenimiento, aseo) — su consumo sigue descontando stock, pero no se le carga el costo a ninguna orden.</span>
         <div class="form-foot"><span id="m-ins-mode"></span><button type="button" class="btn-primary" id="m-ins-save">Agregar insumo</button></div>
         <div class="table-wrap" style="margin-top:12px">
           <table id="tbl-m-insumos">
-            <thead><tr><th>Nombre</th><th>Área</th><th>Unidad</th><th>Stock</th><th>Costo/unidad</th><th></th></tr></thead>
+            <thead><tr><th>Nombre</th><th>Área</th><th>Unidad</th><th>Tipo de consumo</th><th>Stock</th><th>Costo/unidad</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -1084,7 +1090,9 @@
         <h4>Trabajo sin orden asignada</h4>
         <p>Si vas a trabajar algo que todavía no tiene una orden formal (ej. una Impresión Digital suelta o un Servicio de Trabajo Externo rápido), marca la casilla <b>"Trabajo sin orden asignada"</b> — los campos Orden y Pieza se ocultan y aparece uno de "Cliente / concepto del trabajo" para que escribas de qué se trata. Sigue siendo obligatorio llenarlo.</p>
         <h4>Insumo consumido</h4>
-        <p>En la tarjeta de la actividad en curso, "Insumo consumido" junta tres cosas: <b>el/los papel(es) de esta orden</b> (el que se eligió para cada pieza al crearla, sin importar en qué área estés), <b>las materias primas que esa área tenga vinculadas</b> (Maestros &gt; Materias primas &gt; "Áreas que consumen"), y <b>los insumos por defecto de esa área</b> (Maestros &gt; Materiales por área — planchas, tinta, colbón, grapas, etc.). Si el insumo que usaste no aparece igual en la lista, elige <b>"Otro / no está en la lista…"</b> y escríbelo — igual queda registrado. Cuando el insumo tiene una unidad definida (kg, unidad, rollo…), el campo "Consumo" se vuelve un número y la unidad aparece sola al lado; si no, escribes libremente.</p>
+        <p>En la tarjeta de la actividad en curso, "Insumo consumido" junta tres cosas: <b>el/los papel(es) de esta orden</b> (el que se eligió para cada pieza al crearla, sin importar en qué área estés), <b>las materias primas que esa área tenga vinculadas</b> (Maestros &gt; Materias primas &gt; "Áreas que consumen"), y <b>los insumos por defecto de esa área</b> (Maestros &gt; Materiales por área — planchas, tinta, colbón, grapas, etc.). El desplegable las separa en dos grupos, <b>Materia prima</b> e <b>Insumo</b>, para que se vea claro cuál es cuál. Si el insumo que usaste no aparece igual en la lista, elige <b>"Otro / no está en la lista…"</b> y escríbelo — igual queda registrado. Cuando el insumo tiene una unidad definida (kg, unidad, rollo…), el campo "Consumo" se vuelve un número y la unidad aparece sola al lado; si no, escribes libremente.</p>
+        <h4>Insumo Directo vs. Indirecto</h4>
+        <p>Cada insumo de <b>Maestros &gt; Materiales por área</b> tiene un "Tipo de consumo": <b>Directo</b> (lo normal — su costo se le carga a la orden que se esté trabajando cuando se registre, ej. una plancha CTP de un trabajo puntual) o <b>Indirecto</b> (gasto de planta que no es de ninguna orden específica, ej. grasa de mantenimiento o aseo). Un insumo Indirecto sigue descontando del inventario igual que cualquier otro, pero su costo NO se le carga a la orden — queda como un costo suelto más, igual que arriendo o nómina, y se reparte proporcional en Rentabilidad por Orden. La <b>materia prima</b> (papel, laminados, etc.) no tiene esta opción: por definición siempre es Directa, es lo que la orden consume.</p>
         <h4>Finalizar o pausar</h4>
         <p>Busca la tarjeta en "Tus actividades en curso", llena la cantidad producida, y click en "⏹ Finalizar esta actividad". Si todavía no terminaste ese proceso pero necesitas ir a hacer otra cosa (otra actividad, un daño de máquina, almuerzo…), elige <b>"No, voy a pausar"</b> en "¿Quedó terminado?", indica el motivo, y el botón se vuelve "⏸ Pausar esta actividad". No puedes tener dos actividades corriendo tiempo al mismo tiempo — primero pausa o finaliza la que tienes para poder iniciar otra. Si cierras la pantalla sin finalizar, no se pierde nada — al volver a elegir tu nombre, la actividad sigue ahí.</p>
         <h4>Actividad asignada por tu jefe</h4>

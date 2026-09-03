@@ -405,13 +405,16 @@ export function initMaestros(onChange){
       { id:'m-ins-nombre', col:'nombre', required:true },
       { id:'m-ins-area', col:'area', required:true },
       { id:'m-ins-unidad', col:'unidad' },
+      { id:'m-ins-tipo-consumo', col:'tipo_consumo', required:true },
       { id:'m-ins-stock', col:'stock_actual', type:'number' },
       { id:'m-ins-minimo', col:'stock_minimo', type:'number' },
       { id:'m-ins-costo', col:'costo_unitario', type:'number' }
     ],
     renderCols: r => {
       const bajo = (r.stock_actual||0) < 0 || ((r.stock_minimo||0) > 0 && (r.stock_actual||0) < r.stock_minimo);
+      const indirecto = r.tipo_consumo === 'Indirecto';
       return [r.nombre, r.area, r.unidad||'—',
+        indirecto ? '<span title="Su consumo no se carga a ninguna orden">Indirecto</span>' : 'Directo',
         `<span style="${bajo?'color:var(--bad);font-weight:600':''}">${fmtNum(r.stock_actual)}</span>${bajo?' ⚠':''}`,
         r.costo_unitario!=null?fmtCOP(r.costo_unitario):'—'];
     },

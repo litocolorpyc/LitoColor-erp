@@ -156,9 +156,15 @@ export function populateReg(){
 //      quedar disponible en varias áreas a la vez).
 //   3) los insumos por defecto de esta área (Maestros > Materiales por
 //      área — planchas, tinta, colbón, grapas, etc.).
+// Las dos primeras SIEMPRE son "Materia prima" (lo que consume la orden);
+// la tercera es "Insumo" (lo que consume el proceso/la máquina) — se
+// agrupan en <optgroup> separados para que el operario vea de un vistazo
+// cuál es cuál, y un insumo "Indirecto" (Maestros > Materiales por área)
+// queda marcado porque su consumo NO se le carga a ninguna orden (ver
+// descontarInventarioYCargarCosto).
 export function materialSelectOptionsHTML(area, valorActual, materialesOrden){
   const opcionesInsumo = DB.insumos_area.filter(m => m.area === area && m.activo !== false)
-    .map(m => ({ nombre: m.nombre, unidad: m.unidad }));
+    .map(m => ({ nombre: m.nombre, unidad: m.unidad, indirecto: m.tipo_consumo === 'Indirecto' }));
   const codigosVinculados = new Set(DB.materias_primas_areas.filter(x => x.area === area).map(x => x.materia_prima_codigo));
   const nombresYaListados = new Set(opcionesInsumo.map(m => m.nombre));
   const opcionesMPArea = DB.materias_primas.filter(m => codigosVinculados.has(m.codigo) && !nombresYaListados.has(m.nombre))
@@ -180,13 +186,14 @@ export function materialSelectOptionsHTML(area, valorActual, materialesOrden){
       return { nombre, unidad: (mat && mat.unidad) || 'pliegos', deOrden: true };
     });
 
-  const opciones = [...opcionesOrden, ...opcionesMPArea, ...opcionesInsumo];
-  const coincide = opciones.some(m => m.nombre === valorActual);
+  const opcionesMateriaPrima = [...opcionesOrden, ...opcionesMPArea];
+  const coincide = [...opcionesMateriaPrima, ...opcionesInsumo].some(m => m.nombre === valorActual);
   const otroSeleccionado = !!valorActual && !coincide;
+  const opcionHTML = m => `<option value="${m.nombre}"${m.nombre===valorActual?' selected':''}>${m.nombre}${m.deOrden ? ' (de esta orden)' : (m.unidad?' ('+m.unidad+')':'')}${m.indirecto ? ' — indirecto, no se carga a la orden' : ''}</option>`;
+
   const opts = ['<option value="">— Sin insumo registrado —</option>'];
-  opts.push(...opciones.map(m =>
-    `<option value="${m.nombre}"${m.nombre===valorActual?' selected':''}>${m.nombre}${m.deOrden ? ' (de esta orden)' : (m.unidad?' ('+m.unidad+')':'')}</option>`
-  ));
+  if(opcionesMateriaPrima.length) opts.push(`<optgroup label="Materia prima">${opcionesMateriaPrima.map(opcionHTML).join('')}</optgroup>`);
+  if(opcionesInsumo.length) opts.push(`<optgroup label="Insumo">${opcionesInsumo.map(opcionHTML).join('')}</optgroup>`);
   opts.push(`<option value="__otro__"${otroSeleccionado?' selected':''}>Otro / no está en la lista…</option>`);
   return opts.join('');
 }
@@ -614,12 +621,19 @@ export async function descontarInventarioYCargarCosto({ nombre, area, cantidad, 
   if(!mat.costo_unitario) return { descontado:true, costeado:false, motivo:'sin_costo_unitario' };
   const concepto = DB.costos_conceptos.find(c => c.nombre === 'Consumo de materia prima (automático)');
   if(!concepto) return { descontado:true, costeado:false, motivo:'sin_concepto' }; // migración no aplicada todavía — no bloquea el resto
+  // Un insumo marcado "Indirecto" (Maestros > Materiales por área) sigue
+  // descontando stock igual, pero su costo NO se le carga a la orden que
+  // el operario tenía activa — queda como gasto de planta suelto, igual
+  // que cualquier otro costo sin orden asociada (se reparte proporcional
+  // en Rentabilidad por Orden). La materia prima (tabla materias_primas)
+  // no tiene este campo: por definición siempre es "Directo".
+  const esIndirecto = tabla === 'insumos_area' && mat.tipo_consumo === 'Indirecto';
   try{
     const row = {
       concepto_id: concepto.id, tipo: 'Variable', fecha: fecha || fechaHoyLocal(),
       valor: cantidad * mat.costo_unitario, proveedor: null,
       comentario: `Consumo automático — ${nombre} (${fmtNum(cantidad,2)})`,
-      orden: orden ?? null, suborden: suborden ?? null, produccion_id: produccionId ?? null
+      orden: esIndirecto ? null : (orden ?? null), suborden: esIndirecto ? null : (suborden ?? null), produccion_id: produccionId ?? null
     };
     const { data, error } = await sb.from('costos_movimientos').insert([row]).select();
     if(error) throw error;
