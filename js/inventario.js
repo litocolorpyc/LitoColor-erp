@@ -5,7 +5,7 @@
 // pantalla solo junta ambos catálogos en un solo tablero con alertas.
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
-import { fmtNum, fmtCOP, toast, fechaHoyLocal } from './helpers.js';
+import { fmtNum, fmtCOP, toast, fechaHoyLocal, wireTableScroll } from './helpers.js';
 import { mostrarDetalleOrden } from './ordenes.js';
 import { parseCantidadConsumo, listaAreasDisponibles } from './registrar.js';
 import { getCurrentUser } from './auth.js';
@@ -531,6 +531,9 @@ export function initInventario(){
   wireModalMovimiento();
   wireModalAjuste();
   wirePanelFisico();
+  wireTableScroll('tbl-inventario', 'inv-ir-inicio', 'inv-ir-final');
+  wireTableScroll('tbl-inv-fisico', 'inv-fisico-ir-inicio', 'inv-fisico-ir-final');
+  wireTableScroll('tbl-inv-movimientos', 'inv-mov-ir-inicio', 'inv-mov-ir-final');
   const buscar = document.getElementById('inv-buscar');
   if(buscar){
     buscar.addEventListener('input', () => {

@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
-import { fmtCOP, fmtNum, areaColor, rangoFechas, rangoAnterior, deltaBadge, exportarExcel, toast } from './helpers.js';
+import { fmtCOP, fmtNum, areaColor, rangoFechas, rangoAnterior, deltaBadge, exportarExcel, toast, wireTableScroll } from './helpers.js';
 import { mostrarDetalleOrden, tipoTrabajoLabel, renderOppRecent, subprocesosDeArea, getOrdenDetalleActual } from './ordenes.js';
 import { puedeEditarProduccion } from './auth.js';
 import { listaAreasDisponibles, materialSelectOptionsHTML, unidadNumericaDelMaterial, parseCantidadConsumo, descontarInventarioYCargarCosto, revertirConsumoDeRegistro, avisoConsumoNoReflejado } from './registrar.js';
@@ -927,6 +927,7 @@ export function initDashboardFilters(){
   wireExportButtons();
   wireEdicionRegistro();
   wireScrollBitacora();
+  wireTableScroll('tbl-ger-ordenes', 'ger-rent-ir-inicio', 'ger-rent-ir-final');
   const btnCerrarProdArea = document.getElementById('prod-area-detalle-cerrar');
   if(btnCerrarProdArea) btnCerrarProdArea.addEventListener('click', () => {
     document.getElementById('prod-area-detalle-card').style.display = 'none';

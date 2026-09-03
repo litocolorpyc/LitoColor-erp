@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
-import { toast, fmtNum } from './helpers.js';
+import { toast, fmtNum, wireTableScroll } from './helpers.js';
 import { listaAreasDisponibles } from './registrar.js';
 
 function fmtCOP(n){ if(n==null||isNaN(n)) return '—'; return '$' + Math.round(n).toLocaleString('es-CO'); }
@@ -470,6 +470,18 @@ export function initMaestros(onChange){
     renderCols: r => [r.producto, r.pieza],
     onChange
   });
+
+  // Botones "Ir al principio"/"Ir al final" solo en los catálogos que
+  // pueden crecer mucho (materias primas, insumos, clientes, proveedores,
+  // productos, piezas por producto) — el resto (áreas, máquinas,
+  // actividades, motivos de pausa, subprocesos, categorías) son listas
+  // cortas por naturaleza y no lo necesitan.
+  wireTableScroll('tbl-m-materias', 'm-mp-ir-inicio', 'm-mp-ir-final');
+  wireTableScroll('tbl-m-insumos', 'm-ins-ir-inicio', 'm-ins-ir-final');
+  wireTableScroll('tbl-m-clientes', 'm-cli-ir-inicio', 'm-cli-ir-final');
+  wireTableScroll('tbl-m-proveedores', 'm-prov-ir-inicio', 'm-prov-ir-final');
+  wireTableScroll('tbl-m-productos', 'm-prod-ir-inicio', 'm-prod-ir-final');
+  wireTableScroll('tbl-m-piezas-producto', 'm-pp-ir-inicio', 'm-pp-ir-final');
 
   poblarSelectsAreasEnMaestros();
   poblarSelectProductoMaestro();

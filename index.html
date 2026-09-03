@@ -128,13 +128,22 @@
         </div>
       </div>
       <div class="card">
-        <div class="card-head"><h3>Rentabilidad por orden</h3><span class="card-hint">el margen usa el ingreso facturado, o el presupuestado si aún no hay factura — ver notas abajo</span></div>
+        <div class="card-head">
+          <h3>Rentabilidad por orden</h3>
+          <span style="display:flex;align-items:baseline;gap:10px">
+            <span class="card-hint">el margen usa el ingreso facturado, o el presupuestado si aún no hay factura — ver notas abajo</span>
+            <button type="button" class="btn-secondary" id="ger-rent-ir-final" style="padding:4px 10px;margin-top:0">Ir al final ⬇</button>
+          </span>
+        </div>
         <div class="form-foot" style="margin-top:0;margin-bottom:10px"><span></span><button type="button" class="btn-secondary" id="export-rentabilidad" style="margin:0">⬇ Exportar a Excel</button></div>
         <div class="table-wrap">
           <table id="tbl-ger-ordenes">
             <thead><tr><th>Orden</th><th>Cliente</th><th>Trabajo</th><th class="num">Ingreso</th><th class="num">Ingreso presupuestado</th><th class="num">Costo M.O.</th><th class="num">Otros costos *</th><th class="num">Margen **</th></tr></thead>
             <tbody></tbody>
           </table>
+        </div>
+        <div style="text-align:right;margin-top:8px">
+          <button type="button" class="btn-secondary" id="ger-rent-ir-inicio" style="padding:4px 10px;margin-top:0">⬆ Ir al inicio</button>
         </div>
         <p class="card-hint" style="margin-top:10px;line-height:1.5">
           * "Otros costos" = costos fijos y variables (arriendo, nómina, servicios, impuestos, compras de materia prima, etc. — sin mano de obra). Si el costo ya se registró con esta orden asociada (ej. una compra de papel para este trabajo), se carga 100% aquí; el resto (arriendo, nómina, y demás sin orden asociada) se reparte proporcional al ingreso de cada orden. Pasa el mouse sobre el valor para ver el detalle.<br>
@@ -580,12 +589,21 @@
 
     <section class="tab-panel" id="panel-registrar">
       <div class="card">
-        <div class="card-head"><h3>Órdenes vivas en producción</h3><span class="card-hint">con procesos pendientes</span></div>
+        <div class="card-head">
+          <h3>Órdenes vivas en producción</h3>
+          <span style="display:flex;align-items:baseline;gap:10px">
+            <span class="card-hint">con procesos pendientes</span>
+            <button type="button" class="btn-secondary" id="ordvivas-ir-final" style="padding:4px 10px;margin-top:0">Ir al final ⬇</button>
+          </span>
+        </div>
         <div class="table-wrap">
           <table id="tbl-ordenes-vivas">
             <thead><tr><th>Orden</th><th>Cliente</th><th>Producto</th><th>Pieza</th><th class="num">Avance</th></tr></thead>
             <tbody></tbody>
           </table>
+        </div>
+        <div style="text-align:right;margin-top:8px">
+          <button type="button" class="btn-secondary" id="ordvivas-ir-inicio" style="padding:4px 10px;margin-top:0">⬆ Ir al inicio</button>
         </div>
       </div>
 
@@ -779,7 +797,13 @@
 
     <section class="tab-panel" id="panel-m-materias">
       <div class="card">
-        <div class="card-head"><h3>Materias primas</h3><span class="card-hint">papel, laminados, argollas, pegantes — ya viene precargado con 226</span></div>
+        <div class="card-head">
+          <h3>Materias primas</h3>
+          <span style="display:flex;align-items:baseline;gap:10px">
+            <span class="card-hint">papel, laminados, argollas, pegantes — ya viene precargado con 226</span>
+            <button type="button" class="btn-secondary" id="m-mp-ir-final" style="padding:4px 10px;margin-top:0">Ir al final ⬇</button>
+          </span>
+        </div>
         <div class="form-row">
           <div class="field"><label>Código</label><input type="text" id="m-mp-codigo" placeholder="ej. Cote-150-C2-1"></div>
           <div class="field"><label>Nombre</label><input type="text" id="m-mp-nombre" placeholder="ej. Propalcote 150 gr C2S 70x100"></div>
@@ -812,6 +836,9 @@
             <tbody></tbody>
           </table>
         </div>
+        <div style="text-align:right;margin-top:8px">
+          <button type="button" class="btn-secondary" id="m-mp-ir-inicio" style="padding:4px 10px;margin-top:0">⬆ Ir al inicio</button>
+        </div>
       </div>
 
       <div class="card">
@@ -826,7 +853,13 @@
 
     <section class="tab-panel" id="panel-m-insumos">
       <div class="card">
-        <div class="card-head"><h3>Materiales por área</h3><span class="card-hint">lo que consume cada área al producir — planchas, tinta, colbón, grapas, rollos de laminado, etc. (no es el papel de la orden, eso va en "Materias primas")</span></div>
+        <div class="card-head">
+          <h3>Materiales por área</h3>
+          <span style="display:flex;align-items:baseline;gap:10px">
+            <span class="card-hint">lo que consume cada área al producir — planchas, tinta, colbón, grapas, rollos de laminado, etc. (no es el papel de la orden, eso va en "Materias primas")</span>
+            <button type="button" class="btn-secondary" id="m-ins-ir-final" style="padding:4px 10px;margin-top:0">Ir al final ⬇</button>
+          </span>
+        </div>
         <div class="form-row">
           <div class="field"><label>Nombre del insumo</label><input type="text" id="m-ins-nombre" placeholder="ej. Colbón, Plancha CTP, Rollo laminado mate"></div>
           <div class="field"><label>Área que lo consume</label><select id="m-ins-area"></select></div>
@@ -847,12 +880,21 @@
             <tbody></tbody>
           </table>
         </div>
+        <div style="text-align:right;margin-top:8px">
+          <button type="button" class="btn-secondary" id="m-ins-ir-inicio" style="padding:4px 10px;margin-top:0">⬆ Ir al inicio</button>
+        </div>
       </div>
     </section>
 
     <section class="tab-panel" id="panel-m-clientes">
       <div class="card">
-        <div class="card-head"><h3>Clientes</h3><span class="card-hint">datos básicos</span></div>
+        <div class="card-head">
+          <h3>Clientes</h3>
+          <span style="display:flex;align-items:baseline;gap:10px">
+            <span class="card-hint">datos básicos</span>
+            <button type="button" class="btn-secondary" id="m-cli-ir-final" style="padding:4px 10px;margin-top:0">Ir al final ⬇</button>
+          </span>
+        </div>
         <div class="form-row">
           <div class="field"><label>Nombre</label><input type="text" id="m-cli-nombre" placeholder="Razón social o nombre"></div>
           <div class="field"><label>NIT / identificación</label><input type="text" id="m-cli-nit" placeholder="opcional"></div>
@@ -872,12 +914,21 @@
             <tbody></tbody>
           </table>
         </div>
+        <div style="text-align:right;margin-top:8px">
+          <button type="button" class="btn-secondary" id="m-cli-ir-inicio" style="padding:4px 10px;margin-top:0">⬆ Ir al inicio</button>
+        </div>
       </div>
     </section>
 
     <section class="tab-panel" id="panel-m-proveedores">
       <div class="card">
-        <div class="card-head"><h3>Proveedores</h3><span class="card-hint">a quién le compran</span></div>
+        <div class="card-head">
+          <h3>Proveedores</h3>
+          <span style="display:flex;align-items:baseline;gap:10px">
+            <span class="card-hint">a quién le compran</span>
+            <button type="button" class="btn-secondary" id="m-prov-ir-final" style="padding:4px 10px;margin-top:0">Ir al final ⬇</button>
+          </span>
+        </div>
         <div class="form-row">
           <div class="field"><label>Nombre</label><input type="text" id="m-prov-nombre" placeholder="Razón social o nombre"></div>
           <div class="field"><label>Tipo de proveedor</label><input type="text" id="m-prov-tipo" list="m-prov-tipo-list" placeholder="ej. Proveedor de Insumos"></div>
@@ -906,12 +957,21 @@
             <tbody></tbody>
           </table>
         </div>
+        <div style="text-align:right;margin-top:8px">
+          <button type="button" class="btn-secondary" id="m-prov-ir-inicio" style="padding:4px 10px;margin-top:0">⬆ Ir al inicio</button>
+        </div>
       </div>
     </section>
 
     <section class="tab-panel" id="panel-m-productos">
       <div class="card">
-        <div class="card-head"><h3>Productos</h3><span class="card-hint">descripción base, del Excel de combinaciones</span></div>
+        <div class="card-head">
+          <h3>Productos</h3>
+          <span style="display:flex;align-items:baseline;gap:10px">
+            <span class="card-hint">descripción base, del Excel de combinaciones</span>
+            <button type="button" class="btn-secondary" id="m-prod-ir-final" style="padding:4px 10px;margin-top:0">Ir al final ⬇</button>
+          </span>
+        </div>
         <div class="form-row">
           <div class="field"><label>Nombre</label><input type="text" id="m-prod-nombre" placeholder="ej. Talonario"></div>
           <div class="field"><label>Descripción</label><input type="text" id="m-prod-desc" placeholder="opcional"></div>
@@ -923,12 +983,21 @@
             <tbody></tbody>
           </table>
         </div>
+        <div style="text-align:right;margin-top:8px">
+          <button type="button" class="btn-secondary" id="m-prod-ir-inicio" style="padding:4px 10px;margin-top:0">⬆ Ir al inicio</button>
+        </div>
       </div>
     </section>
 
     <section class="tab-panel" id="panel-m-piezas-producto">
       <div class="card">
-        <div class="card-head"><h3>Piezas por producto</h3><span class="card-hint">qué piezas suele tener cada producto — se completa sola cada vez que usas una pieza nueva en una orden, pero también puedes agregarlas aquí de una vez</span></div>
+        <div class="card-head">
+          <h3>Piezas por producto</h3>
+          <span style="display:flex;align-items:baseline;gap:10px">
+            <span class="card-hint">qué piezas suele tener cada producto — se completa sola cada vez que usas una pieza nueva en una orden, pero también puedes agregarlas aquí de una vez</span>
+            <button type="button" class="btn-secondary" id="m-pp-ir-final" style="padding:4px 10px;margin-top:0">Ir al final ⬇</button>
+          </span>
+        </div>
         <div class="form-row">
           <div class="field"><label>Producto <span class="card-hint">(desde Maestros &gt; Productos)</span></label><select id="m-pp-producto"></select></div>
           <div class="field"><label>Pieza</label><input type="text" id="m-pp-pieza" placeholder="ej. Carátula"></div>
@@ -939,6 +1008,9 @@
             <thead><tr><th>Producto</th><th>Pieza</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
+        </div>
+        <div style="text-align:right;margin-top:8px">
+          <button type="button" class="btn-secondary" id="m-pp-ir-inicio" style="padding:4px 10px;margin-top:0">⬆ Ir al inicio</button>
         </div>
       </div>
     </section>
@@ -1229,7 +1301,13 @@
 
     <section class="tab-panel" id="panel-inventario">
       <div class="card">
-        <div class="card-head"><h3>Inventario de materia prima</h3><span class="card-hint">papel (Materias primas) e insumos por área — el consumo del operario descuenta solo, y crear una orden avisa si falta stock</span></div>
+        <div class="card-head">
+          <h3>Inventario de materia prima</h3>
+          <span style="display:flex;align-items:baseline;gap:10px">
+            <span class="card-hint">papel (Materias primas) e insumos por área — el consumo del operario descuenta solo, y crear una orden avisa si falta stock</span>
+            <button type="button" class="btn-secondary" id="inv-ir-final" style="padding:4px 10px;margin-top:0">Ir al final ⬇</button>
+          </span>
+        </div>
         <div class="kpi-row" id="inv-kpis"></div>
         <div class="form-row" style="margin-top:10px">
           <div class="field"><label>Buscar por producto o código</label><input type="text" id="inv-buscar" placeholder="ej. Propalcote, Cote-350-C2-1, Colbón…"></div>
@@ -1239,6 +1317,9 @@
             <thead><tr><th>Tipo</th><th>Código</th><th>Nombre</th><th>Categoría / área</th><th class="num">Stock actual</th><th class="num">Mínimo</th><th class="num">Costo/unidad</th><th>Estado</th><th>Órdenes esperando este material</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
+        </div>
+        <div style="text-align:right;margin-top:8px">
+          <button type="button" class="btn-secondary" id="inv-ir-inicio" style="padding:4px 10px;margin-top:0">⬆ Ir al inicio</button>
         </div>
         <p class="card-hint" style="margin-top:10px;line-height:1.5">
           Solo aparecen aquí los materiales a los que ya les pusiste un stock actual o un mínimo desde "Materias primas" o "Materiales por área" (o que tienen una orden esperándolos) — así los 226 papeles precargados no salen todos como alerta desde el día uno.<br>
@@ -1263,11 +1344,17 @@
             <div class="field"><label>Responsable</label><input type="text" id="inv-fisico-responsable" placeholder="quién hizo el conteo"></div>
           </div>
           <span class="card-hint">Deja en blanco el "Conteo físico" de los materiales que NO vas a contar hoy — solo se guarda ajuste en las filas que llenes con un número distinto al stock del sistema.</span>
+          <div style="text-align:right;margin-top:8px">
+            <button type="button" class="btn-secondary" id="inv-fisico-ir-final" style="padding:4px 10px;margin-top:0">Ir al final ⬇</button>
+          </div>
           <div class="table-wrap" style="margin-top:10px;max-height:480px;overflow-y:auto">
             <table id="tbl-inv-fisico">
               <thead><tr><th>Código</th><th>Artículo</th><th>Grupo</th><th class="num">Stock sistema</th><th class="num">Conteo físico</th><th class="num">Diferencia</th></tr></thead>
               <tbody></tbody>
             </table>
+          </div>
+          <div style="text-align:right;margin-top:8px">
+            <button type="button" class="btn-secondary" id="inv-fisico-ir-inicio" style="padding:4px 10px;margin-top:0">⬆ Ir al inicio</button>
           </div>
           <div class="form-foot" style="margin-top:10px">
             <span class="card-hint" id="inv-fisico-hint"></span>
@@ -1280,12 +1367,21 @@
       </div>
 
       <div class="card">
-        <div class="card-head"><h3>Movimientos de inventario</h3><span class="card-hint">entradas (compras), salidas (consumo) y ajustes de inventario — click en una fila para ver el detalle</span></div>
+        <div class="card-head">
+          <h3>Movimientos de inventario</h3>
+          <span style="display:flex;align-items:baseline;gap:10px">
+            <span class="card-hint">entradas (compras), salidas (consumo) y ajustes de inventario — click en una fila para ver el detalle</span>
+            <button type="button" class="btn-secondary" id="inv-mov-ir-final" style="padding:4px 10px;margin-top:0">Ir al final ⬇</button>
+          </span>
+        </div>
         <div class="table-wrap">
           <table id="tbl-inv-movimientos">
             <thead><tr><th>Fecha</th><th>Código</th><th>Artículo</th><th class="num">Cantidad entra</th><th class="num">Cantidad sale</th><th class="num">Valor unitario</th><th class="num">Valor total</th></tr></thead>
             <tbody></tbody>
           </table>
+        </div>
+        <div style="text-align:right;margin-top:8px">
+          <button type="button" class="btn-secondary" id="inv-mov-ir-inicio" style="padding:4px 10px;margin-top:0">⬆ Ir al inicio</button>
         </div>
         <p class="card-hint" style="margin-top:10px;line-height:1.5">
           El filtro de "Buscar por producto o código" de arriba también aplica acá. Las <b>entradas</b> salen de las compras importadas en Costos &gt; "Importar compra". Las <b>salidas</b> salen del consumo numérico que carga el operario al registrar producción (solo cuando el material tiene costo por unidad configurado se ve el valor). Los <b>ajustes</b> (botón "Ajustar" de la tabla de arriba, o un conteo de "Inventario físico") también salen acá, como entrada o salida según el signo de la diferencia.

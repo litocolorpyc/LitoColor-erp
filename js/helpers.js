@@ -89,6 +89,29 @@ export function normNombreMaterial(s){
   return String(s || '').trim().toLowerCase().replace(/(\d),(\d)/g, '$1.$2').replace(/\s+/g, ' ');
 }
 
+// Botones "Ir al principio" / "Ir al final" para tablas largas (muchos
+// materiales, movimientos, clientes, etc.) — sin esto, moverse de la
+// primera a la última fila (o volver) significa arrastrar la barra de
+// scroll a mano. Se usa en varias pantallas; scrollIntoView respeta tanto
+// el scroll de toda la página como el de una tabla con su propio
+// contenedor (max-height + overflow-y:auto), así que sirve para ambos
+// casos sin distinción.
+export function wireTableScroll(tablaId, btnInicioId, btnFinalId){
+  const tabla = () => document.getElementById(tablaId);
+  const btnInicio = document.getElementById(btnInicioId);
+  const btnFinal = document.getElementById(btnFinalId);
+  if(btnFinal) btnFinal.addEventListener('click', () => {
+    const t = tabla();
+    const filas = t ? t.querySelectorAll('tbody tr') : [];
+    const ultima = filas.length ? filas[filas.length - 1] : t;
+    if(ultima) ultima.scrollIntoView({ behavior:'smooth', block:'end' });
+  });
+  if(btnInicio) btnInicio.addEventListener('click', () => {
+    const t = tabla();
+    if(t) t.scrollIntoView({ behavior:'smooth', block:'start' });
+  });
+}
+
 export function exportarExcel(nombreArchivo, hojas){
   const wb = XLSX.utils.book_new();
   hojas.forEach(h => {

@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
-import { toast, fmtNum, exportarExcel, fechaHoyLocal } from './helpers.js';
+import { toast, fmtNum, exportarExcel, fechaHoyLocal, wireTableScroll } from './helpers.js';
 import { getCurrentUser, puedeEditarProduccion } from './auth.js';
 import { poblarDatalistProveedores } from './costos.js';
 
@@ -2263,6 +2263,7 @@ let onOrdenesChangeCallback = null;
 
 export function initOppForm(onChange){
   onOrdenesChangeCallback = onChange || null;
+  wireTableScroll('tbl-ordenes-vivas', 'ordvivas-ir-inicio', 'ordvivas-ir-final');
   populateClienteSelect();
   populateProductoSelect();
   poblarDatalistProveedores();
