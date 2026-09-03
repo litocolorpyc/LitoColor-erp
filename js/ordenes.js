@@ -760,81 +760,6 @@ function puedeEditarPresupuesto(){
   return puedeReordenarPrioridad();
 }
 
-// ---------- asignar operario a una orden (desde Prioridad de producción) ----------
-// El jefe/gerente no elige área ni pieza a mano — el sistema calcula sola
-// "lo próximo por hacer" de esa orden (primera pieza con procesos sin
-// terminar, primera área de esa pieza que falte) y esa es la actividad que
-// queda asignada. Igual criterio de prioridad que usa el tablero del
-// operario (ver getPiezasPendientesPorPrioridad), pero para una sola orden.
-function proximoPendienteDeOrden(orden){
-  const piezas = DB.opp_piezas.filter(p => p.orden === orden).sort((a,b)=>a.suborden-b.suborden);
-  for(const p of piezas){
-    const requeridos = Array.isArray(p.procesos_requeridos) ? p.procesos_requeridos : [];
-    if(!requeridos.length) continue;
-    const completados = areasCompletadasPorPieza(p);
-    const area = requeridos.find(a => !completados.has(a));
-    if(area) return { pieza: p, area };
-  }
-  return null;
-}
-
-// Registro de producción "asignado, sin iniciar" (horaIni null) que ya
-// exista para esta orden — así se reasigna/quita en vez de duplicar.
-function asignacionPendienteDeOrden(orden){
-  return DB.produccion.find(r => r.orden === orden && !r.horaIni && !r.horaFin) || null;
-}
-
-async function asignarOperarioAOrden(orden, operarioNombre){
-  const o = DB.opp_ordenes.find(x => x.orden === orden);
-  if(!o) return;
-  const pendiente = asignacionPendienteDeOrden(orden);
-  const user = getCurrentUser();
-
-  try{
-    if(!operarioNombre){
-      if(pendiente){
-        const { error } = await sb.from('produccion').delete().eq('id', pendiente.id);
-        if(error) throw error;
-        const idx = DB.produccion.findIndex(r => r.id === pendiente.id);
-        if(idx >= 0) DB.produccion.splice(idx, 1);
-        toast('Asignación quitada');
-      }
-    } else if(pendiente){
-      const { data, error } = await sb.from('produccion')
-        .update({ operario: operarioNombre, asignado_por: user?.nombre || null })
-        .eq('id', pendiente.id).select();
-      if(error) throw error;
-      const idx = DB.produccion.findIndex(r => r.id === pendiente.id);
-      if(idx >= 0) DB.produccion[idx] = normProd(data[0]);
-      toast('Reasignado a ' + operarioNombre);
-    } else {
-      const proximo = proximoPendienteDeOrden(orden);
-      if(!proximo){
-        toast('Esta orden no tiene piezas pendientes para asignar');
-        renderPrioridadOrdenes();
-        return;
-      }
-      const row = {
-        fecha: fechaHoyLocal(), operario: operarioNombre, hora_ini: null, hora_fin: null,
-        area: proximo.area, actividad: null, maquina: null,
-        orden: o.orden, suborden: proximo.pieza.suborden, op: proximo.pieza.op,
-        cliente: o.cliente, trabajo: proximo.pieza.pieza || null,
-        opp: proximo.pieza.op || String(o.orden),
-        asignado_por: user?.nombre || null
-      };
-      const { data, error } = await sb.from('produccion').insert([row]).select();
-      if(error) throw error;
-      DB.produccion.unshift(normProd(data[0]));
-      toast(`Asignado a ${operarioNombre} — ${proximo.area} · ${proximo.pieza.pieza || 'Pieza ' + proximo.pieza.suborden}`);
-    }
-    renderPrioridadOrdenes();
-  }catch(err){
-    console.error(err);
-    toast('No se pudo guardar la asignación — revisa la consola');
-    renderPrioridadOrdenes();
-  }
-}
-
 function renderPrioridadOrdenes(){
   const cont = document.getElementById('opp-prioridad-list');
   if(!cont) return;
@@ -852,30 +777,13 @@ function renderPrioridadOrdenes(){
     return;
   }
 
-  const operariosActivos = DB.personal.filter(p => p.activo !== false);
-
   cont.innerHTML = activas.map((o, i) => {
     const estado = estadoOrden(o);
-    const pendiente = asignacionPendienteDeOrden(o.orden);
-    const proximo = pendiente ? null : proximoPendienteDeOrden(o.orden);
-    const sinNadaQueAsignar = !pendiente && !proximo;
-    const hintAsignar = pendiente
-      ? `asignada a ${pendiente.operario} · ${pendiente.area}${pendiente.trabajo ? ' · ' + pendiente.trabajo : ''}`
-      : (proximo ? `próximo: ${proximo.area} · ${proximo.pieza.pieza || 'Pieza ' + proximo.pieza.suborden}` : 'sin piezas pendientes');
-    const selectorAsignar = puedeArrastrar ? `
-      <div class="prioridad-asignar">
-        <select class="prioridad-asignar-select" data-orden="${o.orden}" ${sinNadaQueAsignar ? 'disabled' : ''}>
-          <option value="">— sin asignar —</option>
-          ${operariosActivos.map(op => `<option value="${op.nombre}"${pendiente && pendiente.operario === op.nombre ? ' selected' : ''}>${op.nombre}</option>`).join('')}
-        </select>
-        <span class="card-hint">${hintAsignar}</span>
-      </div>` : '';
     return `<div class="prioridad-row" data-orden="${o.orden}" draggable="${puedeArrastrar}">
       <span class="prioridad-handle">${puedeArrastrar ? '⠿' : '·'}</span>
       <span class="prioridad-num">${i + 1}</span>
       <span class="prioridad-info fila-clicable"><b>Orden ${o.orden}</b> — ${o.cliente || '—'} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></span>
       ${estadoBadgeHTML(estado)}
-      ${selectorAsignar}
     </div>`;
   }).join('');
 
@@ -885,18 +793,6 @@ function renderPrioridadOrdenes(){
     info.addEventListener('click', () => {
       const orden = parseInt(info.closest('.prioridad-row').dataset.orden, 10);
       mostrarDetalleOrden(orden);
-    });
-  });
-
-  // El desplegable de asignar vive dentro de una fila arrastrable — sin
-  // esto, intentar abrirlo dispara el drag-and-drop en vez de la lista.
-  cont.querySelectorAll('.prioridad-asignar-select').forEach(sel => {
-    sel.addEventListener('mousedown', e => e.stopPropagation());
-    sel.addEventListener('click', e => e.stopPropagation());
-    sel.addEventListener('change', () => {
-      const orden = parseInt(sel.dataset.orden, 10);
-      sel.disabled = true;
-      asignarOperarioAOrden(orden, sel.value).finally(() => { sel.disabled = false; });
     });
   });
 
@@ -990,6 +886,62 @@ function poblarSelectPrioridadArea(){
   if(Array.from(sel.options).some(o => o.value === valorPrevio)) sel.value = valorPrevio;
 }
 
+// ---------- asignar operario a una pieza+área (desde Prioridad por área) ----------
+// Cada fila de "Prioridad por área" ya es una suborden puntual pendiente de
+// un área puntual — a diferencia de la asignación vieja "por orden completa"
+// (que adivinaba sola cuál era "lo próximo pendiente" de toda la orden), acá
+// el jefe/gerente asigna directamente sobre la fila que quiere, sin adivinar
+// nada: tiene sentido porque las prioridades ya se manejan por suborden.
+
+// Registro de producción "asignado, sin iniciar" (horaIni null) que ya
+// exista para esta pieza+área — así se reasigna/quita en vez de duplicar.
+function asignacionPendienteDeSuborden(orden, suborden, area){
+  return DB.produccion.find(r => r.orden === orden && r.suborden === suborden && r.area === area && !r.horaIni && !r.horaFin) || null;
+}
+
+async function asignarOperarioASuborden(o, p, area, operarioNombre){
+  const pendiente = asignacionPendienteDeSuborden(o.orden, p.suborden, area);
+  const user = getCurrentUser();
+
+  try{
+    if(!operarioNombre){
+      if(pendiente){
+        const { error } = await sb.from('produccion').delete().eq('id', pendiente.id);
+        if(error) throw error;
+        const idx = DB.produccion.findIndex(r => r.id === pendiente.id);
+        if(idx >= 0) DB.produccion.splice(idx, 1);
+        toast('Asignación quitada');
+      }
+    } else if(pendiente){
+      const { data, error } = await sb.from('produccion')
+        .update({ operario: operarioNombre, asignado_por: user?.nombre || null })
+        .eq('id', pendiente.id).select();
+      if(error) throw error;
+      const idx = DB.produccion.findIndex(r => r.id === pendiente.id);
+      if(idx >= 0) DB.produccion[idx] = normProd(data[0]);
+      toast('Reasignado a ' + operarioNombre);
+    } else {
+      const row = {
+        fecha: fechaHoyLocal(), operario: operarioNombre, hora_ini: null, hora_fin: null,
+        area, actividad: null, maquina: null,
+        orden: o.orden, suborden: p.suborden, op: p.op,
+        cliente: o.cliente, trabajo: p.pieza || null,
+        opp: p.op || String(o.orden),
+        asignado_por: user?.nombre || null
+      };
+      const { data, error } = await sb.from('produccion').insert([row]).select();
+      if(error) throw error;
+      DB.produccion.unshift(normProd(data[0]));
+      toast(`Asignado a ${operarioNombre} — ${area} · ${p.pieza || 'Pieza ' + p.suborden}`);
+    }
+    renderPrioridadArea();
+  }catch(err){
+    console.error(err);
+    toast('No se pudo guardar la asignación — revisa la consola');
+    renderPrioridadArea();
+  }
+}
+
 function renderPrioridadArea(){
   const sel = document.getElementById('opp-prioridad-area-select');
   const cont = document.getElementById('opp-prioridad-area-list');
@@ -1010,16 +962,46 @@ function renderPrioridadArea(){
     return;
   }
 
-  cont.innerHTML = filas.map(({ o, p }, i) => `<div class="prioridad-row" data-orden="${o.orden}" data-suborden="${p.suborden}" draggable="${puede}">
+  const operariosActivos = DB.personal.filter(p => p.activo !== false);
+
+  cont.innerHTML = filas.map(({ o, p }, i) => {
+    const pendiente = asignacionPendienteDeSuborden(o.orden, p.suborden, area);
+    const selectorAsignar = puede ? `
+      <div class="prioridad-asignar">
+        <select class="prioridad-asignar-select" data-orden="${o.orden}" data-suborden="${p.suborden}">
+          <option value="">— sin asignar —</option>
+          ${operariosActivos.map(op => `<option value="${op.nombre}"${pendiente && pendiente.operario === op.nombre ? ' selected' : ''}>${op.nombre}</option>`).join('')}
+        </select>
+        ${pendiente ? `<span class="card-hint">asignada a ${pendiente.operario}</span>` : ''}
+      </div>` : '';
+    return `<div class="prioridad-row" data-orden="${o.orden}" data-suborden="${p.suborden}" draggable="${puede}">
       <span class="prioridad-handle">${puede ? '⠿' : '·'}</span>
       <span class="prioridad-num">${i + 1}</span>
       <span class="prioridad-info fila-clicable"><b>Orden ${o.orden}-${p.suborden}</b> — ${o.cliente || '—'} ${p.pieza ? '· ' + p.pieza : ''} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></span>
-    </div>`).join('');
+      ${selectorAsignar}
+    </div>`;
+  }).join('');
 
   cont.querySelectorAll('.prioridad-info').forEach(info => {
     info.addEventListener('click', () => {
       const orden = parseInt(info.closest('.prioridad-row').dataset.orden, 10);
       mostrarDetalleOrden(orden);
+    });
+  });
+
+  // El desplegable de asignar vive dentro de una fila arrastrable — sin
+  // esto, intentar abrirlo dispara el drag-and-drop en vez de la lista.
+  cont.querySelectorAll('.prioridad-asignar-select').forEach(sel => {
+    sel.addEventListener('mousedown', e => e.stopPropagation());
+    sel.addEventListener('click', e => e.stopPropagation());
+    sel.addEventListener('change', () => {
+      const orden = parseInt(sel.dataset.orden, 10);
+      const suborden = parseInt(sel.dataset.suborden, 10);
+      const o = DB.opp_ordenes.find(x => x.orden === orden);
+      const p = DB.opp_piezas.find(x => x.orden === orden && x.suborden === suborden);
+      if(!o || !p) return;
+      sel.disabled = true;
+      asignarOperarioASuborden(o, p, area, sel.value).finally(() => { sel.disabled = false; });
     });
   });
 
