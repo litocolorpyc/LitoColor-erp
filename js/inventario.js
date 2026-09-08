@@ -1,8 +1,9 @@
 // Punto 13 de AjustesERP: sección de control de inventario de materia
-// prima. Es de solo lectura — para cargar/ajustar stock, costo unitario o
-// mínimos se sigue editando desde Maestros > "Materias primas" o
-// "Materiales por área" (donde ya existe el patrón de alta/edición), esta
-// pantalla solo junta ambos catálogos en un solo tablero con alertas.
+// prima. El tablero en sí es de solo lectura, pero desde acá también se
+// puede ajustar stock y (desde 08sep26) costo por unidad — con "Ajustar"
+// (una fila) o "Inventario físico" (conteo masivo), ambos con rastro en
+// inventario_ajustes. Los mínimos y el alta/baja de materiales se siguen
+// editando desde Maestros > "Materias primas" o "Materiales por área".
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
 import { fmtNum, fmtCOP, toast, fechaHoyLocal, wireTableScroll } from './helpers.js';
@@ -337,16 +338,34 @@ function wireModalMovimiento(){
 // nuevo stock en el material Y una fila de auditoría en inventario_ajustes
 // (motivo, quién, cuánto cambió) — antes, corregir el stock en Maestros no
 // dejaba ningún rastro.
-async function guardarAjusteMaterial({ tabla, key, codigo, nombre, stockAnterior, stockNuevo, costoUnitario, motivo, tipo, fecha, area }){
+//
+// `costoNuevo` (opcional, agregado 08sep26): permite cargar/corregir el
+// costo por unidad del material al mismo tiempo que se ajusta el stock (o
+// sin tocar el stock — mucho material del catálogo nunca tuvo costo
+// cargado desde el Excel del 20ago26, y eso hace que su consumo descuente
+// inventario pero no se valorice; ver descontarInventarioYCargarCosto en
+// registrar.js). No queda como fila de inventario_ajustes (esa tabla es
+// para movimientos de stock, no de costo) — igual que editar el costo
+// desde Maestros, que tampoco deja rastro.
+async function guardarAjusteMaterial({ tabla, key, codigo, nombre, stockAnterior, stockNuevo, costoUnitario, costoNuevo, motivo, tipo, fecha, area }){
   const cantidad = stockNuevo - stockAnterior;
-  if(cantidad === 0) return null; // nada que ajustar
+  const cambiaCosto = costoNuevo != null && costoNuevo !== costoUnitario;
+  if(cantidad === 0 && !cambiaCosto) return null; // nada que ajustar
   const eqCol = tabla === 'materias_primas' ? 'codigo' : 'id';
-  const { error: errStock } = await sb.from(tabla).update({ stock_actual: stockNuevo }).eq(eqCol, key);
+  const payload = {};
+  if(cantidad !== 0) payload.stock_actual = stockNuevo;
+  if(cambiaCosto) payload.costo_unitario = costoNuevo;
+  const { error: errStock } = await sb.from(tabla).update(payload).eq(eqCol, key);
   if(errStock) throw errStock;
   const mat = tabla === 'materias_primas'
     ? DB.materias_primas.find(m => m.codigo === key)
     : DB.insumos_area.find(m => m.id === key);
-  if(mat) mat.stock_actual = stockNuevo;
+  if(mat){
+    if(cantidad !== 0) mat.stock_actual = stockNuevo;
+    if(cambiaCosto) mat.costo_unitario = costoNuevo;
+  }
+
+  if(cantidad === 0) return { soloCosto: true }; // costo cargado, sin movimiento de stock que auditar
 
   const row = {
     fecha: fecha || fechaHoyLocal(), material_tabla: tabla, material_key: String(key), codigo: codigo || null, nombre,
@@ -376,6 +395,7 @@ function abrirModalAjuste(f){
   document.getElementById('inv-ajuste-modal-stock').textContent = `Stock actual en el sistema: ${fmtNum(f.stock, 2)} ${f.unidad || ''}`;
   document.getElementById('inv-ajuste-nuevo-stock').value = '';
   document.getElementById('inv-ajuste-diferencia').value = '';
+  document.getElementById('inv-ajuste-costo').value = f.costo != null ? f.costo : '';
   document.getElementById('inv-ajuste-motivo').value = '';
   document.getElementById('inv-ajuste-nota').value = '';
   document.getElementById('inv-ajuste-nota-wrap').style.display = 'none';
@@ -394,31 +414,43 @@ function cerrarModalAjuste(){
 async function guardarAjusteDesdeModal(){
   const f = filaAjusteActual;
   if(!f) return;
-  const nuevoStock = parseFloat(document.getElementById('inv-ajuste-nuevo-stock').value);
+  const stockRaw = document.getElementById('inv-ajuste-nuevo-stock').value;
+  const costoRaw = document.getElementById('inv-ajuste-costo').value;
   const motivoSel = document.getElementById('inv-ajuste-motivo').value;
   const nota = document.getElementById('inv-ajuste-nota').value.trim();
   const esIndirecto = motivoSel === 'Consumo indirecto';
   const area = document.getElementById('inv-ajuste-area').value;
-  if(isNaN(nuevoStock)){ toast('Escribe el nuevo stock (el conteo real)'); document.getElementById('inv-ajuste-nuevo-stock').focus(); return; }
-  if(!motivoSel){ toast('Elige un motivo para el ajuste'); document.getElementById('inv-ajuste-motivo').focus(); return; }
-  if(esIndirecto && !area){ toast('Elige el área / centro de costo de este consumo indirecto'); document.getElementById('inv-ajuste-area').focus(); return; }
-  if(nuevoStock === f.stock){ toast('El nuevo stock es igual al actual — no hay nada que ajustar'); return; }
-  const motivo = nota ? motivoSel + ' — ' + nota : motivoSel;
+
+  const hayStock = stockRaw !== '';
+  const nuevoStock = hayStock ? parseFloat(stockRaw) : f.stock;
+  if(hayStock && isNaN(nuevoStock)){ toast('El nuevo stock no es un número válido'); document.getElementById('inv-ajuste-nuevo-stock').focus(); return; }
+  const hayCosto = costoRaw !== '';
+  const costoNuevo = hayCosto ? parseFloat(costoRaw) : null;
+  if(hayCosto && isNaN(costoNuevo)){ toast('El costo por unidad no es un número válido'); document.getElementById('inv-ajuste-costo').focus(); return; }
+
+  const cambiaStock = hayStock && nuevoStock !== f.stock;
+  const cambiaCosto = hayCosto && costoNuevo !== f.costo;
+  if(!cambiaStock && !cambiaCosto){ toast('No hay ningún cambio para guardar — ni el stock ni el costo por unidad cambiaron'); return; }
+  if(cambiaStock && !motivoSel){ toast('Elige un motivo para el ajuste de stock'); document.getElementById('inv-ajuste-motivo').focus(); return; }
+  if(cambiaStock && esIndirecto && !area){ toast('Elige el área / centro de costo de este consumo indirecto'); document.getElementById('inv-ajuste-area').focus(); return; }
+  const motivo = motivoSel ? (nota ? motivoSel + ' — ' + nota : motivoSel) : ('Costo por unidad cargado/corregido' + (nota ? ' — ' + nota : ''));
 
   const btn = document.getElementById('inv-ajuste-guardar');
   btn.disabled = true; btn.textContent = 'Guardando…';
   try{
     await guardarAjusteMaterial({
       tabla: f.tabla, key: f.key, codigo: f.codigo, nombre: f.nombre,
-      stockAnterior: f.stock, stockNuevo: nuevoStock, costoUnitario: f.costo, motivo, tipo: 'ajuste',
-      area: esIndirecto ? area : null
+      stockAnterior: f.stock, stockNuevo: cambiaStock ? nuevoStock : f.stock,
+      costoUnitario: f.costo, costoNuevo: cambiaCosto ? costoNuevo : null,
+      motivo, tipo: 'ajuste',
+      area: (cambiaStock && esIndirecto) ? area : null
     });
-    toast('Ajuste guardado — inventario actualizado');
+    toast(cambiaStock ? 'Ajuste guardado — inventario actualizado' : 'Costo por unidad actualizado');
     cerrarModalAjuste();
     renderInventario();
   }catch(err){
     console.error(err);
-    toast('Error al guardar el ajuste — revisa la consola');
+    toast('Error al guardar — revisa la consola');
   }finally{
     btn.disabled = false; btn.textContent = 'Guardar ajuste';
   }
@@ -461,7 +493,8 @@ function abrirPanelFisico(){
       <td class="num">${fmtNum(f.stock, 2)} ${f.unidad || ''}</td>
       <td class="num"><input type="number" class="num inv-fisico-conteo" step="0.01" style="width:110px" data-fisico-idx="${i}"></td>
       <td class="num inv-fisico-dif" data-fisico-idx="${i}">—</td>
-    </tr>`).join('') || `<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Ningún material coincide con "${filtroInventario}"</td></tr>`;
+      <td class="num"><input type="number" class="num inv-fisico-costo" step="0.01" style="width:100px" data-fisico-idx="${i}" value="${f.costo != null ? f.costo : ''}" placeholder="sin costo"></td>
+    </tr>`).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--ink-faint)">Ningún material coincide con "${filtroInventario}"</td></tr>`;
 
   tbody.querySelectorAll('.inv-fisico-conteo').forEach(inp => {
     inp.addEventListener('input', () => {
@@ -491,12 +524,28 @@ async function guardarConteoFisico(){
   const fecha = document.getElementById('inv-fisico-fecha').value || fechaHoyLocal();
   const responsable = document.getElementById('inv-fisico-responsable').value.trim() || null;
   const tbody = document.querySelector('#tbl-inv-fisico tbody');
-  const inputs = Array.from(tbody.querySelectorAll('.inv-fisico-conteo'));
-  const pendientes = inputs
-    .map(inp => ({ idx: parseInt(inp.dataset.fisicoIdx, 10), valor: parseFloat(inp.value) }))
-    .filter(x => !isNaN(x.valor) && x.valor !== filasFisicoActuales[x.idx].stock);
+  const costoPorIdx = {};
+  tbody.querySelectorAll('.inv-fisico-costo').forEach(inp => { costoPorIdx[parseInt(inp.dataset.fisicoIdx, 10)] = inp.value; });
 
-  if(!pendientes.length){ toast('No escribiste ningún conteo distinto al stock del sistema — nada para guardar'); return; }
+  // Una fila entra a guardarse si el conteo cambió el stock, o si se cargó/
+  // corrigió su costo por unidad (aunque el conteo se haya dejado en blanco
+  // — sirve para ir cerrando el hueco de materiales sin costo sin tener que
+  // contar stock ese mismo día).
+  const pendientes = Array.from(tbody.querySelectorAll('.inv-fisico-conteo'))
+    .map(inp => {
+      const idx = parseInt(inp.dataset.fisicoIdx, 10);
+      const f = filasFisicoActuales[idx];
+      const valorConteo = parseFloat(inp.value);
+      const cambiaStock = !isNaN(valorConteo) && valorConteo !== f.stock;
+      const costoRaw = costoPorIdx[idx];
+      const hayCosto = costoRaw !== undefined && costoRaw !== '';
+      const costoNuevo = hayCosto ? parseFloat(costoRaw) : null;
+      const cambiaCosto = hayCosto && !isNaN(costoNuevo) && costoNuevo !== f.costo;
+      return { idx, valorConteo, cambiaStock, costoNuevo, cambiaCosto };
+    })
+    .filter(x => x.cambiaStock || x.cambiaCosto);
+
+  if(!pendientes.length){ toast('No escribiste ningún conteo ni costo distinto al del sistema — nada para guardar'); return; }
 
   const btn = document.getElementById('inv-fisico-guardar');
   btn.disabled = true;
@@ -508,7 +557,8 @@ async function guardarConteoFisico(){
     try{
       await guardarAjusteMaterial({
         tabla: f.tabla, key: f.key, codigo: f.codigo, nombre: f.nombre,
-        stockAnterior: f.stock, stockNuevo: p.valor, costoUnitario: f.costo,
+        stockAnterior: f.stock, stockNuevo: p.cambiaStock ? p.valorConteo : f.stock,
+        costoUnitario: f.costo, costoNuevo: p.cambiaCosto ? p.costoNuevo : null,
         motivo: 'Inventario físico' + (responsable ? ' — ' + responsable : ''), tipo: 'fisico', fecha
       });
       guardados++;

@@ -1331,7 +1331,7 @@
         </div>
         <p class="card-hint" style="margin-top:10px;line-height:1.5">
           Solo aparecen aquí los materiales a los que ya les pusiste un stock actual o un mínimo desde "Materias primas" o "Materiales por área" (o que tienen una orden esperándolos) — así los 226 papeles precargados no salen todos como alerta desde el día uno.<br>
-          Para registrar una compra, usa "Importar compra" en Costos — así queda ligada a un proveedor y sale en el Kardex de abajo. El botón <b>"Ajustar"</b> de cada fila es para corregir el stock sin que sea una compra ni un consumo de producción: conteo físico puntual, sobrante, faltante/merma, daño, corrección de digitación, o <b>consumo indirecto</b> (insumos que se gastan sin ser para un trabajo puntual, ej. grasa de mantenimiento o aseo) — todo queda con motivo y usuario, y también sale en el Kardex.<br>
+          Para registrar una compra, usa "Importar compra" en Costos — así queda ligada a un proveedor y sale en el Kardex de abajo. El botón <b>"Ajustar"</b> de cada fila es para corregir el stock sin que sea una compra ni un consumo de producción: conteo físico puntual, sobrante, faltante/merma, daño, corrección de digitación, o <b>consumo indirecto</b> (insumos que se gastan sin ser para un trabajo puntual, ej. grasa de mantenimiento o aseo) — todo queda con motivo y usuario, y también sale en el Kardex. Ese mismo modal también trae un campo de <b>costo por unidad</b>: úsalo para cargar el costo de los materiales que todavía no lo tienen (sin eso, su consumo descuenta el stock pero no se valoriza en las órdenes ni en Rentabilidad).<br>
           <b>Órdenes esperando este material:</b> si al crear/editar una orden no alcanzaba el stock de un papel, queda anotado acá (y en Alertas) hasta que se repone — hacé click en la orden para abrir su detalle.<br>
           <b>Stock negativo:</b> si un operario registra un consumo mayor al stock cargado, el sistema <b>no lo bloquea</b> — así funciona la litografía en la práctica, el consumo real a veces se registra antes de que llegue la compra. El stock queda en negativo (número rojo, "🔴 Stock negativo") y sigue así hasta que se cargue la compra; también aparece en Alertas para que no se pierda de vista.
         </p>
@@ -1351,13 +1351,13 @@
             <div class="field" style="max-width:180px"><label>Fecha del conteo</label><input type="date" id="inv-fisico-fecha"></div>
             <div class="field"><label>Responsable</label><input type="text" id="inv-fisico-responsable" placeholder="quién hizo el conteo"></div>
           </div>
-          <span class="card-hint">Deja en blanco el "Conteo físico" de los materiales que NO vas a contar hoy — solo se guarda ajuste en las filas que llenes con un número distinto al stock del sistema.</span>
+          <span class="card-hint">Deja en blanco el "Conteo físico" de los materiales que NO vas a contar hoy — solo se guarda ajuste en las filas que llenes con un número distinto al stock del sistema. La columna "Costo/u" es opcional: úsala para cargar o corregir el costo de los materiales que todavía no lo tienen (se guarda aunque el conteo no cambie).</span>
           <div style="text-align:right;margin-top:8px">
             <button type="button" class="btn-secondary" id="inv-fisico-ir-final" style="padding:4px 10px;margin-top:0">Ir al final ⬇</button>
           </div>
           <div class="table-wrap" style="margin-top:10px;max-height:480px;overflow-y:auto">
             <table id="tbl-inv-fisico">
-              <thead><tr><th>Código</th><th>Artículo</th><th>Grupo</th><th class="num">Stock sistema</th><th class="num">Conteo físico</th><th class="num">Diferencia</th></tr></thead>
+              <thead><tr><th>Código</th><th>Artículo</th><th>Grupo</th><th class="num">Stock sistema</th><th class="num">Conteo físico</th><th class="num">Diferencia</th><th class="num">Costo/u</th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
@@ -1416,7 +1416,11 @@
           <div class="field"><label>Diferencia</label><input type="text" id="inv-ajuste-diferencia" disabled></div>
         </div>
         <div class="field full" style="margin-bottom:10px">
-          <label>Motivo</label>
+          <label>Costo por unidad <span class="card-hint">opcional — cárgalo o corrígelo si todavía no lo tiene, para que sus consumos empiecen a valorizarse</span></label>
+          <input type="number" id="inv-ajuste-costo" step="0.01" placeholder="sin costo cargado">
+        </div>
+        <div class="field full" style="margin-bottom:10px">
+          <label>Motivo <span class="card-hint">obligatorio solo si cambias el stock — si solo vas a cargar el costo, déjalo vacío</span></label>
           <select id="inv-ajuste-motivo">
             <option value="">— Elige un motivo —</option>
             <option value="Consumo indirecto">Consumo indirecto (uso general, no ligado a una orden)</option>
