@@ -59,7 +59,10 @@ function parseMoneyUS(str){
 
 function parsePct(str){
   if(str == null) return 0;
-  const n = parseFloat(String(str).replace(/[^\d.]/g, ''));
+  // Admite "19.5" y "19,5" (coma decimal) — antes solo se quitaba todo lo
+  // que no fuera dígito/punto, así que una coma decimal (posible en el
+  // texto del PDF) se perdía entera y "19,5" quedaba leído como 195.
+  const n = parseFloat(String(str).replace(',', '.').replace(/[^\d.]/g, ''));
   return isNaN(n) ? 0 : n;
 }
 
@@ -110,10 +113,34 @@ function parseCompraTexto(texto){
   // Filas de la tabla de ítems: N° · Valor desc. · IVA% · Retención% ·
   // Vr. Unitario · Descripción · Cantidad · Vr. Total
   const items = [];
-  const filaRegex = /^(\d+)\s+([\d.,]+)\s+(\d+(?:\.\d+)?)\s*%\s+(\d+(?:\.\d+)?)\s*%\s+([\d.,]+)\s+(.+?)\s+([\d.,]+)\s+([\d.,]+)\s*$/;
-  texto.split('\n').forEach(linea => {
-    const m = linea.trim().match(filaRegex);
-    if(!m) return;
+  // El inicio de la fila (N°, Valor desc., IVA%, Retención%, Vr. Unitario)
+  // es el ancla confiable — casi no varía entre documentos. Lo que sí
+  // varía es el final: cuando la Descripción es larga, Siigo la sigue en
+  // la línea de abajo, y ahí es donde terminan quedando Cantidad/Vr. Total
+  // — antes eso hacía que la fila NO calzara con el patrón de una sola
+  // línea y se perdiera ENTERA (reportado 13sep26: "del PDF solo sube el
+  // encabezado, sin ninguna línea"). Ahora, si la fila arranca bien pero no
+  // completa el patrón, se le van pegando hasta 2 líneas siguientes antes
+  // de darla por perdida.
+  const inicioFilaRegex = /^(\d+)\s+([\d.,]+)\s+(\d+(?:[.,]\d+)?)\s*%\s+(\d+(?:[.,]\d+)?)\s*%\s+([\d.,]+)\s/;
+  const filaRegex = /^(\d+)\s+([\d.,]+)\s+(\d+(?:[.,]\d+)?)\s*%\s+(\d+(?:[.,]\d+)?)\s*%\s+([\d.,]+)\s+(.+?)\s+([\d.,]+)\s+([\d.,]+)\s*$/;
+  const lineas = texto.split('\n');
+  const filasNoReconocidas = [];
+  for(let i = 0; i < lineas.length; i++){
+    let linea = lineas[i].trim();
+    if(!linea || !inicioFilaRegex.test(linea)) continue;
+    let m = linea.match(filaRegex);
+    let usadas = 1;
+    while(!m && usadas <= 2 && (i + usadas) < lineas.length){
+      linea = (linea + ' ' + lineas[i + usadas].trim()).trim();
+      m = linea.match(filaRegex);
+      usadas++;
+    }
+    if(!m){
+      filasNoReconocidas.push(lineas[i].trim());
+      continue;
+    }
+    i += usadas - 1; // no reprocesar las líneas ya consumidas para completar esta fila
     const descripcion = m[6].trim();
     const detectado = detectarOrdenEnTexto(descripcion);
     const conceptoSugerido = sugerirConceptoId(descripcion);
@@ -121,8 +148,8 @@ function parseCompraTexto(texto){
       codigo: m[1],
       descripcion,
       valor_unitario: parseMoneyUS(m[5]),
-      iva_pct: parseFloat(m[3]),
-      retencion_pct: parseFloat(m[4]),
+      iva_pct: parsePct(m[3]),
+      retencion_pct: parsePct(m[4]),
       cantidad: parseMoneyUS(m[7]),
       valor_credito: parseMoneyUS(m[8]), // se usa esta columna como "Vr. Total" del ítem
       valor_debito: 0,
@@ -132,7 +159,15 @@ function parseCompraTexto(texto){
       concepto_id: conceptoSugerido,
       tipo_costo: tipoDeConcepto(conceptoSugerido)
     });
-  });
+  }
+  // Si alguna fila arrancó como ítem (N°/valor desc./IVA%/Retención%/Vr.
+  // Unitario reconocibles) pero no se pudo cerrar ni pegando líneas
+  // siguientes, se deja registrado en consola — antes esto se perdía en
+  // silencio total. Sirve para diagnosticar de una vez si vuelve a pasar
+  // (F12 → Consola, después de subir el PDF).
+  if(filasNoReconocidas.length){
+    console.warn('Importar compra: se reconocieron', items.length, 'línea(s), pero', filasNoReconocidas.length, 'fila(s) parecían un ítem y no se pudieron leer completas:', filasNoReconocidas);
+  }
 
   return { cabecera, items };
 }

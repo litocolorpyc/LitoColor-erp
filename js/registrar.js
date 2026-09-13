@@ -608,6 +608,33 @@ export async function descontarInventarioYCargarCosto({ nombre, area, cantidad, 
   if(!encontrado) return { descontado:false, costeado:false, motivo:'sin_catalogo' }; // "Otro" escrito a mano que no calza con ningún material real
   const { tabla, mat, key } = encontrado;
 
+  // Causa raíz real de "se descuenta el consumo pero no aparece el costo,
+  // y solo se arregla si vuelvo a corregir el registro" (reportado
+  // 13sep26): DB.materias_primas/insumos_area se cargan UNA sola vez al
+  // abrir la página (ver loadCatalogos en store.js) y nunca se refrescan
+  // solos. Si alguien le carga el costo_unitario a este material en
+  // Maestros DESPUÉS de que esta pestaña quedó abierta (típico: un
+  // operario deja registro.html abierto todo el día en un equipo de
+  // planta), esta copia en memoria seguía viendo costo_unitario = null y
+  // el consumo se guardaba SIN costo — aunque el costo YA existiera en la
+  // base. El único "arreglo" que existía era corregir el mismo registro
+  // desde otra sesión con datos frescos (Corregir registro → revierte y
+  // vuelve a aplicar, ver dashboard.js), lo cual sí volvía a consultar acá
+  // pero con la MISMA copia en memoria de ESA sesión — si esa sesión se
+  // había abierto/recargado después de cargar el costo, funcionaba, dando
+  // la falsa impresión de que "reescribir la cantidad" era lo que lo
+  // arreglaba. Ahora, antes de decidir si hay costo, se refresca este
+  // material puntual directo desde Supabase (una sola fila, no toda la
+  // tabla) — así siempre se usa el costo_unitario real del momento, sin
+  // importar hace cuánto se cargó la página.
+  try{
+    const { data: fresco, error: errFresco } = await sb.from(tabla).select('*').eq(key, mat[key]).single();
+    if(errFresco) throw errFresco;
+    if(fresco) Object.assign(mat, fresco);
+  }catch(err){
+    console.error('No se pudo refrescar el material antes de costear (se sigue con el dato en memoria, puede estar desactualizado):', err);
+  }
+
   try{
     const nuevoStock = (mat.stock_actual || 0) - cantidad;
     const { data, error } = await sb.from(tabla).update({ stock_actual: nuevoStock }).eq(key, mat[key]).select();
