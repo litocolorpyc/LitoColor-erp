@@ -357,6 +357,13 @@ let cabeceraTotalesActuales = {};
 // Si no es null, "Guardar recibo" corrige ESTE documento ya guardado en
 // vez de crear uno nuevo — ver editarRecibo() más abajo.
 let reciboEditandoId = null;
+// Se incrementa cada vez que se pide "Editar" una compra — permite que
+// editarRecibo() descarte una respuesta vieja de Supabase que llegue tarde
+// (ej. si se hace clic en "Editar" de una compra y enseguida en la de otra):
+// sin esto, si la primera petición de red tarda más que la segunda, sus
+// datos pisan a los de la compra que sí se pidió ver al final, y en pantalla
+// quedan dos compras con número distinto pero mostrando las mismas líneas.
+let editarReciboSeq = 0;
 // IVA%/Retención% de ESTE documento — se piden una sola vez (modal) y se
 // aplican a todas sus líneas para calcular el costo neto que se descarga
 // al inventario (pedido: "el costo del material se ingresa al inventario
@@ -597,6 +604,9 @@ function actualizarResumen(){
 async function manejarArchivo(file){
   const hint = document.getElementById('recibo-file-hint');
   document.getElementById('recibo-review').style.display = '';
+  // Invalida cualquier "Editar" en curso — si su respuesta llega después de
+  // elegir este archivo nuevo, no debe pisar lo que se acaba de leer aquí.
+  editarReciboSeq++;
 
   if(file.type === 'application/pdf'){
     hint.textContent = 'Leyendo el PDF…';
@@ -694,6 +704,7 @@ function aplicarModalIva(){
 // empezar de cero con el próximo documento — igual que "Nueva orden" en
 // Órdenes. También sirve para descartar un intento si algo salió mal.
 function limpiarFormularioRecibo(){
+  editarReciboSeq++; // invalida cualquier "Editar" en curso, ver arriba
   document.getElementById('recibo-file').value = '';
   document.getElementById('recibo-numero').value = '';
   document.getElementById('recibo-fecha').value = '';
@@ -721,9 +732,14 @@ function limpiarFormularioRecibo(){
 async function editarRecibo(reciboId){
   const recibo = DB.recibos_caja.find(r => r.id === reciboId);
   if(!recibo) return;
+  const miSeq = ++editarReciboSeq;
   try{
     const { data: items, error } = await sb.from('recibos_caja_items').select('*').eq('recibo_id', reciboId).order('id');
     if(error) throw error;
+
+    // Si mientras se esperaba esta respuesta se pidió "Editar" otra compra,
+    // esta ya quedó vieja — no pisar lo que se está mostrando ahora.
+    if(miSeq !== editarReciboSeq) return;
 
     reciboEditandoId = reciboId;
     document.getElementById('recibo-file').value = '';
