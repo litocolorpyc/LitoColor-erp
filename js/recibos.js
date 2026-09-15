@@ -11,9 +11,38 @@ if(typeof pdfjsLib !== 'undefined'){
 
 // ---------- lectura del archivo ----------
 
+// Agrupa fragmentos de texto (con su posición x/y) en líneas "a barrido":
+// los ordena de arriba hacia abajo y agrupa los que caen a menos de `tol`
+// de distancia vertical entre sí — una sola tabla puede tener columnas con
+// la línea base a una fracción de punto de diferencia, y redondear con una
+// rejilla fija a veces parte una misma fila en dos. Cada línea devuelta
+// queda ordenada de izquierda a derecha.
+function agruparLineas(items, tol){
+  const ordenados = items.slice().sort((a, b) => b.y - a.y || a.x - b.x);
+  const lineas = [];
+  let actual = [];
+  let anclaY = null;
+  ordenados.forEach(it => {
+    if(anclaY === null || Math.abs(it.y - anclaY) <= tol){
+      actual.push(it);
+      if(anclaY === null) anclaY = it.y;
+    } else {
+      lineas.push(actual);
+      actual = [it];
+      anclaY = it.y;
+    }
+  });
+  if(actual.length) lineas.push(actual);
+  return lineas.map(l => l.slice().sort((a,b) => a.x - b.x));
+}
+
 // Los PDF que descarga Siigo (documentos "Compra") tienen el texto ya
 // seleccionable (no son una imagen escaneada), así que se leen con pdf.js
 // directamente en el navegador — sin subir el archivo a ningún servidor.
+// Devuelve el texto ya armado en líneas (para la cabecera y el parser
+// "de una línea") Y, por separado, los fragmentos crudos con su posición
+// por página (para el parser "por columnas" que se usa como respaldo —
+// ver parseItemsPorColumnas).
 async function extraerTextoPDF(file){
   if(typeof pdfjsLib === 'undefined'){
     throw new Error('La librería para leer PDF no cargó (revisa tu conexión a internet)');
@@ -21,34 +50,16 @@ async function extraerTextoPDF(file){
   const buffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
   let texto = '';
+  const paginas = [];
   for(let i = 1; i <= pdf.numPages; i++){
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    // Agrupa los fragmentos de texto en líneas "a barrido": los ordena de
-    // arriba hacia abajo y agrupa los que caen a menos de 3pt de distancia
-    // vertical entre sí — una sola tabla puede tener columnas con la línea
-    // base a una fracción de punto de diferencia, y redondear con una
-    // rejilla fija a veces parte una misma fila en dos.
-    const items = content.items.map(it => ({ x: it.transform[4], y: it.transform[5], str: it.str }));
-    items.sort((a, b) => b.y - a.y || a.x - b.x);
-    const TOL = 3;
-    const lineas = [];
-    let actual = [];
-    let anclaY = null;
-    items.forEach(it => {
-      if(anclaY === null || Math.abs(it.y - anclaY) <= TOL){
-        actual.push(it);
-        if(anclaY === null) anclaY = it.y;
-      } else {
-        lineas.push(actual);
-        actual = [it];
-        anclaY = it.y;
-      }
-    });
-    if(actual.length) lineas.push(actual);
-    texto += lineas.map(l => l.sort((a,b) => a.x - b.x).map(it => it.str).join(' ')).join('\n') + '\n';
+    const items = content.items.map(it => ({ x: it.transform[4], y: it.transform[5], str: it.str, width: it.width || 0 }));
+    paginas.push(items);
+    const lineas = agruparLineas(items, 3);
+    texto += lineas.map(l => l.map(it => it.str).join(' ')).join('\n') + '\n';
   }
-  return texto;
+  return { texto, paginas };
 }
 
 function parseMoneyUS(str){
@@ -76,10 +87,154 @@ function detectarOrdenEnTexto(texto){
   return { orden: parseInt(m[1], 10), suborden: m[2] ? parseInt(m[2], 10) : null };
 }
 
+// Etiquetas de encabezado de la tabla de ítems en el PDF de Siigo, en el
+// orden en que aparecen de izquierda a derecha.
+const ENCABEZADOS_TABLA_ITEMS = [
+  { key: 'item', re: /^ítem$|^item$/i },
+  { key: 'valor_desc', re: /^valor\s*desc\.?$/i },
+  { key: 'iva', re: /^impto\.?\s*cargo$/i },
+  { key: 'rete', re: /^impto\.?\s*rete\.?$/i },
+  { key: 'unitario', re: /^vr\.?\s*unitario$/i },
+  { key: 'descripcion', re: /^descripci[oó]n$/i },
+  { key: 'cantidad', re: /^cantidad$/i },
+  { key: 'total', re: /^vr\.?\s*total$/i }
+];
+
+// Busca, entre las líneas ya agrupadas de una página, la fila de
+// encabezados de la tabla de ítems y devuelve el centro-x de cada columna
+// reconocida (probando de a 1, 2 o 3 fragmentos seguidos, porque un mismo
+// título como "Impto. Cargo" a veces llega en fragmentos separados).
+function detectarColumnasEncabezado(lineas){
+  for(const linea of lineas){
+    const encontrados = {};
+    for(let i = 0; i < linea.length; i++){
+      for(let span = 1; span <= 3 && i + span <= linea.length; span++){
+        const grupo = linea.slice(i, i + span);
+        const texto = grupo.map(t => t.str).join(' ').trim();
+        const def = ENCABEZADOS_TABLA_ITEMS.find(h => h.re.test(texto));
+        if(def && !encontrados[def.key]){
+          const xIni = grupo[0].x;
+          const ultimo = grupo[grupo.length - 1];
+          const xFin = ultimo.x + (ultimo.width || 0);
+          encontrados[def.key] = { xCentro: (xIni + xFin) / 2, y: linea[0].y };
+        }
+      }
+    }
+    // Si esta línea trae al menos 6 de los 8 encabezados esperados, es la fila de encabezado
+    if(Object.keys(encontrados).length >= 6) return encontrados;
+  }
+  return null;
+}
+
+// Respaldo del parser "de una sola línea" (parseCompraTexto): en vez de
+// reconstruir cada fila por su texto en orden de lectura, ubica cada
+// fragmento de texto por su posición (x,y) real en la página y lo asigna a
+// la columna de la tabla que le corresponde según su x. Esto es más lento
+// de razonar pero mucho más tolerante a que "Cantidad"/"Vr. Total" queden
+// con la línea base un poco corrida respecto al resto de la fila — algo
+// que algunos PDF de Siigo hacen y que rompía por completo el parser de
+// una línea (reportado 15sep26 con la compra C-1899 — Axio: subía la
+// cabecera pero CERO artículos). Solo se usa cuando el parser normal no
+// encontró ningún ítem, para no arriesgar los casos que ya funcionan bien.
+function parseItemsPorColumnas(paginas){
+  const items = [];
+  for(const pageItems of (paginas || [])){
+    if(!pageItems || !pageItems.length) continue;
+    const lineas = agruparLineas(pageItems, 3);
+    const encontrados = detectarColumnasEncabezado(lineas);
+    if(!encontrados || !encontrados.item || !encontrados.cantidad || !encontrados.total || !encontrados.descripcion) continue;
+
+    const claves = Object.keys(encontrados).sort((a, b) => encontrados[a].xCentro - encontrados[b].xCentro);
+    const limites = claves.map((k, i) => {
+      const centro = encontrados[k].xCentro;
+      const centroAnt = i > 0 ? encontrados[claves[i-1]].xCentro : null;
+      const centroSig = i < claves.length - 1 ? encontrados[claves[i+1]].xCentro : null;
+      return {
+        key: k,
+        inicio: centroAnt != null ? (centroAnt + centro) / 2 : -Infinity,
+        fin: centroSig != null ? (centro + centroSig) / 2 : Infinity
+      };
+    });
+    const columnaDe = x => {
+      const l = limites.find(l => x >= l.inicio && x < l.fin);
+      return l ? l.key : null;
+    };
+
+    const headerY = encontrados.item.y;
+    const lineaValorLetras = lineas.find(l => /valor\s+en\s+letras/i.test(l.map(t => t.str).join(' ')));
+    const limiteInferiorY = lineaValorLetras ? lineaValorLetras[0].y : -Infinity;
+
+    // Fragmentos de datos: debajo del encabezado, encima del cierre de la tabla
+    const tokensDatos = pageItems.filter(it => it.y < headerY - 1 && it.y > limiteInferiorY);
+    if(!tokensDatos.length) continue;
+
+    // Anclas de fila: fragmentos en la columna "Ítem" que son solo un
+    // número (1, 2, 3…) — son el dato más confiable para saber dónde
+    // empieza cada fila, aunque el resto de la fila esté corrido.
+    const anclas = tokensDatos
+      .filter(it => columnaDe(it.x) === 'item' && /^\d+$/.test(it.str.trim()))
+      .sort((a, b) => b.y - a.y);
+    if(!anclas.length) continue;
+
+    const alturas = [];
+    for(let i = 1; i < anclas.length; i++) alturas.push(anclas[i-1].y - anclas[i].y);
+    alturas.sort((a,b) => a - b);
+    const alturaFila = alturas.length ? alturas[Math.floor(alturas.length/2)] : 20;
+
+    // La banda de cada fila llega hasta la MITAD de camino hacia la fila
+    // anterior/siguiente (partición por punto medio) — así dos filas nunca
+    // se solapan y un dato con la línea base corrida (el jitter que
+    // this respaldo existe para tolerar) cae en su fila real mientras el
+    // corrimiento sea menor a medio renglón, sin arrastrar texto de la
+    // fila vecina.
+    anclas.forEach((ancla, idx) => {
+      const yPrevAncla = idx > 0 ? anclas[idx-1].y : null;
+      const ySigAncla = idx < anclas.length - 1 ? anclas[idx+1].y : null;
+      const yTope = yPrevAncla != null ? (ancla.y + yPrevAncla) / 2 : ancla.y + alturaFila / 2;
+      const yPiso = ySigAncla != null ? (ancla.y + ySigAncla) / 2 : ancla.y - alturaFila / 2;
+      const tokensFila = tokensDatos.filter(it => it.y <= yTope && it.y > yPiso);
+
+      const porColumna = {};
+      tokensFila.forEach(it => {
+        const col = columnaDe(it.x);
+        if(!col) return;
+        (porColumna[col] = porColumna[col] || []).push(it);
+      });
+      const textoColumna = col => (porColumna[col] || []).sort((a,b) => a.x - b.x).map(t => t.str).join(' ').trim();
+
+      const descripcion = textoColumna('descripcion');
+      const cantidadTxt = textoColumna('cantidad');
+      const totalTxt = textoColumna('total');
+      // Si no se pudo armar lo esencial de la fila, se descarta — mejor
+      // dejarla afuera (la persona la agrega a mano) que inventar un dato.
+      if(!descripcion || !cantidadTxt || !totalTxt) return;
+
+      const detectado = detectarOrdenEnTexto(descripcion);
+      const conceptoSugerido = sugerirConceptoId(descripcion);
+      items.push({
+        codigo: textoColumna('item') || ancla.str,
+        descripcion,
+        valor_unitario: parseMoneyUS(textoColumna('unitario')),
+        iva_pct: parsePct(textoColumna('iva')),
+        retencion_pct: parsePct(textoColumna('rete')),
+        cantidad: parseMoneyUS(cantidadTxt),
+        valor_credito: parseMoneyUS(totalTxt),
+        valor_debito: 0,
+        orden: detectado.orden,
+        suborden: detectado.suborden,
+        observacion: detectado.suborden ? `Pieza sugerida: ${detectado.orden}-${detectado.suborden}` : '',
+        concepto_id: conceptoSugerido,
+        tipo_costo: tipoDeConcepto(conceptoSugerido)
+      });
+    });
+  }
+  return items;
+}
+
 // Intenta reconocer el formato "Compra" que genera Siigo. Si algo no
 // calza, simplemente no lo llena — la persona lo completa a mano en la
 // tabla de revisión, nunca se guarda nada sin que alguien lo confirme.
-function parseCompraTexto(texto){
+function parseCompraTexto(texto, paginas){
   const cabecera = { numero_recibo: '', fecha: '', nit: '', tercero: '', total_bruto: null, iva: null, retefuente: null, valor_total: null };
 
   const mNumero = texto.match(/Compra[\s\S]{0,80}?No\.?\s*(\d+)/i);
@@ -167,6 +322,16 @@ function parseCompraTexto(texto){
   // (F12 → Consola, después de subir el PDF).
   if(filasNoReconocidas.length){
     console.warn('Importar compra: se reconocieron', items.length, 'línea(s), pero', filasNoReconocidas.length, 'fila(s) parecían un ítem y no se pudieron leer completas:', filasNoReconocidas);
+  }
+
+  // Si el parser "de una línea" no encontró NINGÚN ítem, se intenta el
+  // respaldo por columnas antes de rendirse — ver parseItemsPorColumnas.
+  if(!items.length && paginas && paginas.length){
+    const itemsPorColumnas = parseItemsPorColumnas(paginas);
+    if(itemsPorColumnas.length){
+      console.warn('Importar compra: el parser de una línea no reconoció ítems — se usó el respaldo por columnas y se encontraron', itemsPorColumnas.length, 'línea(s).');
+      return { cabecera, items: itemsPorColumnas };
+    }
   }
 
   return { cabecera, items };
@@ -436,8 +601,8 @@ async function manejarArchivo(file){
   if(file.type === 'application/pdf'){
     hint.textContent = 'Leyendo el PDF…';
     try{
-      const texto = await extraerTextoPDF(file);
-      const { cabecera, items } = parseCompraTexto(texto);
+      const { texto, paginas } = await extraerTextoPDF(file);
+      const { cabecera, items } = parseCompraTexto(texto, paginas);
       document.getElementById('recibo-numero').value = cabecera.numero_recibo;
       document.getElementById('recibo-fecha').value = cabecera.fecha;
       document.getElementById('recibo-nit').value = cabecera.nit;

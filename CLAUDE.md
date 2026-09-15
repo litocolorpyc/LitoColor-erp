@@ -61,3 +61,40 @@ La usuaria pidió explícitamente (2026-07-26) que Claude deje de pedir aprobaci
 ## Roles de usuario
 
 - [Pendiente: listar brevemente los roles que existen (ej. admin, producción, contabilidad) y qué puede ver/hacer cada uno]
+
+<!-- BEGIN: actualiza-memoria-control-intervencion -->
+## Actualizar Control_Intervencion_Diaria.xlsx ("Actualiza Memoria")
+
+Cuando el usuario diga **"Actualiza Memoria"** (o "actualiza memoria") en esta sesión, además de
+guardar la memoria de la sesión como normalmente lo harías:
+
+1. Resume en 1-2 líneas qué se hizo en la sesión (será la "Actividad realizada").
+2. Define el "Estado tras la intervención": uno de "Al día", "Pendiente", "Atrasado", "Pausado", "Finalizado".
+3. Si aplica, define el "Próximo paso" (y opcionalmente una fecha para ese próximo paso).
+4. Verifica que `C:\mis_apps\Control_Intervencion_Diaria.xlsx` no esté abierto en Excel (si lo está, pide al usuario que lo cierre y no sigas intentando en loop).
+5. Ejecuta en terminal:
+
+   ```
+   node C:\mis_apps\excel-tools\log-intervencion.js --proyecto "LitoColor" --actividad "<resumen>" --estado "<estado>" --proximo "<próximo paso>"
+   ```
+
+   El nombre de proyecto de ESTA carpeta en la hoja "Proyectos" de Control_Intervencion_Diaria.xlsx es
+   exactamente: **"LitoColor"** (no lo cambies ni lo traduzcas).
+
+6. Inmediatamente después (SIEMPRE, no solo si algo se ve roto), ejecuta también:
+
+   ```
+   node C:\mis_apps\excel-tools\fix-proyectos-formulas.js
+   ```
+
+   Motivo: el usuario abre este archivo directamente en Excel entre sesiones, y eso (por una
+   causa aún no confirmada) termina pisando con valores fijos las fórmulas de la hoja
+   "Proyectos" que traen "Última intervención" y "Qué queda pendiente" desde la Bitácora — ya
+   pasó el 2026-09-13 en 17 de 31 filas, incluida Higietex. Este script repara/reescribe esas
+   fórmulas siempre; es idempotente y no hace daño correrlo aunque no haga falta.
+
+Nunca edites ese xlsx directamente con ExcelJS ni otro script por tu cuenta: usa siempre
+`log-intervencion.js` (ya valida el proyecto/estado, encuentra la fila libre, guarda, y repara
+automáticamente unas extensiones de Excel que ExcelJS rompe si se tocan a mano — ver
+`C:\mis_apps\excel-tools\fix-extlst.js`) y luego `fix-proyectos-formulas.js` (paso 6 arriba).
+<!-- END: actualiza-memoria-control-intervencion -->

@@ -1580,7 +1580,18 @@ export function imprimirDetalleOrden(orden){
   .procesos-print, .materiales-print{ font-size:12px; margin:4px 0; }
   .pieza-print{ page-break-inside: avoid; margin-bottom:14px; }
   .historial-print{ page-break-inside: avoid; }
-  @media print{ body{ margin:10mm; } }
+  .footer-obs-print{ display:none; }
+  @media print{
+    body{ margin:10mm; margin-bottom:20mm; }
+    /* position:fixed se repite en cada hoja impresa (Chrome) — así las
+       observaciones quedan visibles al pie de TODAS las páginas de la
+       orden, no solo la primera. Pedido 15sep26. */
+    .footer-obs-print{
+      display:block; position:fixed; left:0; right:0; bottom:0;
+      font-size:11px; color:#333; border-top:1px solid #999;
+      padding-top:4px; background:#fff;
+    }
+  }
 </style>
 </head><body>
   <h1>Orden de producción ${orden}</h1>
@@ -1588,6 +1599,7 @@ export function imprimirDetalleOrden(orden){
   ${o.observaciones ? `<p><b>Observaciones:</b> ${o.observaciones}</p>` : ''}
   ${piezasHTML}
   ${historialHTML}
+  ${o.observaciones ? `<div class="footer-obs-print"><b>Observaciones:</b> ${o.observaciones}</div>` : ''}
 </body></html>`;
 
   const w = window.open('', '_blank');
