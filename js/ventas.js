@@ -77,6 +77,36 @@ function calcularNeto(it){
   return factor ? (it.valor_total || 0) / factor : (it.valor_total || 0);
 }
 
+// Auto-reparación (16sep26): las primeras 2 facturas que se cargaron
+// (FE 1145 y FE 1147) quedaron con `valor_neto` vacío en la base — se
+// guardaron con la app abierta desde antes de que este cálculo existiera
+// (la pestaña del navegador no se había recargado desde el arreglo). Eso
+// hacía que "Ingresos facturados" (Gerencial) y el "Ingreso facturado" de
+// cada orden dieran $0 aunque el ítem sí tuviera una orden asociada — la
+// suma usa `valor_neto || 0`. Es una cuenta determinística (Vr. Total ÷
+// (1+IVA%)), no una decisión de negocio, así que se recalcula sola al
+// abrir la app, sin pedir nada. Esto NO recupera líneas que nunca se
+// llegaron a guardar (ej. los 2 ítems que le faltaron a FE 1147 por el bug
+// de descripción larga, ya corregido aparte) — esas facturas hay que
+// eliminarlas y volver a cargarlas.
+export async function repararValorNetoFacturasVenta(){
+  const faltantes = DB.facturas_venta_items.filter(it => it.valor_neto == null && it.valor_total != null);
+  if(!faltantes.length) return;
+  let reparadas = 0;
+  for(const it of faltantes){
+    const neto = calcularNeto(it);
+    try{
+      const { error } = await sb.from('facturas_venta_items').update({ valor_neto: neto }).eq('id', it.id);
+      if(error) throw error;
+      it.valor_neto = neto;
+      reparadas++;
+    }catch(err){
+      console.error('No se pudo reparar el valor neto de la línea de factura de venta', it.id, err);
+    }
+  }
+  if(reparadas) console.warn(`Se recalculó el valor neto de ${reparadas} línea(s) de factura de venta que lo tenían vacío (ver nota en ventas.js).`);
+}
+
 // ---------- cabecera ----------
 function parseCabeceraVenta(texto){
   const cabecera = { numero_factura: '', fecha: '', nit: '', cliente: '', total_bruto: null, iva: null, valor_total: null };

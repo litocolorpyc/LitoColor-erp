@@ -8,7 +8,7 @@ import { initCalendario, renderCalendario } from './calendario.js';
 import { initAlertas, renderAlertas } from './alertas.js';
 import { initCostos, poblarDatalistProveedores } from './costos.js';
 import { initRecibosCaja } from './recibos.js';
-import { initVentas } from './ventas.js';
+import { initVentas, repararValorNetoFacturasVenta } from './ventas.js';
 import { initConsultaTiempos, renderConsultaTiempos } from './consulta-tiempos.js';
 import { initInventario, renderInventario } from './inventario.js';
 import { restaurarSesion, iniciarSesion, cerrarSesion, cambiarContrasena, crearCuentaPropia, getCurrentUser, aplicarPermisos } from './auth.js';
@@ -87,6 +87,11 @@ async function arrancarApp(){
   pasoSeguro('Costos', initCostos);
   pasoSeguro('Recibos de caja', initRecibosCaja);
   pasoSeguro('Registrar Venta', initVentas);
+  pasoSeguro('Reparar valor neto de facturas de venta', () => {
+    repararValorNetoFacturasVenta()
+      .then(() => { renderGerencial(); renderOppRecent(); })
+      .catch(e => console.error('Error reparando valor neto de facturas de venta:', e));
+  });
   pasoSeguro('Consulta de tiempos por operario', initConsultaTiempos);
   pasoSeguro('Inventario', initInventario);
 
