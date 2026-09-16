@@ -8,6 +8,7 @@ import { sb } from './supabase-client.js';
 import { DB } from './store.js';
 import { fmtNum, fmtCOP, toast, fechaHoyLocal, wireTableScroll } from './helpers.js';
 import { mostrarDetalleOrden } from './ordenes.js';
+import { recostearConsumosDeMaterial } from './registrar.js';
 import { parseCantidadConsumo, listaAreasDisponibles } from './registrar.js';
 import { getCurrentUser } from './auth.js';
 
@@ -364,6 +365,12 @@ async function guardarAjusteMaterial({ tabla, key, codigo, nombre, stockAnterior
     if(cantidad !== 0) mat.stock_actual = stockNuevo;
     if(cambiaCosto) mat.costo_unitario = costoNuevo;
   }
+  // Si este ajuste le cargó/corrigió el costo por unidad, cualquier consumo
+  // de este material que ya se hubiera registrado (con su stock ya
+  // descontado) pero se hubiera quedado sin costear por no tener este dato
+  // todavía, se costea solo — sin esto había que ir a "Corregir registro"
+  // uno por uno (reportado 16sep26).
+  if(cambiaCosto && nombre) recostearConsumosDeMaterial(nombre);
 
   if(cantidad === 0) return { soloCosto: true }; // costo cargado, sin movimiento de stock que auditar
 

@@ -1,6 +1,7 @@
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
-import { toast, fmtCOP, fechaHoyLocal } from './helpers.js';
+import { toast, fmtCOP, fmtNum, fechaHoyLocal } from './helpers.js';
+import { buscarConsumosSinCostear, aplicarCosteoConsumosPendientes } from './registrar.js';
 
 // ---------- Maestro: Conceptos de costo ----------
 let editingConceptoId = null;
@@ -240,6 +241,47 @@ async function guardarMovimiento(){
   }
 }
 
+// ---------- consumos que quedaron sin costo (ver registrar.js) ----------
+let candidatosSinCostear = [];
+
+function renderConsumosSinCostear(candidatos){
+  const tbody = document.querySelector('#tbl-consumos-sin-costo tbody');
+  const hint = document.getElementById('csc-hint');
+  if(!tbody) return;
+  candidatosSinCostear = candidatos;
+  const btnAplicar = document.getElementById('csc-aplicar');
+  if(btnAplicar) btnAplicar.disabled = !candidatos.length;
+  tbody.innerHTML = candidatos.map(c => `<tr>
+    <td>${(c.registro.fecha||'').slice(0,10) || '—'}</td>
+    <td>${c.registro.orden != null ? c.registro.orden + (c.registro.suborden ? '-' + c.registro.suborden : '') : '—'}</td>
+    <td>${c.registro.materiaPrima}</td>
+    <td class="num">${fmtNum(c.cantidad,2)}</td>
+    <td class="num">${fmtCOP(c.mat.costo_unitario)}</td>
+    <td class="num">${fmtCOP(c.cantidad * c.mat.costo_unitario)}</td>
+  </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin pendientes — todo lo que tiene costo configurado ya está costeado</td></tr>';
+  hint.textContent = candidatos.length
+    ? `${candidatos.length} consumo(s) ya se pueden costear`
+    : 'Sin consumos pendientes por costear en este momento';
+}
+
+function buscarYMostrarConsumosSinCostear(){
+  renderConsumosSinCostear(buscarConsumosSinCostear());
+}
+
+async function aplicarConsumosSinCostear(){
+  if(!candidatosSinCostear.length) return;
+  const btn = document.getElementById('csc-aplicar');
+  const seguro = confirm(`Se van a crear ${candidatosSinCostear.length} movimiento(s) de costo por consumos que ya estaban registrados (el stock no se toca, ya estaba descontado desde que se guardó cada uno).\n\n¿Continuar?`);
+  if(!seguro) return;
+  btn.disabled = true; btn.textContent = 'Aplicando…';
+  const { creados, errores } = await aplicarCosteoConsumosPendientes(candidatosSinCostear);
+  toast(`Se costearon ${creados} consumo(s)` + (errores.length ? ` · ${errores.length} con error, revisa la consola` : ''));
+  renderMovimientosRecientes();
+  renderResumenCostosMes();
+  buscarYMostrarConsumosSinCostear();
+  btn.textContent = 'Aplicar costeo';
+}
+
 export function initCostos(){
   document.getElementById('cc-save').addEventListener('click', guardarConcepto);
   renderConceptos();
@@ -251,4 +293,8 @@ export function initCostos(){
   document.getElementById('rc-save').addEventListener('click', guardarMovimiento);
   renderMovimientosRecientes();
   renderResumenCostosMes();
+
+  document.getElementById('csc-buscar').addEventListener('click', buscarYMostrarConsumosSinCostear);
+  document.getElementById('csc-aplicar').addEventListener('click', aplicarConsumosSinCostear);
+  buscarYMostrarConsumosSinCostear();
 }

@@ -4,6 +4,7 @@ import { toast, fmtCOP, fechaHoyLocal } from './helpers.js';
 import { getCurrentUser } from './auth.js';
 import { renderMovimientosRecientes, renderResumenCostosMes } from './costos.js';
 import { renderInventario, invalidarEntradasInventario } from './inventario.js';
+import { recostearConsumosDeMaterial } from './registrar.js';
 
 if(typeof pdfjsLib !== 'undefined'){
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -984,6 +985,7 @@ async function guardarRecibo(){
             .update({ stock_actual: nuevoStock, costo_unitario: it.valor_neto_unitario }).eq('codigo', it.material_key).select();
           if(error) throw error;
           Object.assign(mat, data[0]);
+          recostearConsumosDeMaterial(mat.nombre);
         } else {
           const mat = DB.insumos_area.find(m => String(m.id) === it.material_key);
           if(!mat) throw new Error('material no encontrado en memoria');
@@ -992,6 +994,7 @@ async function guardarRecibo(){
             .update({ stock_actual: nuevoStock, costo_unitario: it.valor_neto_unitario }).eq('id', mat.id).select();
           if(error) throw error;
           Object.assign(mat, data[0]);
+          recostearConsumosDeMaterial(mat.nombre);
         }
         materialesActualizados++;
       }catch(err){

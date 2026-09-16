@@ -1323,6 +1323,21 @@
         </div>
       </div>
 
+      <div class="card" id="consumos-sin-costo-card">
+        <div class="card-head"><h3>Consumos de material sin costo</h3><span class="card-hint">registros de producción que ya descontaron stock, pero se quedaron sin costo porque el material todavía no tenía costo por unidad cargado en ese momento — ahora que sí lo tiene, se puede completar. El stock NO se vuelve a tocar (ya se descontó cuando se registró).</span></div>
+        <div class="form-foot">
+          <span class="card-hint" id="csc-hint"></span>
+          <button type="button" class="row-btn" id="csc-buscar">Buscar</button>
+          <button type="button" class="btn-primary" id="csc-aplicar" disabled>Aplicar costeo</button>
+        </div>
+        <div class="table-wrap" style="margin-top:8px">
+          <table id="tbl-consumos-sin-costo">
+            <thead><tr><th>Fecha</th><th>Orden</th><th>Material</th><th class="num">Cantidad</th><th class="num">Costo unit.</th><th class="num">Valor a cargar</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-head"><h3>Compras cargadas</h3><span class="card-hint">"Eliminar" deshace todo lo que generó esa compra: le devuelve el stock al inventario, borra sus costos y borra el documento — para corregir un error de tecleo. Filtra solo entre las últimas cargadas (para buscar una más vieja, usa el Informe de compras más abajo)</span></div>
         <div class="form-row">
@@ -1415,12 +1430,31 @@
       </div>
 
       <div class="card">
-        <div class="card-head"><h3>Facturas de venta cargadas</h3><span class="card-hint">"Editar" reabre la factura para corregir a qué orden quedó asociada cada línea — "Eliminar" borra la factura y sus líneas (no toca inventario ni costos, esto es solo información de venta)</span></div>
+        <div class="card-head"><h3>Facturas de venta cargadas</h3><span class="card-hint">"Ver detalle" abre las líneas para corregir a qué orden quedó asociada cada una, sin salir de acá — "Editar" reabre la factura completa arriba — "Eliminar" borra la factura y sus líneas (no toca inventario ni costos, esto es solo información de venta)</span></div>
         <div class="table-wrap">
           <table id="tbl-fv-cargadas">
             <thead><tr><th>Fecha</th><th>N° de factura</th><th>Cliente</th><th class="num">Total</th><th>Cargado por</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
+        </div>
+      </div>
+
+      <div class="modal-overlay" id="fv-detalle-modal" style="display:none">
+        <div class="modal-card" style="max-width:960px">
+          <h3 id="fv-detalle-titulo">Detalle de la factura</h3>
+          <p class="card-hint" id="fv-detalle-cabecera"></p>
+          <p class="card-hint">Se puede corregir la <b>Orden asociada</b> y la <b>Observación</b> de cada línea directo acá. Para corregir cantidades, valores o el resto de la factura, usa "Editar" desde el listado.</p>
+          <div class="table-wrap" style="margin-top:8px;max-height:420px;overflow-y:auto">
+            <table id="tbl-fv-detalle">
+              <thead><tr><th>Descripción</th><th class="num">Cant.</th><th class="num">Vr. Total</th><th class="num">Valor neto</th><th>Orden asociada</th><th>Observación</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="form-foot">
+            <span class="card-hint" id="fv-detalle-hint"></span>
+            <button type="button" class="btn-secondary" id="fv-detalle-cerrar">Cerrar</button>
+            <button type="button" class="btn-primary" id="fv-detalle-guardar">Guardar cambios</button>
+          </div>
         </div>
       </div>
     </section>

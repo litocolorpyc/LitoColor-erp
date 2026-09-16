@@ -683,6 +683,85 @@ export function avisoConsumoNoReflejado(resultado, nombre){
   return '';
 }
 
+// ---------- costear consumos que quedaron pendientes ----------
+// Causa real más común de "el consumo se registró pero nunca le apareció
+// costo" (reportado de nuevo 16sep26): en el momento en que se registró el
+// consumo, el material todavía NO tenía costo_unitario cargado (motivo
+// 'sin_costo_unitario' arriba) — típico cuando el material es nuevo o su
+// costo recién se carga después, al importar una compra o corregirlo en
+// Ajustar/Inventario físico/Maestros. El stock YA se descontó bien en su
+// momento; lo único que falta es el costos_movimiento — así que este
+// backfill nunca vuelve a tocar el stock, solo llena el costo que faltó.
+//
+// `filtroNombreMaterial` (opcional) acota la búsqueda a un solo material —
+// se usa para el "re-costeo automático" que se dispara justo después de
+// cargarle costo a ESE material (ver recibos.js/inventario.js), sin tener
+// que revisar toda la producción cada vez. Sin filtro, revisa todo
+// DB.produccion — lo usa el botón manual "Buscar consumos sin costo".
+export function buscarConsumosSinCostear(filtroNombreMaterial){
+  const yaCosteados = new Set(DB.costos_movimientos.filter(c => c.produccion_id != null).map(c => c.produccion_id));
+  const candidatos = DB.produccion.filter(r =>
+    r.materiaPrima && r.consumoMP && /^\s*[\d.,]/.test(r.consumoMP) && !yaCosteados.has(r.id)
+    && (!filtroNombreMaterial || r.materiaPrima === filtroNombreMaterial)
+  );
+
+  const paraCostear = [];
+  candidatos.forEach(r => {
+    const cantidad = parseFloat(parseCantidadConsumo(r.consumoMP));
+    if(!cantidad || cantidad <= 0) return;
+    const encontrado = buscarMaterialPorNombre(r.area, r.materiaPrima);
+    if(!encontrado || !encontrado.mat.costo_unitario) return; // sigue sin costo configurado — nada que hacer todavía
+    const esIndirecto = encontrado.tabla === 'insumos_area' && encontrado.mat.tipo_consumo === 'Indirecto';
+    paraCostear.push({ registro: r, mat: encontrado.mat, cantidad, esIndirecto });
+  });
+  return paraCostear;
+}
+
+// Crea el costos_movimiento que le faltaba a cada candidato de
+// buscarConsumosSinCostear — mismo criterio de armado que
+// descontarInventarioYCargarCosto (concepto "Consumo de materia prima
+// (automático)", orden/suborden solo si el material es Directo), pero acá
+// SIN tocar stock.
+export async function aplicarCosteoConsumosPendientes(paraCostear){
+  const concepto = DB.costos_conceptos.find(c => c.nombre === 'Consumo de materia prima (automático)');
+  if(!concepto) return { creados: 0, errores: paraCostear.length, sinConcepto: true };
+  let creados = 0; const errores = [];
+  for(const { registro, mat, cantidad, esIndirecto } of paraCostear){
+    try{
+      const row = {
+        concepto_id: concepto.id, tipo: 'Variable', fecha: registro.fecha,
+        valor: cantidad * mat.costo_unitario, proveedor: null,
+        comentario: `Consumo automático (recalculado) — ${registro.materiaPrima} (${fmtNum(cantidad,2)})`,
+        orden: esIndirecto ? null : (registro.orden ?? null),
+        suborden: esIndirecto ? null : (registro.suborden ?? null),
+        produccion_id: registro.id
+      };
+      const { data, error } = await sb.from('costos_movimientos').insert([row]).select();
+      if(error) throw error;
+      DB.costos_movimientos.unshift(data[0]);
+      creados++;
+    }catch(err){
+      console.error('No se pudo costear el consumo pendiente del registro', registro.id, err);
+      errores.push(registro.id);
+    }
+  }
+  return { creados, errores };
+}
+
+// Se llama justo después de cargarle costo_unitario a un material (compra
+// importada, Ajustar/Inventario físico) para que sus consumos ya
+// registrados y pendientes se costeen SOLOS, sin tener que ir uno por uno a
+// "Corregir registro". Es silencioso si no había nada pendiente; si costeó
+// algo, avisa con un toast (nunca deja pasar dinero sin que quede visible).
+export async function recostearConsumosDeMaterial(nombreMaterial){
+  if(!nombreMaterial) return;
+  const paraCostear = buscarConsumosSinCostear(nombreMaterial);
+  if(!paraCostear.length) return;
+  const { creados } = await aplicarCosteoConsumosPendientes(paraCostear);
+  if(creados) toast(`Se costearon ${creados} consumo(s) de "${nombreMaterial}" que estaban pendientes (ya tenían el stock descontado, les faltaba el costo)`, 6000);
+  if(onChangeCallback) onChangeCallback();
+}
+
 // Contrario de descontarInventarioYCargarCosto: le devuelve la cantidad al
 // stock del material y borra el costo automático que había generado ese
 // registro puntual — se usa al CORREGIR el consumo de un registro ya

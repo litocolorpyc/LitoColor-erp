@@ -639,6 +639,94 @@ async function eliminarFacturaVenta(facturaId){
   }
 }
 
+// ---------- Ver detalle (sin salir del listado): editar orden/observación ----------
+let detalleFacturaId = null;
+let detalleFacturaItems = [];
+
+async function mostrarDetalleFacturaVenta(facturaId){
+  const factura = DB.facturas_venta.find(f => f.id === facturaId);
+  if(!factura) return;
+  detalleFacturaId = facturaId;
+  const modal = document.getElementById('fv-detalle-modal');
+  const titulo = document.getElementById('fv-detalle-titulo');
+  const cabeceraEl = document.getElementById('fv-detalle-cabecera');
+  const tbody = document.querySelector('#tbl-fv-detalle tbody');
+  titulo.textContent = 'Detalle de la factura ' + (factura.numero_factura || facturaId);
+  cabeceraEl.textContent = [
+    factura.fecha ? 'Fecha: ' + factura.fecha.slice(0,10) : null,
+    factura.cliente ? 'Cliente: ' + factura.cliente : null,
+    'Total: ' + fmtCOP(factura.valor_total||0)
+  ].filter(Boolean).join(' · ');
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Cargando…</td></tr>';
+  document.getElementById('fv-detalle-hint').textContent = '';
+  modal.style.display = 'flex';
+
+  try{
+    const { data: items, error } = await sb.from('facturas_venta_items').select('*').eq('factura_id', facturaId).order('id');
+    if(error) throw error;
+    detalleFacturaItems = (items||[]).map(it => ({ ...it }));
+    renderTablaDetalleFacturaVenta(factura.cliente);
+  }catch(err){
+    console.error(err);
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Error al cargar el detalle — revisa la consola</td></tr>';
+  }
+}
+
+function renderTablaDetalleFacturaVenta(clienteFactura){
+  const tbody = document.querySelector('#tbl-fv-detalle tbody');
+  tbody.innerHTML = detalleFacturaItems.map((it, i) => `<tr data-i="${i}">
+    <td>${it.descripcion || '—'}</td>
+    <td class="num">${it.cantidad ?? '—'}</td>
+    <td class="num">${fmtCOP(it.valor_total||0)}</td>
+    <td class="num">${fmtCOP(it.valor_neto||0)}</td>
+    <td><select class="fvd-orden">${opcionesOrdenVenta(it.orden, clienteFactura)}</select></td>
+    <td><input type="text" class="fvd-obs" value="${it.observacion||''}" placeholder="opcional" style="width:100%;min-width:120px"></td>
+  </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin líneas</td></tr>';
+
+  tbody.querySelectorAll('tr').forEach(tr => {
+    const i = parseInt(tr.dataset.i, 10);
+    if(isNaN(i)) return;
+    tr.querySelector('.fvd-orden').addEventListener('change', e => {
+      detalleFacturaItems[i].orden = e.target.value ? parseInt(e.target.value,10) : null;
+    });
+    tr.querySelector('.fvd-obs').addEventListener('input', e => {
+      detalleFacturaItems[i].observacion = e.target.value;
+    });
+  });
+}
+
+// Solo actualiza orden/observación de cada línea (update liviano por id) —
+// no toca cantidad/valores/cabecera, para eso está "Editar" (que sí vuelve
+// a armar todo el documento). Si esta misma factura estaba abierta arriba
+// en modo edición, también refresca esa tabla para que no quede
+// desactualizada frente a lo que se acaba de guardar acá.
+async function guardarDetalleFacturaVenta(){
+  if(!detalleFacturaId) return;
+  const btn = document.getElementById('fv-detalle-guardar');
+  const hint = document.getElementById('fv-detalle-hint');
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  try{
+    for(const it of detalleFacturaItems){
+      const { error } = await sb.from('facturas_venta_items')
+        .update({ orden: it.orden || null, observacion: it.observacion || null }).eq('id', it.id);
+      if(error) throw error;
+    }
+    hint.textContent = 'Cambios guardados.';
+    toast('Cambios guardados');
+    if(facturaEditandoId === detalleFacturaId){
+      itemsActuales = detalleFacturaItems.map(it => ({ ...it }));
+      renderTablaItemsVenta();
+      actualizarResumenVenta();
+    }
+  }catch(err){
+    console.error(err);
+    hint.textContent = '';
+    toast('Error al guardar — revisa la consola');
+  }finally{
+    btn.disabled = false; btn.textContent = 'Guardar cambios';
+  }
+}
+
 export function renderFacturasVentaCargadas(){
   const tbody = document.querySelector('#tbl-fv-cargadas tbody');
   if(!tbody) return;
@@ -650,11 +738,13 @@ export function renderFacturasVentaCargadas(){
     <td class="num">${fmtCOP(f.valor_total||0)}</td>
     <td>${f.cargado_por || '—'}</td>
     <td><div class="row-actions">
+      <button type="button" class="row-btn" data-detalle-fv="${f.id}">Ver detalle</button>
       <button type="button" class="row-btn" data-edit-fv="${f.id}">Editar</button>
       <button type="button" class="row-btn row-btn-danger" data-del-fv="${f.id}">Eliminar</button>
     </div></td>
   </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin facturas de venta cargadas todavía</td></tr>';
 
+  tbody.querySelectorAll('[data-detalle-fv]').forEach(b => b.addEventListener('click', () => mostrarDetalleFacturaVenta(parseInt(b.dataset.detalleFv, 10))));
   tbody.querySelectorAll('[data-edit-fv]').forEach(b => b.addEventListener('click', () => editarFacturaVenta(parseInt(b.dataset.editFv, 10))));
   tbody.querySelectorAll('[data-del-fv]').forEach(b => b.addEventListener('click', () => eliminarFacturaVenta(parseInt(b.dataset.delFv, 10))));
 }
@@ -685,5 +775,9 @@ export function initVentas(){
     renderTablaItemsVenta();
     actualizarResumenVenta();
   });
+  document.getElementById('fv-detalle-cerrar').addEventListener('click', () => {
+    document.getElementById('fv-detalle-modal').style.display = 'none';
+  });
+  document.getElementById('fv-detalle-guardar').addEventListener('click', guardarDetalleFacturaVenta);
   renderFacturasVentaCargadas();
 }
