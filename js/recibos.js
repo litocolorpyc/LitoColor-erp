@@ -113,10 +113,21 @@ function detectarColumnasEncabezado(lineas){
         const texto = grupo.map(t => t.str).join(' ').trim();
         const def = ENCABEZADOS_TABLA_ITEMS.find(h => h.re.test(texto));
         if(def && !encontrados[def.key]){
-          const xIni = grupo[0].x;
-          const ultimo = grupo[grupo.length - 1];
+          // Entre cada título de columna, Siigo mete un fragmento de texto
+          // "espacio" que ocupa casi todo el hueco hasta el próximo título
+          // (a veces 150-180pt de ancho). Si ese fragmento queda como el
+          // primero del grupo que hizo match (grupo[0]), xIni terminaba
+          // siendo el borde del espacio y no el de la palabra real del
+          // título — eso descuadraba el centro calculado para columnas
+          // anchas como "Descripción"/"Cantidad" y hacía que sus límites
+          // quedaran mal ubicados. Por eso acá se ignoran los fragmentos
+          // que son solo espacio en blanco al medir el ancho real.
+          const tokensReales = grupo.filter(t => t.str.trim() !== '');
+          const base = tokensReales.length ? tokensReales : grupo;
+          const xIni = base[0].x;
+          const ultimo = base[base.length - 1];
           const xFin = ultimo.x + (ultimo.width || 0);
-          encontrados[def.key] = { xCentro: (xIni + xFin) / 2, y: linea[0].y };
+          encontrados[def.key] = { xCentro: (xIni + xFin) / 2, xIni, xFin, y: linea[0].y };
         }
       }
     }
@@ -155,6 +166,29 @@ function parseItemsPorColumnas(paginas){
         fin: centroSig != null ? (centro + centroSig) / 2 : Infinity
       };
     });
+    // "Descripción" es la única columna de texto libre (bastante más ancha
+    // que su propio título) — al resto de columnas (numéricas, angostas) sí
+    // les sirve repartir el límite a la mitad entre sus centros porque el
+    // título ocupa casi todo el ancho de la columna. A "Descripción" en
+    // cambio hay que darle el hueco COMPLETO entre el borde real de la
+    // columna anterior y el de la siguiente, sin repartir por mitad —
+    // si no, una descripción corta (ej. "OP 6002-1", que en esta factura
+    // arranca pegada al final de "Vr. Unitario") cae mal clasificada en la
+    // columna vecina y la fila entera se descarta por no tener descripción
+    // (reportado con la compra C-1899 de AXIO, 16sep26).
+    const idxDesc = claves.indexOf('descripcion');
+    if(idxDesc !== -1){
+      if(idxDesc > 0){
+        const borde = encontrados[claves[idxDesc - 1]].xFin;
+        limites[idxDesc - 1].fin = borde;
+        limites[idxDesc].inicio = borde;
+      }
+      if(idxDesc < claves.length - 1){
+        const borde = encontrados[claves[idxDesc + 1]].xIni;
+        limites[idxDesc].fin = borde;
+        limites[idxDesc + 1].inicio = borde;
+      }
+    }
     const columnaDe = x => {
       const l = limites.find(l => x >= l.inicio && x < l.fin);
       return l ? l.key : null;
