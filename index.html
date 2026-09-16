@@ -53,6 +53,7 @@
         <button class="tab-btn" data-tab="alertas" role="tab">Alertas</button>
         <button class="tab-btn" data-tab="registrar" role="tab">Registrar</button>
         <button class="tab-btn" data-tab="registrar-costo" role="tab">Registrar costo</button>
+        <button class="tab-btn" data-tab="registrar-venta" role="tab">Registrar Venta</button>
         <button class="tab-btn" data-tab="inventario" role="tab">Inventario</button>
       </div>
       <div class="sidebar-group">
@@ -1347,6 +1348,53 @@
             <span></span>
             <button type="button" class="btn-secondary" id="informe-compra-detalle-cerrar">Cerrar</button>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-registrar-venta">
+      <div class="card" id="fv-import-card">
+        <div class="card-head"><h3>Registrar Venta — Importar factura de venta (PDF de Siigo)</h3><span class="card-hint">las "Factura electrónica de venta" (FE) que descarga la administradora — revisa y corrige antes de guardar, nada se guarda automático</span></div>
+        <div class="form-row">
+          <div class="field full">
+            <label>Archivo de la factura</label>
+            <input type="file" id="fv-file" accept="application/pdf,image/*">
+            <span class="card-hint" id="fv-file-hint">PDF: se intenta leer el texto solo. Imagen/foto: por ahora se llena la tabla a mano.</span>
+          </div>
+        </div>
+        <div id="fv-review" style="display:none">
+          <p class="card-hint" id="fv-editando-aviso" style="display:none;background:#2E8FC022;color:#2E8FC0;padding:6px 10px;border-radius:8px;font-weight:600"></p>
+          <div class="form-row">
+            <div class="field"><label>N° de factura</label><input type="text" id="fv-numero" placeholder="ej. FE 1137"></div>
+            <div class="field"><label>Fecha</label><input type="date" id="fv-fecha"></div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>NIT del cliente</label><input type="text" id="fv-nit"></div>
+            <div class="field"><label>Cliente</label><input type="text" id="fv-cliente"></div>
+          </div>
+          <span class="card-hint">El sistema cruza el cliente de la factura con sus órdenes de producción en el sistema y sugiere sola la <b>orden genérica</b> (nunca una pieza -1/-2) de cada línea — cámbiala en "Orden asociada" si no es la correcta. Las líneas sin sugerencia quedan resaltadas para elegirla a mano.</span>
+          <div class="table-wrap" style="margin-top:8px">
+            <table id="tbl-fv-items">
+              <thead><tr><th>Ítem</th><th>Descripción</th><th class="num">Cant.</th><th>Unidad</th><th class="num">IVA %</th><th class="num">Vr. Unit.</th><th class="num">Vr. Total</th><th>Orden asociada</th><th>Observación</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="form-foot">
+            <button type="button" class="row-btn" id="fv-add-item">+ Agregar línea</button>
+            <button type="button" class="btn-secondary" id="fv-limpiar">Limpiar</button>
+            <span class="card-hint" id="fv-total-hint"></span>
+            <button type="button" class="btn-primary" id="fv-guardar">Guardar factura</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Facturas de venta cargadas</h3><span class="card-hint">"Editar" reabre la factura para corregir a qué orden quedó asociada cada línea — "Eliminar" borra la factura y sus líneas (no toca inventario ni costos, esto es solo información de venta)</span></div>
+        <div class="table-wrap">
+          <table id="tbl-fv-cargadas">
+            <thead><tr><th>Fecha</th><th>N° de factura</th><th>Cliente</th><th class="num">Total</th><th>Cargado por</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
         </div>
       </div>
     </section>

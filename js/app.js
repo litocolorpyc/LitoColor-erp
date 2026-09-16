@@ -8,6 +8,7 @@ import { initCalendario, renderCalendario } from './calendario.js';
 import { initAlertas, renderAlertas } from './alertas.js';
 import { initCostos, poblarDatalistProveedores } from './costos.js';
 import { initRecibosCaja } from './recibos.js';
+import { initVentas } from './ventas.js';
 import { initInventario, renderInventario } from './inventario.js';
 import { restaurarSesion, iniciarSesion, cerrarSesion, cambiarContrasena, crearCuentaPropia, getCurrentUser, aplicarPermisos } from './auth.js';
 
@@ -82,6 +83,7 @@ async function arrancarApp(){
   pasoSeguro('Alertas', initAlertas);
   pasoSeguro('Costos', initCostos);
   pasoSeguro('Recibos de caja', initRecibosCaja);
+  pasoSeguro('Registrar Venta', initVentas);
   pasoSeguro('Inventario', initInventario);
 
   pasoSeguro('Permisos', aplicarPermisos);
