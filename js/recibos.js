@@ -1070,8 +1070,12 @@ export function renderRecibosCargados(){
   }));
 }
 
-async function eliminarRecibo(reciboId){
-  const recibo = DB.recibos_caja.find(r => r.id === reciboId);
+// `reciboConocido` es opcional: lo manda el Informe de compras cuando el
+// documento a borrar es viejo y ya no está en el caché local de las
+// últimas 100 (DB.recibos_caja) — sin esto, borrar desde el informe una
+// compra vieja fallaba en silencio porque no la encontraba ahí.
+async function eliminarRecibo(reciboId, reciboConocido){
+  const recibo = reciboConocido || DB.recibos_caja.find(r => r.id === reciboId);
   if(!recibo) return;
   const seguro = confirm(
     `¿Eliminar el documento "${recibo.numero_recibo || reciboId}" (${recibo.tercero || 'sin proveedor'})?\n\n` +
@@ -1097,6 +1101,8 @@ async function eliminarRecibo(reciboId){
     renderMovimientosRecientes();
     renderResumenCostosMes();
     renderRecibosCargados();
+    document.getElementById('informe-compra-detalle-modal')?.style.setProperty('display', 'none');
+    if(document.getElementById('informe-compras-buscar')) buscarInformeCompras();
     toast('Documento eliminado — inventario y costos revertidos');
   }catch(err){
     console.error(err);
@@ -1135,11 +1141,20 @@ async function buscarInformeCompras(){
       <td>${r.tercero || '—'}</td>
       <td class="num">${fmtCOP(r.valor_total||0)}</td>
       <td>${r.cargado_por || '—'}</td>
-    </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--ink-faint)">No se encontraron compras con esos filtros</td></tr>';
+      <td><button type="button" class="row-btn row-btn-danger" data-del-informe="${r.id}">Eliminar</button></td>
+    </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">No se encontraron compras con esos filtros</td></tr>';
 
     tbody.querySelectorAll('tr[data-id]').forEach(tr => {
       tr.addEventListener('click', () => mostrarDetalleCompra(parseInt(tr.dataset.id, 10), filas.find(r => r.id === parseInt(tr.dataset.id, 10))));
     });
+    // Botón "Eliminar" de la fila: para el clic antes de que llegue a la
+    // fila (si no, además de borrar se abriría el detalle de un documento
+    // que ya no existe).
+    tbody.querySelectorAll('[data-del-informe]').forEach(b => b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const id = parseInt(b.dataset.delInforme, 10);
+      eliminarRecibo(id, filas.find(r => r.id === id));
+    }));
 
     hint.textContent = filas.length
       ? `${filas.length} compra(s) encontrada(s)` + (!desde && !hasta && !numero ? ' (las 50 más recientes — usa los filtros para buscar más atrás)' : '')
@@ -1150,7 +1165,12 @@ async function buscarInformeCompras(){
   }
 }
 
+// Recuerda qué compra está abierta en el modal de detalle, para que el
+// botón "Eliminar esta compra" del modal sepa cuál borrar.
+let reciboDetalleActual = null;
+
 async function mostrarDetalleCompra(reciboId, cabecera){
+  reciboDetalleActual = { id: reciboId, cabecera };
   const modal = document.getElementById('informe-compra-detalle-modal');
   const titulo = document.getElementById('informe-compra-detalle-titulo');
   const cabeceraEl = document.getElementById('informe-compra-detalle-cabecera');
@@ -1199,6 +1219,10 @@ function initInformeCompras(){
   });
   document.getElementById('informe-compra-detalle-cerrar').addEventListener('click', () => {
     document.getElementById('informe-compra-detalle-modal').style.display = 'none';
+  });
+  document.getElementById('informe-compra-detalle-eliminar').addEventListener('click', () => {
+    if(!reciboDetalleActual) return;
+    eliminarRecibo(reciboDetalleActual.id, reciboDetalleActual.cabecera);
   });
   buscarInformeCompras();
 }
