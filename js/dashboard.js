@@ -53,8 +53,42 @@ let rangoGer = rangoFechas('todo');
 let ultimaRentabilidad = [];
 let ultimaRentabilidadProducto = [];
 
+// "Registrar Venta" (facturas de venta importadas, ver ventas.js) es la
+// fuente de ingresos facturados que reemplaza al Excel histórico de
+// "pedidos" hacia adelante. Se arman como filas con la misma forma que un
+// "pedido" ({fecha, orden, cliente, producto, trabajo, total}) para poder
+// sumarse a `pedidos` y reusar TODA la lógica de abajo (KPI, gráfico
+// mensual, clientes principales, rentabilidad por orden y por producto)
+// sin duplicarla — así el ingreso de una factura se refleja en cada
+// reporte que ya usaba "pedidos", automáticamente.
+//
+// Reglas pedidas explícitamente 16sep26:
+// - Solo cuentan los ÍTEMS que tienen una orden de producción asociada —
+//   los que no, no se suman a ningún lado (ni sueltos, ni repartidos).
+// - El valor que cuenta es el NETO de cada ítem (sin IVA, ver valor_neto
+//   en ventas.js/calcularNeto), nunca el Vr. Total crudo de la factura.
+function pedidosDesdeFacturasVenta(desde, hasta){
+  const facturasPorId = new Map(DB.facturas_venta.map(f => [f.id, f]));
+  const filas = [];
+  DB.facturas_venta_items.forEach(it => {
+    if(it.orden == null) return;
+    const factura = facturasPorId.get(it.factura_id);
+    if(!factura || !enRango(factura.fecha, desde, hasta)) return;
+    const ordenOpp = DB.opp_ordenes.find(o => o.orden === it.orden);
+    filas.push({
+      fecha: factura.fecha, orden: it.orden,
+      cliente: factura.cliente || (ordenOpp ? ordenOpp.cliente : null),
+      producto: ordenOpp ? ordenOpp.producto : null,
+      trabajo: ordenOpp ? (ordenOpp.producto || tipoTrabajoLabel(ordenOpp)) : null,
+      total: it.valor_neto || 0
+    });
+  });
+  return filas;
+}
+
 function calcularGerencial(desde, hasta){
-  const pedidos = DB.pedidos.filter(p => enRango(p.fecha, desde, hasta));
+  const pedidos = DB.pedidos.filter(p => enRango(p.fecha, desde, hasta))
+    .concat(pedidosDesdeFacturasVenta(desde, hasta));
   const produccion = DB.produccion.filter(r => enRango(r.fecha, desde, hasta));
   const costosMov = DB.costos_movimientos.filter(m => enRango(m.fecha, desde, hasta));
   const ingresos = pedidos.reduce((s,p)=>s+(p.total||0),0);
@@ -86,7 +120,7 @@ export function renderGerencial(){
     : calcularGerencial(ant.desde, ant.hasta);
 
   document.getElementById('ger-kpis').innerHTML = `
-    <div class="kpi"><div class="lbl">Ingresos facturados</div><div class="val">${fmtCOP(actual.ingresos)} ${deltaBadge(actual.ingresos, anterior.ingresos)}</div><div class="sub">según pedidos con valor</div></div>
+    <div class="kpi"><div class="lbl">Ingresos facturados</div><div class="val">${fmtCOP(actual.ingresos)} ${deltaBadge(actual.ingresos, anterior.ingresos)}</div><div class="sub">pedidos con valor + facturas de venta con orden asociada (valor neto, antes de IVA)</div></div>
     <div class="kpi"><div class="lbl">Ingresos presupuestados</div><div class="val">${fmtCOP(actual.ingresosPresupuestados)} ${deltaBadge(actual.ingresosPresupuestados, anterior.ingresosPresupuestados)}</div><div class="sub">precio venta antes de IVA de órdenes con presupuesto</div></div>
     <div class="kpi"><div class="lbl">Costo mano de obra</div><div class="val">${fmtCOP(actual.costoMO)} ${deltaBadge(actual.costoMO, anterior.costoMO)}</div><div class="sub">según bitácora de producción</div></div>
     <div class="kpi"><div class="lbl">Otros costos (fijos + variables)</div><div class="val">${fmtCOP(actual.otrosCostos)} ${deltaBadge(actual.otrosCostos, anterior.otrosCostos)}</div><div class="sub">arriendo, nómina, materia prima, impuestos…</div></div>
@@ -971,6 +1005,10 @@ function wireExportButtons(){
       { nombre: 'Costos', filas: DB.costos_movimientos.map(m => {
         const c = DB.costos_conceptos.find(x=>x.id===m.concepto_id);
         return { Fecha:m.fecha, Tipo:m.tipo, Concepto:c?c.nombre:'—', Proveedor:m.proveedor, Valor:m.valor, Comentario:m.comentario };
+      }) },
+      { nombre: 'Facturas de venta', filas: DB.facturas_venta_items.map(it => {
+        const f = DB.facturas_venta.find(x => x.id === it.factura_id);
+        return { Factura:f?f.numero_factura:'—', Fecha:f?f.fecha:'—', Cliente:f?f.cliente:'—', Descripción:it.descripcion, Cantidad:it.cantidad, 'Vr. Total (con IVA)':it.valor_total, 'Valor neto (sin IVA)':it.valor_neto, Orden:it.orden };
       }) }
     ]);
   });

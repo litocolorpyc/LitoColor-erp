@@ -2,6 +2,8 @@ import { sb } from './supabase-client.js';
 import { DB } from './store.js';
 import { toast, fmtCOP } from './helpers.js';
 import { getCurrentUser } from './auth.js';
+import { renderGerencial } from './dashboard.js';
+import { renderOppRecent } from './ordenes.js';
 
 if(typeof pdfjsLib !== 'undefined'){
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -558,7 +560,7 @@ async function guardarFacturaVenta(){
       valor_neto: it.valor_neto ?? calcularNeto(it),
       orden: it.orden || null, observacion: it.observacion || null
     }));
-    const { error: errItems } = await sb.from('facturas_venta_items').insert(payloadItems);
+    const { data: itemsGuardados, error: errItems } = await sb.from('facturas_venta_items').insert(payloadItems).select();
     if(errItems) throw errItems;
 
     toast('Factura ' + (numero || facturaId) + (esEdicion ? ' actualizada con ' : ' guardada con ') + payloadItems.length + ' línea(s)'
@@ -567,11 +569,22 @@ async function guardarFacturaVenta(){
     if(esEdicion){
       const idx = DB.facturas_venta.findIndex(f => f.id === facturaId);
       if(idx>=0) DB.facturas_venta[idx] = facturaGuardada; else DB.facturas_venta.unshift(facturaGuardada);
+      // Las líneas viejas de esta factura ya se borraron en Supabase arriba
+      // (delete antes del insert) — hay que sacarlas también del caché en
+      // memoria, si no Gerencial/Órdenes seguirían sumando el ingreso viejo
+      // duplicado junto con el nuevo.
+      DB.facturas_venta_items = DB.facturas_venta_items.filter(it => it.factura_id !== facturaId);
     } else {
       DB.facturas_venta.unshift(facturaGuardada);
     }
+    DB.facturas_venta_items.push(...(itemsGuardados||[]));
     limpiarFormularioVenta();
     renderFacturasVentaCargadas();
+    // El ingreso de estas líneas (si tienen orden asociada) ya afecta
+    // Gerencial y el detalle de esa orden — refresca ambos para que no
+    // haga falta recargar la página.
+    renderGerencial();
+    renderOppRecent();
   }catch(err){
     console.error(err);
     toast('Error al guardar la factura — revisa la consola');
@@ -630,8 +643,11 @@ async function eliminarFacturaVenta(facturaId){
     if(errDel) throw errDel;
     const i = DB.facturas_venta.findIndex(f => f.id === facturaId);
     if(i >= 0) DB.facturas_venta.splice(i, 1);
+    DB.facturas_venta_items = DB.facturas_venta_items.filter(it => it.factura_id !== facturaId);
     if(facturaEditandoId === facturaId) limpiarFormularioVenta();
     renderFacturasVentaCargadas();
+    renderGerencial();
+    renderOppRecent();
     toast('Factura eliminada');
   }catch(err){
     console.error(err);
@@ -713,11 +729,20 @@ async function guardarDetalleFacturaVenta(){
     }
     hint.textContent = 'Cambios guardados.';
     toast('Cambios guardados');
+    // Sincroniza el caché en memoria con lo que se acaba de guardar (orden/
+    // observación por línea) para que Gerencial y el detalle de la orden
+    // reflejen el cambio sin recargar la página.
+    detalleFacturaItems.forEach(it => {
+      const cache = DB.facturas_venta_items.find(x => x.id === it.id);
+      if(cache){ cache.orden = it.orden; cache.observacion = it.observacion; }
+    });
     if(facturaEditandoId === detalleFacturaId){
       itemsActuales = detalleFacturaItems.map(it => ({ ...it }));
       renderTablaItemsVenta();
       actualizarResumenVenta();
     }
+    renderGerencial();
+    renderOppRecent();
   }catch(err){
     console.error(err);
     hint.textContent = '';

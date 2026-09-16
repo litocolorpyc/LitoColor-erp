@@ -1222,8 +1222,15 @@ function wirePresupuestoOrden(orden, costoReal, ingresoReal, costoMateriales){
   });
 }
 
+// "Registrar Venta" (facturas de venta importadas, ver ventas.js) es la
+// fuente que reemplaza al Excel histórico de "pedidos" hacia adelante —
+// mismo criterio que calcularGerencial en dashboard.js: solo cuentan los
+// ítems de factura que tienen ESTA orden asociada, por su valor NETO (sin
+// IVA). Pedido explícito 16sep26.
 function ingresoDeOrden(orden){
-  return DB.pedidos.filter(p => p.orden === orden).reduce((s,p)=>s+(p.total||0),0);
+  const dePedidos = DB.pedidos.filter(p => p.orden === orden).reduce((s,p)=>s+(p.total||0),0);
+  const deFacturasVenta = DB.facturas_venta_items.filter(it => it.orden === orden).reduce((s,it)=>s+(it.valor_neto||0),0);
+  return dePedidos + deFacturasVenta;
 }
 
 // Agrupa registros de producción por Área + Operario + Máquina. Antes se
@@ -1417,7 +1424,7 @@ export function mostrarDetalleOrden(orden){
   document.getElementById('opp-detalle-body').innerHTML = `
     <div class="kpi-row" style="margin-bottom:16px">
       <div class="kpi"><div class="lbl">Estado</div><div class="val" style="font-size:16px">${o.cliente||'—'}</div><div class="sub">${o.producto||''} · ${(o.fecha||'').slice(0,10)}</div></div>
-      <div class="kpi"><div class="lbl">Ingreso facturado</div><div class="val">${fmtCOPlocal(ingreso)}</div><div class="sub">${ingreso>0 ? 'según pedidos' : (ingresoPresupuestado ? 'en $0 — el margen usa el presupuestado' : 'según pedidos')}</div></div>
+      <div class="kpi"><div class="lbl">Ingreso facturado</div><div class="val">${fmtCOPlocal(ingreso)}</div><div class="sub">${ingreso>0 ? 'pedidos + facturas de venta (neto, sin IVA)' : (ingresoPresupuestado ? 'en $0 — el margen usa el presupuestado' : 'pedidos + facturas de venta (neto, sin IVA)')}</div></div>
       <div class="kpi"><div class="lbl">Ingreso presupuestado</div><div class="val">${ingresoPresupuestado!=null ? fmtCOPlocal(ingresoPresupuestado) : '—'}</div><div class="sub">precio venta antes de IVA</div></div>
       <div class="kpi"><div class="lbl">Costo mano de obra</div><div class="val">${fmtCOPlocal(costo)}</div><div class="sub">${registros.length} registros de producción</div></div>
       <div class="kpi"><div class="lbl">Otros costos</div><div class="val">${fmtCOPlocal(costoMateriales)}</div><div class="sub">materiales/compras con esta orden asociada</div></div>

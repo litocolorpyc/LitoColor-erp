@@ -9,7 +9,7 @@ export const DB = {
   productos: [], costos_conceptos: [], costos_movimientos: [], insumos_area: [],
   piezas_producto: [], presupuesto_orden: [], recibos_caja: [], motivos_pausa: [], subprocesos: [],
   categorias_materia_prima: [], materias_primas_areas: [], areas: [], prioridad_area: [],
-  alertas_faltante_material: [], inventario_ajustes: [], facturas_venta: []
+  alertas_faltante_material: [], inventario_ajustes: [], facturas_venta: [], facturas_venta_items: []
 };
 
 export function normProd(r){
@@ -92,9 +92,15 @@ export async function loadCatalogos(){
     sb.from('prioridad_area').select('*'),
     sb.from('alertas_faltante_material').select('*').eq('resuelta', false),
     sb.from('inventario_ajustes').select('*').order('fecha', { ascending: false }),
-    sb.from('facturas_venta').select('*').order('cargado_en', { ascending: false }).limit(100)
+    // A diferencia de recibos_caja (que sí se limita a las últimas 100 y
+    // usa "Informe de compras" para buscar más atrás), acá se cargan TODAS
+    // las facturas y TODOS sus ítems sin límite — Gerencial necesita el
+    // histórico completo para sumar bien "Ingresos facturados" en el rango
+    // "Todo", y son filas livianas (sin texto largo) así que no pesa.
+    sb.from('facturas_venta').select('*').order('cargado_en', { ascending: false }),
+    sb.from('facturas_venta_items').select('*')
   ]);
-  const [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22, p23] = results;
+  const [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22, p23, p24] = results;
   // Solo personal/maquinas/actividades/pedidos son indispensables para arrancar.
   // Las tablas más nuevas (materias_primas, clientes, proveedores, insumos_area)
   // pueden no existir todavía si no se ha corrido el SQL más reciente — no
@@ -128,6 +134,7 @@ export async function loadCatalogos(){
   DB.alertas_faltante_material = p21.data || [];
   DB.inventario_ajustes = p22.data || [];
   DB.facturas_venta = p23.data || [];
+  DB.facturas_venta_items = p24.data || [];
 }
 
 export async function loadProduccion(){
