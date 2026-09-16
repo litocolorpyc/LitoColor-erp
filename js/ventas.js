@@ -65,6 +65,16 @@ function parsePct(str){
   return isNaN(n) ? 0 : n;
 }
 
+// El "Vr. Total" de cada línea ya trae el IVA sumado — pedido explícito
+// 16sep26: el valor que se asocia a la orden de producción debe ser el
+// NETO (sin IVA), no ese total crudo. Mismo criterio que calcularNeto en
+// recibos.js para las compras (ahí también se resta Retención, que en
+// ventas no aplica).
+function calcularNeto(it){
+  const factor = 1 + ((it.iva_pct || 0) / 100);
+  return factor ? (it.valor_total || 0) / factor : (it.valor_total || 0);
+}
+
 // ---------- cabecera ----------
 function parseCabeceraVenta(texto){
   const cabecera = { numero_factura: '', fecha: '', nit: '', cliente: '', total_bruto: null, iva: null, valor_total: null };
@@ -88,6 +98,11 @@ function parseCabeceraVenta(texto){
   if(mIva) cabecera.iva = parseMoneyUS(mIva[1]);
   const mPagar = texto.match(/Total a Pagar\s+([\d.,]+)/i);
   if(mPagar) cabecera.valor_total = parseMoneyUS(mPagar[1]);
+
+  // Siigo imprime "Total items: N" — sirve para saber si el parser de una
+  // sola línea se quedó corto (ver parseItemsVenta más abajo).
+  const mTotalItems = texto.match(/Total items:\s*(\d+)/i);
+  cabecera.totalItemsDeclarado = mTotalItems ? parseInt(mTotalItems[1], 10) : null;
   return cabecera;
 }
 
@@ -232,7 +247,20 @@ function parseItemsPorColumnas(paginas){
   return items;
 }
 
-function parseItemsVenta(texto, paginas){
+// `totalItemsDeclarado` es el "Total items: N" que Siigo imprime en la
+// factura — la única forma confiable de notar que el parser de una línea
+// se quedó corto SIN que ninguna fila se vea rota. Descubierto con la
+// factura FE 1147 (CAMACOL, 16sep26): cuando una "Descripción" es larga y
+// se parte en 2 líneas, el N° de ítem queda solo en un renglón intermedio
+// ("5" sin nada más al lado) — esa línea no arranca como una fila (no
+// matchea inicioFilaRegex, que espera dígito+espacio+algo más) y tampoco
+// la línea de arriba (empieza directo con texto) ni la de abajo (el resto
+// de la descripción) — ninguna de las 3 se ve nunca como "una fila que
+// casi calzó", así que antes esto pasaba TOTALMENTE en silencio: la
+// factura cargaba con 4 de 6 ítems y ningún aviso en consola. Por eso ya
+// no basta con revisar si quedaron 0 ítems para decidir si hace falta el
+// respaldo por columnas — hay que comparar contra el total declarado.
+function parseItemsVenta(texto, paginas, totalItemsDeclarado){
   const items = [];
   const lineas = texto.split('\n');
   const filasNoReconocidas = [];
@@ -249,10 +277,12 @@ function parseItemsVenta(texto, paginas){
   if(filasNoReconocidas.length){
     console.warn('Importar factura de venta: se reconocieron', items.length, 'línea(s), pero', filasNoReconocidas.length, 'fila(s) parecían un ítem y no se pudieron leer completas:', filasNoReconocidas);
   }
-  if(!items.length && paginas && paginas.length){
+
+  const faltanItems = totalItemsDeclarado != null && items.length < totalItemsDeclarado;
+  if((!items.length || faltanItems) && paginas && paginas.length){
     const itemsPorColumnas = parseItemsPorColumnas(paginas);
-    if(itemsPorColumnas.length){
-      console.warn('Importar factura de venta: el parser de una línea no reconoció ítems — se usó el respaldo por columnas y se encontraron', itemsPorColumnas.length, 'línea(s).');
+    if(itemsPorColumnas.length > items.length){
+      console.warn(`Importar factura de venta: el parser de una línea encontró ${items.length} de ${totalItemsDeclarado ?? '?'} ítem(s) declarados — se usó el respaldo por columnas y se encontraron ${itemsPorColumnas.length}.`);
       return itemsPorColumnas;
     }
   }
@@ -367,7 +397,8 @@ async function manejarArchivoVenta(file){
     try{
       const { texto, paginas } = await extraerTextoPDF(file);
       const cabecera = parseCabeceraVenta(texto);
-      const items = parseItemsVenta(texto, paginas);
+      const items = parseItemsVenta(texto, paginas, cabecera.totalItemsDeclarado);
+      items.forEach(it => { it.valor_neto = calcularNeto(it); });
       document.getElementById('fv-numero').value = cabecera.numero_factura;
       document.getElementById('fv-fecha').value = cabecera.fecha;
       document.getElementById('fv-nit').value = cabecera.nit;
@@ -377,9 +408,11 @@ async function manejarArchivoVenta(file){
       cabeceraActual = cabecera;
       const conOrden = items.filter(it => it.orden).length;
       const yaCargada = cabecera.numero_factura && DB.facturas_venta.some(f => f.numero_factura === cabecera.numero_factura);
+      const faltanTrasAmbosParsers = cabecera.totalItemsDeclarado != null && items.length < cabecera.totalItemsDeclarado;
       hint.textContent = (items.length
         ? `Se leyeron ${items.length} línea(s) automáticamente${conOrden ? ` (${conOrden} con orden de producción sugerida)` : ''} — revisa que estén correctas antes de guardar.`
         : 'No se pudieron reconocer líneas automáticamente en este PDF — agrégalas manualmente abajo.')
+        + (faltanTrasAmbosParsers ? ` ⚠️ La factura dice tener ${cabecera.totalItemsDeclarado} ítem(s) pero solo se leyeron ${items.length} — agrega el resto a mano abajo.` : '')
         + (yaCargada ? ' ⚠️ Esta factura ya se había cargado antes — revisa que no sea un duplicado.' : '');
     }catch(err){
       console.error(err);
@@ -411,22 +444,30 @@ function renderTablaItemsVenta(){
       <td><input type="number" class="fv-iva num" value="${it.iva_pct||0}" style="width:55px"></td>
       <td><input type="number" class="fv-unitario num" value="${it.valor_unitario||0}" style="width:100px"></td>
       <td><input type="number" class="fv-total num" value="${it.valor_total||0}" style="width:110px"></td>
+      <td class="num" title="Vr. Total ÷ (1 + IVA%) — lo que cuenta como ingreso de la orden">${fmtCOP(it.valor_neto ?? calcularNeto(it))}</td>
       <td><select class="fv-orden" title="${sinOrden?'No se pudo sugerir sola — elegí a cuál orden de producción corresponde':'Sugerida automáticamente por cliente/producto — cambiala si no es la correcta'}">${opcionesOrdenVenta(it.orden, clienteFactura)}</select></td>
       <td><input type="text" class="fv-obs" value="${it.observacion||''}" placeholder="opcional" style="width:100%;min-width:120px"></td>
       <td><button type="button" class="row-btn row-btn-danger fv-del">✕</button></td>
     </tr>`;
-  }).join('') || '<tr><td colspan="10" style="text-align:center;color:var(--ink-faint)">Sin líneas todavía — agrega una manualmente</td></tr>';
+  }).join('') || '<tr><td colspan="11" style="text-align:center;color:var(--ink-faint)">Sin líneas todavía — agrega una manualmente</td></tr>';
 
   tbody.querySelectorAll('tr').forEach(tr => {
     const i = parseInt(tr.dataset.i, 10);
     if(isNaN(i)) return;
+    // Recalcula el valor neto (sin IVA) de ESTA línea y refresca la celda
+    // — depende de Vr. Total e IVA%, ver calcularNeto.
+    const actualizarNetoFila = () => {
+      itemsActuales[i].valor_neto = calcularNeto(itemsActuales[i]);
+      tr.querySelector('td.num[title]').textContent = fmtCOP(itemsActuales[i].valor_neto);
+      actualizarResumenVenta();
+    };
     tr.querySelector('.fv-codigo').addEventListener('input', e => itemsActuales[i].codigo = e.target.value);
     tr.querySelector('.fv-desc').addEventListener('input', e => itemsActuales[i].descripcion = e.target.value);
     tr.querySelector('.fv-cantidad').addEventListener('input', e => { itemsActuales[i].cantidad = parseFloat(e.target.value)||0; actualizarResumenVenta(); });
     tr.querySelector('.fv-unidad').addEventListener('input', e => itemsActuales[i].unidad_medida = e.target.value);
-    tr.querySelector('.fv-iva').addEventListener('input', e => { itemsActuales[i].iva_pct = parseFloat(e.target.value)||0; actualizarResumenVenta(); });
+    tr.querySelector('.fv-iva').addEventListener('input', e => { itemsActuales[i].iva_pct = parseFloat(e.target.value)||0; actualizarNetoFila(); });
     tr.querySelector('.fv-unitario').addEventListener('input', e => { itemsActuales[i].valor_unitario = parseFloat(e.target.value)||0; actualizarResumenVenta(); });
-    tr.querySelector('.fv-total').addEventListener('input', e => { itemsActuales[i].valor_total = parseFloat(e.target.value)||0; actualizarResumenVenta(); });
+    tr.querySelector('.fv-total').addEventListener('input', e => { itemsActuales[i].valor_total = parseFloat(e.target.value)||0; actualizarNetoFila(); });
     tr.querySelector('.fv-orden').addEventListener('change', e => {
       itemsActuales[i].orden = e.target.value ? parseInt(e.target.value,10) : null;
       tr.style.background = itemsActuales[i].orden ? '' : 'var(--bg-warning,rgba(163,45,45,.05))';
@@ -441,8 +482,11 @@ function actualizarResumenVenta(){
   const hint = document.getElementById('fv-total-hint');
   if(!hint) return;
   const total = itemsActuales.reduce((s,it)=>s+(it.valor_total||0),0);
-  const conOrden = itemsActuales.filter(it => it.orden).length;
-  hint.innerHTML = `Total de líneas: ${fmtCOP(total)} · ${conOrden}/${itemsActuales.length} línea(s) con orden de producción asociada`;
+  const itemsConOrden = itemsActuales.filter(it => it.orden);
+  // Solo las líneas CON orden asociada aportan a este total — las que no
+  // tienen orden no se cuentan en ningún lado (pedido explícito 16sep26).
+  const netoAsociado = itemsConOrden.reduce((s,it)=>s+(it.valor_neto ?? calcularNeto(it)),0);
+  hint.innerHTML = `Total de líneas (con IVA): ${fmtCOP(total)} · ${itemsConOrden.length}/${itemsActuales.length} línea(s) con orden de producción asociada · Valor neto asociado a órdenes (sin IVA): ${fmtCOP(netoAsociado)}`;
 }
 
 async function guardarFacturaVenta(){
@@ -507,6 +551,11 @@ async function guardarFacturaVenta(){
       factura_id: facturaId, codigo: it.codigo || null, descripcion: it.descripcion || null,
       cantidad: it.cantidad || null, unidad_medida: it.unidad_medida || null,
       iva_pct: it.iva_pct || null, valor_unitario: it.valor_unitario || null, valor_total: it.valor_total || null,
+      // Solo tiene sentido como "ingreso de la orden" en las líneas que sí
+      // tienen una orden asociada — en las que no, igual se guarda el neto
+      // calculado (es solo un dato de la línea), pero no cuenta para
+      // ninguna orden porque `orden` queda null.
+      valor_neto: it.valor_neto ?? calcularNeto(it),
       orden: it.orden || null, observacion: it.observacion || null
     }));
     const { error: errItems } = await sb.from('facturas_venta_items').insert(payloadItems);
@@ -550,7 +599,7 @@ async function editarFacturaVenta(facturaId){
     itemsActuales = (items||[]).map(it => ({
       codigo: it.codigo || '', descripcion: it.descripcion || '', cantidad: it.cantidad || 0,
       unidad_medida: it.unidad_medida || '', iva_pct: it.iva_pct || 0, valor_unitario: it.valor_unitario || 0,
-      valor_total: it.valor_total || 0, orden: it.orden || null, observacion: it.observacion || ''
+      valor_total: it.valor_total || 0, valor_neto: it.valor_neto ?? calcularNeto(it), orden: it.orden || null, observacion: it.observacion || ''
     }));
 
     document.getElementById('fv-review').style.display = '';
@@ -618,7 +667,7 @@ export function initVentas(){
     if(file) manejarArchivoVenta(file);
   });
   document.getElementById('fv-add-item').addEventListener('click', () => {
-    itemsActuales.push({ codigo:'', descripcion:'', cantidad:0, unidad_medida:'Unidad', iva_pct:19, valor_unitario:0, valor_total:0, orden:null, observacion:'' });
+    itemsActuales.push({ codigo:'', descripcion:'', cantidad:0, unidad_medida:'Unidad', iva_pct:19, valor_unitario:0, valor_total:0, valor_neto:0, orden:null, observacion:'' });
     document.getElementById('fv-review').style.display = '';
     renderTablaItemsVenta();
     actualizarResumenVenta();

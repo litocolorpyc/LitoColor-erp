@@ -1398,10 +1398,10 @@
             <div class="field"><label>NIT del cliente</label><input type="text" id="fv-nit"></div>
             <div class="field"><label>Cliente</label><input type="text" id="fv-cliente"></div>
           </div>
-          <span class="card-hint">El sistema cruza el cliente de la factura con sus órdenes de producción en el sistema y sugiere sola la <b>orden genérica</b> (nunca una pieza -1/-2) de cada línea — cámbiala en "Orden asociada" si no es la correcta. Las líneas sin sugerencia quedan resaltadas para elegirla a mano.</span>
+          <span class="card-hint">El sistema cruza el cliente de la factura con sus órdenes de producción en el sistema y sugiere sola la <b>orden genérica</b> (nunca una pieza -1/-2) de cada línea — cámbiala en "Orden asociada" si no es la correcta. Las líneas sin sugerencia quedan resaltadas para elegirla a mano. El valor que cuenta como ingreso de la orden es el <b>Valor neto</b> (sin IVA, columna de abajo) — solo de las líneas que sí tengan una orden asociada.</span>
           <div class="table-wrap" style="margin-top:8px">
             <table id="tbl-fv-items">
-              <thead><tr><th>Ítem</th><th>Descripción</th><th class="num">Cant.</th><th>Unidad</th><th class="num">IVA %</th><th class="num">Vr. Unit.</th><th class="num">Vr. Total</th><th>Orden asociada</th><th>Observación</th><th></th></tr></thead>
+              <thead><tr><th>Ítem</th><th>Descripción</th><th class="num">Cant.</th><th>Unidad</th><th class="num">IVA %</th><th class="num">Vr. Unit.</th><th class="num">Vr. Total</th><th class="num">Valor neto</th><th>Orden asociada</th><th>Observación</th><th></th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
