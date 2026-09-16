@@ -9,6 +9,7 @@ import { initAlertas, renderAlertas } from './alertas.js';
 import { initCostos, poblarDatalistProveedores } from './costos.js';
 import { initRecibosCaja } from './recibos.js';
 import { initVentas } from './ventas.js';
+import { initConsultaTiempos, renderConsultaTiempos } from './consulta-tiempos.js';
 import { initInventario, renderInventario } from './inventario.js';
 import { restaurarSesion, iniciarSesion, cerrarSesion, cambiarContrasena, crearCuentaPropia, getCurrentUser, aplicarPermisos } from './auth.js';
 
@@ -30,6 +31,7 @@ function onRegistrarChange(){
   pasoSeguro('refrescar Calendario', renderCalendario);
   pasoSeguro('refrescar Alertas', renderAlertas);
   pasoSeguro('refrescar Inventario', renderInventario);
+  pasoSeguro('refrescar lista de operarios (consulta de tiempos)', renderConsultaTiempos);
 }
 
 function onMaestrosChange(){
@@ -40,6 +42,7 @@ function onMaestrosChange(){
   pasoSeguro('refrescar Papel/Pliego', refreshPapelPliegoSelects);
   pasoSeguro('refrescar Proveedores', poblarDatalistProveedores);
   pasoSeguro('refrescar Inventario', renderInventario);
+  pasoSeguro('refrescar lista de operarios (consulta de tiempos)', renderConsultaTiempos);
 }
 
 // Corre cada paso de arranque de forma aislada: si uno falla (por ejemplo,
@@ -84,6 +87,7 @@ async function arrancarApp(){
   pasoSeguro('Costos', initCostos);
   pasoSeguro('Recibos de caja', initRecibosCaja);
   pasoSeguro('Registrar Venta', initVentas);
+  pasoSeguro('Consulta de tiempos por operario', initConsultaTiempos);
   pasoSeguro('Inventario', initInventario);
 
   pasoSeguro('Permisos', aplicarPermisos);

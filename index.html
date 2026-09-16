@@ -216,6 +216,32 @@
           </table>
         </div>
       </div>
+
+      <div class="card" id="consulta-tiempos-card">
+        <div class="card-head"><h3>Consulta: registros de tiempos por operario y orden</h3><span class="card-hint">cuántas veces registró tiempo cada operario, desglosado por orden, en el rango que elijas — para imprimir o revisar</span></div>
+        <div class="form-row">
+          <div class="field" style="max-width:160px"><label>Desde</label><input type="date" id="ct-desde"></div>
+          <div class="field" style="max-width:160px"><label>Hasta</label><input type="date" id="ct-hasta"></div>
+        </div>
+        <div class="field full">
+          <label>Operario(s)</label>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-weight:600;margin:4px 0;cursor:pointer">
+            <input type="checkbox" id="ct-operario-todos" checked> Todos
+          </label>
+          <div id="ct-operarios-lista" style="max-height:160px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:8px;display:flex;flex-wrap:wrap;gap:6px 18px"></div>
+        </div>
+        <div class="form-foot">
+          <span class="card-hint" id="ct-hint"></span>
+          <button type="button" class="btn-secondary" id="ct-imprimir">🖶 Imprimir</button>
+          <button type="button" class="btn-primary" id="ct-consultar">Consultar</button>
+        </div>
+        <div class="table-wrap" style="margin-top:8px">
+          <table id="tbl-ct-resultado">
+            <thead><tr><th>Operario</th><th>Orden</th><th>Cliente</th><th class="num">Registros</th><th class="num">Horas</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <section class="tab-panel" id="panel-operario">
