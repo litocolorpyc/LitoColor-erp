@@ -1046,10 +1046,33 @@ async function guardarRecibo(){
 // borra las líneas, le DEVUELVE al inventario lo que esa compra le había
 // sumado, borra los movimientos de costo que generó (via recibo_id) y
 // borra el documento — deja todo como si nunca se hubiera cargado.
+// Filtra sobre lo que YA está en memoria (las últimas 100 que carga la app
+// al abrir, ver store.js) — no consulta Supabase de nuevo. Para buscar una
+// compra más vieja que ya se salió de ese caché, está el Informe de compras
+// más abajo, que sí busca directo en la base.
+function filtrarRecibosCargados(){
+  const desde = document.getElementById('rec-cargados-desde')?.value || '';
+  const hasta = document.getElementById('rec-cargados-hasta')?.value || '';
+  const numero = (document.getElementById('rec-cargados-numero')?.value || '').trim().toLowerCase();
+  const proveedor = (document.getElementById('rec-cargados-proveedor')?.value || '').trim().toLowerCase();
+  const sinFiltros = !desde && !hasta && !numero && !proveedor;
+
+  let filas = [...DB.recibos_caja];
+  if(desde) filas = filas.filter(r => (r.fecha||'') >= desde);
+  if(hasta) filas = filas.filter(r => (r.fecha||'') <= hasta);
+  if(numero) filas = filas.filter(r => (r.numero_recibo||'').toLowerCase().includes(numero));
+  if(proveedor) filas = filas.filter(r => (r.tercero||'').toLowerCase().includes(proveedor));
+  filas.sort((a,b) => (b.cargado_en||'').localeCompare(a.cargado_en||''));
+  // Sin filtros: se mantiene el comportamiento de siempre (solo las 30 más
+  // recientes). Con algún filtro puesto, se muestran todas las que calcen
+  // entre las que ya están cargadas — la persona está buscando algo puntual.
+  return sinFiltros ? filas.slice(0, 30) : filas;
+}
+
 export function renderRecibosCargados(){
   const tbody = document.querySelector('#tbl-recibos-cargados tbody');
   if(!tbody) return;
-  const recientes = [...DB.recibos_caja].sort((a,b) => (b.cargado_en||'').localeCompare(a.cargado_en||'')).slice(0, 30);
+  const recientes = filtrarRecibosCargados();
   tbody.innerHTML = recientes.map(r => `<tr data-id="${r.id}">
     <td>${(r.fecha||'').slice(0,10) || '—'}</td>
     <td>${r.numero_recibo || '—'}</td>
@@ -1060,7 +1083,7 @@ export function renderRecibosCargados(){
       <button type="button" class="row-btn" data-edit-recibo="${r.id}">Editar</button>
       <button type="button" class="row-btn row-btn-danger" data-del-recibo="${r.id}">Eliminar</button>
     </div></td>
-  </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin compras cargadas todavía</td></tr>';
+  </tr>`).join('') || `<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">${DB.recibos_caja.length ? 'Ninguna de las cargadas recientemente calza con ese filtro' : 'Sin compras cargadas todavía'}</td></tr>`;
 
   tbody.querySelectorAll('[data-edit-recibo]').forEach(b => b.addEventListener('click', () => {
     editarRecibo(parseInt(b.dataset.editRecibo, 10));
@@ -1253,6 +1276,9 @@ export function initRecibosCaja(){
   });
   document.getElementById('recibo-editar-iva').addEventListener('click', mostrarModalIva);
   document.getElementById('recibo-iva-modal-aplicar').addEventListener('click', aplicarModalIva);
+  ['rec-cargados-desde','rec-cargados-hasta','rec-cargados-numero','rec-cargados-proveedor'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', renderRecibosCargados);
+  });
   renderRecibosCargados();
   initInformeCompras();
 }

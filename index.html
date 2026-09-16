@@ -1297,7 +1297,13 @@
       </div>
 
       <div class="card">
-        <div class="card-head"><h3>Compras cargadas</h3><span class="card-hint">"Eliminar" deshace todo lo que generó esa compra: le devuelve el stock al inventario, borra sus costos y borra el documento — para corregir un error de tecleo</span></div>
+        <div class="card-head"><h3>Compras cargadas</h3><span class="card-hint">"Eliminar" deshace todo lo que generó esa compra: le devuelve el stock al inventario, borra sus costos y borra el documento — para corregir un error de tecleo. Filtra solo entre las últimas cargadas (para buscar una más vieja, usa el Informe de compras más abajo)</span></div>
+        <div class="form-row">
+          <div class="field"><label>Desde</label><input type="date" id="rec-cargados-desde"></div>
+          <div class="field"><label>Hasta</label><input type="date" id="rec-cargados-hasta"></div>
+          <div class="field"><label>N° de compra</label><input type="text" id="rec-cargados-numero" placeholder="ej. 1899"></div>
+          <div class="field"><label>Proveedor</label><input type="text" id="rec-cargados-proveedor" placeholder="ej. Axio"></div>
+        </div>
         <div class="table-wrap">
           <table id="tbl-recibos-cargados">
             <thead><tr><th>Fecha</th><th>N° de compra</th><th>Proveedor</th><th class="num">Total</th><th>Cargado por</th><th></th></tr></thead>
