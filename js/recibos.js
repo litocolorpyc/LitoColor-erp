@@ -1104,6 +1104,105 @@ async function eliminarRecibo(reciboId){
   }
 }
 
+// ---------- Informe de compras: buscar y ver detalle (solo lectura) ----------
+// A diferencia de "Compras cargadas" (que solo muestra las últimas 100 que
+// ya están en memoria, para editar/eliminar), este informe consulta
+// Supabase directo cada vez que se busca — así también encuentra compras
+// viejas que ya no están en el caché local. Filtra por rango de fecha y/o
+// por N° de compra (coincidencia parcial); sin ningún filtro, trae las 50
+// más recientes.
+async function buscarInformeCompras(){
+  const desde = document.getElementById('informe-compras-desde').value || null;
+  const hasta = document.getElementById('informe-compras-hasta').value || null;
+  const numero = document.getElementById('informe-compras-numero').value.trim();
+  const hint = document.getElementById('informe-compras-hint');
+  const tbody = document.querySelector('#tbl-informe-compras tbody');
+  hint.textContent = 'Buscando…';
+  tbody.innerHTML = '';
+  try{
+    let query = sb.from('recibos_caja').select('*').order('fecha', { ascending: false }).order('cargado_en', { ascending: false });
+    if(desde) query = query.gte('fecha', desde);
+    if(hasta) query = query.lte('fecha', hasta);
+    if(numero) query = query.ilike('numero_recibo', `%${numero}%`);
+    if(!desde && !hasta && !numero) query = query.limit(50);
+    const { data, error } = await query;
+    if(error) throw error;
+
+    const filas = data || [];
+    tbody.innerHTML = filas.map(r => `<tr data-id="${r.id}" style="cursor:pointer">
+      <td>${(r.fecha||'').slice(0,10) || '—'}</td>
+      <td>${r.numero_recibo || '—'}</td>
+      <td>${r.tercero || '—'}</td>
+      <td class="num">${fmtCOP(r.valor_total||0)}</td>
+      <td>${r.cargado_por || '—'}</td>
+    </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--ink-faint)">No se encontraron compras con esos filtros</td></tr>';
+
+    tbody.querySelectorAll('tr[data-id]').forEach(tr => {
+      tr.addEventListener('click', () => mostrarDetalleCompra(parseInt(tr.dataset.id, 10), filas.find(r => r.id === parseInt(tr.dataset.id, 10))));
+    });
+
+    hint.textContent = filas.length
+      ? `${filas.length} compra(s) encontrada(s)` + (!desde && !hasta && !numero ? ' (las 50 más recientes — usa los filtros para buscar más atrás)' : '')
+      : 'Sin resultados';
+  }catch(err){
+    console.error(err);
+    hint.textContent = 'Error al buscar — revisa la consola';
+  }
+}
+
+async function mostrarDetalleCompra(reciboId, cabecera){
+  const modal = document.getElementById('informe-compra-detalle-modal');
+  const titulo = document.getElementById('informe-compra-detalle-titulo');
+  const cabeceraEl = document.getElementById('informe-compra-detalle-cabecera');
+  const tbody = document.querySelector('#tbl-informe-compra-detalle tbody');
+  titulo.textContent = 'Detalle de la compra ' + (cabecera?.numero_recibo || reciboId);
+  cabeceraEl.textContent = [
+    cabecera?.fecha ? 'Fecha: ' + cabecera.fecha.slice(0,10) : null,
+    cabecera?.tercero ? 'Proveedor: ' + cabecera.tercero : null,
+    cabecera?.nit ? 'NIT: ' + cabecera.nit : null,
+    'Total: ' + fmtCOP(cabecera?.valor_total||0),
+    cabecera?.cargado_por ? 'Cargado por: ' + cabecera.cargado_por : null
+  ].filter(Boolean).join(' · ');
+  tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--ink-faint)">Cargando…</td></tr>';
+  modal.style.display = 'flex';
+
+  try{
+    const { data: items, error } = await sb.from('recibos_caja_items').select('*').eq('recibo_id', reciboId).order('id');
+    if(error) throw error;
+    tbody.innerHTML = (items||[]).map(it => `<tr>
+      <td>${it.codigo || '—'}</td>
+      <td>${it.descripcion || '—'}</td>
+      <td class="num">${it.cantidad ?? '—'}</td>
+      <td class="num">${fmtCOP(it.valor_unitario||0)}</td>
+      <td class="num">${it.iva_pct ?? '—'}</td>
+      <td class="num">${it.retencion_pct ?? '—'}</td>
+      <td class="num">${fmtCOP(it.valor_credito||0)}</td>
+      <td class="num">${fmtCOP(it.valor_neto_unitario||0)}</td>
+      <td>${it.orden ? it.orden + (it.suborden ? '-' + it.suborden : '') : '—'}</td>
+      <td>${DB.costos_conceptos.find(c => c.id === it.concepto_id)?.nombre || '—'}</td>
+    </tr>`).join('') || '<tr><td colspan="10" style="text-align:center;color:var(--ink-faint)">Sin líneas</td></tr>';
+  }catch(err){
+    console.error(err);
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--ink-faint)">Error al cargar el detalle — revisa la consola</td></tr>';
+  }
+}
+
+function initInformeCompras(){
+  const buscarBtn = document.getElementById('informe-compras-buscar');
+  if(!buscarBtn) return; // esta tarjeta no existe en esta página
+  buscarBtn.addEventListener('click', buscarInformeCompras);
+  document.getElementById('informe-compras-limpiar').addEventListener('click', () => {
+    document.getElementById('informe-compras-desde').value = '';
+    document.getElementById('informe-compras-hasta').value = '';
+    document.getElementById('informe-compras-numero').value = '';
+    buscarInformeCompras();
+  });
+  document.getElementById('informe-compra-detalle-cerrar').addEventListener('click', () => {
+    document.getElementById('informe-compra-detalle-modal').style.display = 'none';
+  });
+  buscarInformeCompras();
+}
+
 export function initRecibosCaja(){
   const fileInput = document.getElementById('recibo-file');
   if(!fileInput) return; // esta tarjeta no existe en esta página, no hay nada que conectar
@@ -1131,4 +1230,5 @@ export function initRecibosCaja(){
   document.getElementById('recibo-editar-iva').addEventListener('click', mostrarModalIva);
   document.getElementById('recibo-iva-modal-aplicar').addEventListener('click', aplicarModalIva);
   renderRecibosCargados();
+  initInformeCompras();
 }

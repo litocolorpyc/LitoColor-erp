@@ -1305,6 +1305,40 @@
           </table>
         </div>
       </div>
+
+      <div class="card" id="informe-compras-card">
+        <div class="card-head"><h3>Informe de compras</h3><span class="card-hint">busca por rango de fechas o N° de compra — haz clic en una fila para ver el detalle de lo que se ingresó</span></div>
+        <div class="form-row">
+          <div class="field"><label>Desde</label><input type="date" id="informe-compras-desde"></div>
+          <div class="field"><label>Hasta</label><input type="date" id="informe-compras-hasta"></div>
+          <div class="field"><label>N° de compra</label><input type="text" id="informe-compras-numero" placeholder="ej. 1899"></div>
+        </div>
+        <div class="form-foot">
+          <span class="card-hint" id="informe-compras-hint"></span>
+          <button type="button" class="row-btn" id="informe-compras-limpiar">Limpiar filtros</button>
+          <button type="button" class="btn-primary" id="informe-compras-buscar">Buscar</button>
+        </div>
+        <div class="table-wrap" style="margin-top:8px">
+          <table id="tbl-informe-compras">
+            <thead><tr><th>Fecha</th><th>N° de compra</th><th>Proveedor</th><th class="num">Total</th><th>Cargado por</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-overlay" id="informe-compra-detalle-modal" style="display:none">
+        <div class="modal-card" style="max-width:960px">
+          <h3 id="informe-compra-detalle-titulo">Detalle de la compra</h3>
+          <p class="card-hint" id="informe-compra-detalle-cabecera"></p>
+          <div class="table-wrap" style="margin-top:8px;max-height:420px;overflow-y:auto">
+            <table id="tbl-informe-compra-detalle">
+              <thead><tr><th>Ítem</th><th>Descripción</th><th class="num">Cant.</th><th class="num">Vr. Unit.</th><th class="num">IVA %</th><th class="num">Reten. %</th><th class="num">Vr. Total</th><th class="num">Costo neto</th><th>Orden</th><th>Concepto</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="form-foot"><span></span><button type="button" class="btn-secondary" id="informe-compra-detalle-cerrar">Cerrar</button></div>
+        </div>
+      </div>
     </section>
 
     <section class="tab-panel" id="panel-inventario">
