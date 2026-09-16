@@ -507,15 +507,23 @@ function puntajeSimilitud(descripcion, nombre){
   return comunes;
 }
 
-function opcionesMaterialInventario(tablaSel, keySel, descripcion){
-  const todos = [
-    ...DB.materias_primas.filter(m=>m.activo!==false).map(m => ({ tabla:'materias_primas', key:m.codigo, nombre:m.nombre, etiqueta:`📄 ${m.nombre} (${m.codigo})` })),
-    ...DB.insumos_area.filter(m=>m.activo!==false).map(m => ({ tabla:'insumos_area', key:String(m.id), nombre:m.nombre, etiqueta:`🧰 ${m.nombre} (${m.area||'—'})` }))
-  ];
-  const opcion = m => {
-    const sel = tablaSel===m.tabla && keySel===m.key;
-    return `<option value="${m.tabla}|${m.key}"${sel?' selected':''}>${m.etiqueta}</option>`;
-  };
+// Muchas facturas (ej. las de AXIO por Siigo) no traen el nombre real del
+// material en "Descripción" — solo el N° de orden ("OP 6002-1") — así que
+// buscarMaterialParaLinea no tiene con qué adivinar y la línea queda "sin
+// material" pidiendo elegir a mano entre ~200 (materias primas + insumos
+// juntos). Por eso el selector de material ahora depende de `tipoFiltro`
+// ('materias_primas' o 'insumos_area', elegido en la columna "¿Materia
+// prima o insumo?" de al lado): sin ese tipo elegido todavía no se lista
+// nada (para no hacer buscar entre los ~200 mezclados), y una vez elegido
+// la lista se acorta a solo esa tabla.
+function opcionesMaterialInventario(keySel, descripcion, tipoFiltro){
+  if(!tipoFiltro){
+    return '<option value="">— elegí primero si es materia prima o insumo —</option>';
+  }
+  const todos = tipoFiltro === 'materias_primas'
+    ? DB.materias_primas.filter(m=>m.activo!==false).map(m => ({ key:m.codigo, nombre:m.nombre, etiqueta:`${m.nombre} (${m.codigo})` }))
+    : DB.insumos_area.filter(m=>m.activo!==false).map(m => ({ key:String(m.id), nombre:m.nombre, etiqueta:`${m.nombre} (${m.area||'—'})` }));
+  const opcion = m => `<option value="${m.key}"${keySel===m.key?' selected':''}>${m.etiqueta}</option>`;
 
   if(descripcion){
     const puntuados = todos.map(m => ({ ...m, puntaje: puntajeSimilitud(descripcion, m.nombre) }))
@@ -523,12 +531,12 @@ function opcionesMaterialInventario(tablaSel, keySel, descripcion){
       .sort((a,b) => b.puntaje - a.puntaje)
       .slice(0, 8);
     if(puntuados.length){
-      const restoKeys = new Set(puntuados.map(m => m.tabla+'|'+m.key));
-      const resto = todos.filter(m => !restoKeys.has(m.tabla+'|'+m.key));
+      const restoKeys = new Set(puntuados.map(m => m.key));
+      const resto = todos.filter(m => !restoKeys.has(m.key));
       const etiquetaGrupo = ('Parecidos a: ' + descripcion.slice(0,40)).replace(/"/g, "'");
       return '<option value="">— sin coincidencia, elegí uno —</option>'
         + `<optgroup label="${etiquetaGrupo}">` + puntuados.map(opcion).join('') + '</optgroup>'
-        + '<optgroup label="Todos los materiales">' + resto.map(opcion).join('') + '</optgroup>';
+        + '<optgroup label="Todos">' + resto.map(opcion).join('') + '</optgroup>';
     }
   }
   return '<option value="">— sin coincidencia, elegí uno —</option>' + todos.map(opcion).join('');
@@ -568,7 +576,12 @@ function renderTablaItems(){
       <td><input type="number" class="ri-reten num" value="${it.retencion_pct||0}" style="width:55px"></td>
       <td><input type="number" class="ri-credito num" value="${it.valor_credito||0}" style="width:100px"></td>
       <td class="num" title="Vr. Total de la factura ÷ (1 + IVA% − Retención%) ÷ cantidad">${fmtCOP(it.valor_neto_unitario||0)}</td>
-      <td><select class="ri-material" title="${sinMaterial?'Sin coincidencia — elegí el material real para que actualice el inventario':'Se va a sumar la cantidad al stock y actualizar el costo por unidad de este material'}">${opcionesMaterialInventario(it.material_tabla, it.material_key, it.descripcion)}</select></td>
+      <td><select class="ri-tipo-mat" title="Elegí esto primero — de eso depende qué lista aparece en 'Material del inventario'">
+        <option value="">— Elegí —</option>
+        <option value="materias_primas"${it.material_tabla==='materias_primas'?' selected':''}>Materia prima</option>
+        <option value="insumos_area"${it.material_tabla==='insumos_area'?' selected':''}>Insumo</option>
+      </select></td>
+      <td><select class="ri-material" title="${sinMaterial?'Sin coincidencia — elegí el material real para que actualice el inventario':'Se va a sumar la cantidad al stock y actualizar el costo por unidad de este material'}">${opcionesMaterialInventario(it.material_key, it.descripcion, it.material_tabla)}</select></td>
       <td><select class="ri-orden">${opcionesOrden(it.orden)}</select></td>
       <td><input type="number" class="ri-suborden" value="${it.suborden||''}" placeholder="sub." title="Suborden / pieza (ej. el 2 de OP5955-2)" style="width:55px"></td>
       <td><select class="ri-concepto">${opcionesConcepto(it.concepto_id)}</select></td>
@@ -576,7 +589,7 @@ function renderTablaItems(){
       <td><input type="text" class="ri-obs" value="${it.observacion||''}" placeholder="opcional" style="width:100%;min-width:120px"></td>
       <td><button type="button" class="row-btn row-btn-danger ri-del">✕</button></td>
     </tr>`;
-  }).join('') || '<tr><td colspan="15" style="text-align:center;color:var(--ink-faint)">Sin líneas todavía — agrega una manualmente</td></tr>';
+  }).join('') || '<tr><td colspan="16" style="text-align:center;color:var(--ink-faint)">Sin líneas todavía — agrega una manualmente</td></tr>';
 
   tbody.querySelectorAll('tr').forEach(tr => {
     const i = parseInt(tr.dataset.i, 10);
@@ -598,11 +611,21 @@ function renderTablaItems(){
     tr.querySelector('.ri-iva').addEventListener('input', e => { itemsActuales[i].iva_pct = parseFloat(e.target.value)||0; actualizarResumen(); });
     tr.querySelector('.ri-reten').addEventListener('input', e => { itemsActuales[i].retencion_pct = parseFloat(e.target.value)||0; actualizarResumen(); });
     tr.querySelector('.ri-credito').addEventListener('input', e => { itemsActuales[i].valor_credito = parseFloat(e.target.value)||0; actualizarNetoFila(); });
+    // "¿Materia prima o insumo?": al cambiar, la selección de material
+    // anterior ya no aplica (podía ser de la otra tabla) — se limpia y se
+    // recarga la lista de "Material del inventario" acotada a la tabla
+    // elegida, ver opcionesMaterialInventario.
+    tr.querySelector('.ri-tipo-mat').addEventListener('change', e => {
+      const tipo = e.target.value || null;
+      itemsActuales[i].material_tabla = tipo;
+      itemsActuales[i].material_key = null;
+      tr.querySelector('.ri-material').innerHTML = opcionesMaterialInventario(null, itemsActuales[i].descripcion, tipo);
+      tr.style.background = 'var(--bg-warning,rgba(163,45,45,.05))';
+      actualizarResumen();
+    });
     tr.querySelector('.ri-material').addEventListener('change', e => {
-      const [tabla, key] = e.target.value ? e.target.value.split('|') : [null, null];
-      itemsActuales[i].material_tabla = tabla;
-      itemsActuales[i].material_key = key;
-      tr.style.background = (tabla && key) ? '' : 'var(--bg-warning,rgba(163,45,45,.05))';
+      itemsActuales[i].material_key = e.target.value || null;
+      tr.style.background = (itemsActuales[i].material_tabla && itemsActuales[i].material_key) ? '' : 'var(--bg-warning,rgba(163,45,45,.05))';
       actualizarResumen();
     });
     tr.querySelector('.ri-orden').addEventListener('change', e => itemsActuales[i].orden = e.target.value ? parseInt(e.target.value,10) : null);
