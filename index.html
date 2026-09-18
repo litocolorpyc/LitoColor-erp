@@ -52,6 +52,7 @@
         <button class="tab-btn" data-tab="calendario" role="tab">Calendario</button>
         <button class="tab-btn" data-tab="alertas" role="tab">Alertas</button>
         <button class="tab-btn" data-tab="registrar" role="tab">Registrar</button>
+        <button class="tab-btn" data-tab="reprocesos" role="tab">Reprocesos</button>
         <button class="tab-btn" data-tab="registrar-costo" role="tab">Registrar costo</button>
         <button class="tab-btn" data-tab="registrar-venta" role="tab">Registrar Venta</button>
         <button class="tab-btn" data-tab="remisiones" role="tab">Remisión</button>
@@ -64,6 +65,7 @@
         <button class="tab-btn" data-tab="m-maquinas" role="tab">Máquinas</button>
         <button class="tab-btn" data-tab="m-actividades" role="tab">Actividades</button>
         <button class="tab-btn" data-tab="m-motivos-pausa" role="tab">Motivos de pausa</button>
+        <button class="tab-btn" data-tab="m-motivos-reproceso" role="tab">Motivos de reproceso</button>
         <button class="tab-btn" data-tab="m-subprocesos" role="tab">Subprocesos</button>
         <button class="tab-btn" data-tab="m-cat-materia" role="tab">Categorías de materia prima</button>
         <button class="tab-btn" data-tab="m-materias" role="tab">Materias primas</button>
@@ -321,6 +323,11 @@
           <div class="field"><label>Cantidad producida</label><input type="number" id="ole-cantidad" min="0"></div>
           <div class="field"><label>Horas trabajadas</label><input type="number" id="ole-horas" min="0" step="0.01"></div>
           <div class="field"><label>¿Reproceso?</label><select id="ole-reproceso"><option value="No">No</option><option value="Si">Sí</option></select></div>
+        </div>
+        <div class="form-row" id="ole-reproceso-wrap" style="display:none">
+          <div class="field"><label>Motivo del reproceso</label><select id="ole-motivo-reproceso"></select></div>
+          <div class="field"><label>Responsable</label><input type="text" id="ole-responsable-reproceso" list="reg-responsables-datalist" placeholder="quién/qué lo causó"></div>
+          <div class="field"><label>Costo adicional <span class="card-hint">(opcional)</span></label><input type="number" id="ole-costo-adicional-reproceso" min="0"></div>
         </div>
         <div class="form-row">
           <div class="field">
@@ -617,6 +624,7 @@
     </section>
 
     <section class="tab-panel" id="panel-registrar">
+      <datalist id="reg-responsables-datalist"></datalist>
       <div class="card">
         <div class="card-head">
           <h3>Órdenes vivas en producción</h3>
@@ -687,6 +695,86 @@
       <div class="card">
         <div class="card-head"><h3>Tus actividades en curso</h3><span class="card-hint">solo una corre tiempo a la vez — puedes tener varias asignadas esperando</span></div>
         <div id="reg-running-list"><p style="color:var(--ink-faint);font-size:13px">Selecciona tu nombre arriba para ver tus actividades en curso.</p></div>
+      </div>
+    </section>
+
+    <!-- REPROCESOS -->
+    <section class="tab-panel" id="panel-reprocesos">
+      <div class="card-head" style="margin-bottom:14px">
+        <h3 style="margin:0">Reprocesos</h3>
+        <button type="button" class="btn-primary" id="rep-abrir-crear" style="margin:0">+ Nuevo reproceso</button>
+      </div>
+
+      <div class="card" id="rep-crear-card" style="display:none">
+        <div class="card-head"><h3>Nuevo reproceso</h3><span class="card-hint">reabre un proceso ya completado de una suborden — el operario asignado lo ve en Registrar y, al terminarlo, genera tiempo y costo de mano de obra como cualquier actividad</span></div>
+        <div class="form-row">
+          <div class="field"><label>N° de orden</label><input type="number" id="rep-orden" placeholder="ej. 5944"></div>
+          <div class="field"><label>Suborden / Pieza</label><select id="rep-pieza" disabled><option value="">— elige la orden primero —</option></select></div>
+          <div class="field"><label>Área a reprocesar</label><select id="rep-area" disabled><option value="">— elige la pieza primero —</option></select></div>
+        </div>
+        <p class="card-hint" id="rep-area-hint">Solo se listan los procesos que esa pieza ya tiene marcados como terminados — reprocesar es volver a abrir algo que ya se había dado por hecho.</p>
+        <div class="form-row">
+          <div class="field"><label>Operario a asignar</label><select id="rep-operario"></select></div>
+          <div class="field"><label>Motivo del reproceso</label><select id="rep-motivo"></select></div>
+          <div class="field"><label>Responsable</label><input type="text" id="rep-responsable" list="reg-responsables-datalist" placeholder="quién/qué lo causó"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Costo adicional estimado <span class="card-hint">(opcional — se puede ajustar al finalizar)</span></label><input type="number" id="rep-costo-adicional" min="0"></div>
+          <div class="field full"><label>Comentario</label><input type="text" id="rep-comentario" placeholder="opcional"></div>
+        </div>
+        <div class="form-foot">
+          <button type="button" class="btn-secondary" id="rep-cancelar">Cancelar</button>
+          <button type="button" class="btn-primary" id="rep-guardar">Crear reproceso</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Informe de reprocesos</h3><span class="card-hint">totales del periodo — imprime esta tarjeta o exporta a Excel</span></div>
+        <div class="date-range-row">
+          <div class="field" style="max-width:160px"><label>Desde</label><input type="date" id="rep-inf-desde"></div>
+          <div class="field" style="max-width:160px"><label>Hasta</label><input type="date" id="rep-inf-hasta"></div>
+          <button type="button" class="btn-secondary" id="rep-inf-imprimir" style="margin-left:auto">🖨 Imprimir informe</button>
+          <button type="button" class="btn-secondary" id="rep-inf-exportar">⬇ Exportar a Excel</button>
+        </div>
+        <div class="kpi-row" id="rep-inf-kpis"></div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head"><h3>Por área</h3><span class="card-hint">cantidad de reprocesos</span></div>
+            <canvas id="chart-rep-area" height="200"></canvas>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Por motivo</h3><span class="card-hint">cantidad de reprocesos</span></div>
+            <canvas id="chart-rep-motivo" height="200"></canvas>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="tbl-rep-por-operario">
+            <thead><tr><th>Operario</th><th>Responsable</th><th class="num">Reprocesos</th><th class="num">Costo M.O.</th><th class="num">Costo adicional</th><th class="num">Total</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Reprocesos registrados</h3><span class="card-hint">"Ver detalle" abre esa orden</span></div>
+        <div class="form-row">
+          <div class="field"><label>N° de orden</label><input type="number" id="rep-f-orden"></div>
+          <div class="field"><label>Área</label><input type="text" id="rep-f-area" placeholder="contiene…"></div>
+          <div class="field"><label>Motivo</label><input type="text" id="rep-f-motivo" placeholder="contiene…"></div>
+          <div class="field"><label>Operario / Responsable</label><input type="text" id="rep-f-persona" placeholder="contiene…"></div>
+          <div class="field" style="max-width:160px"><label>Desde</label><input type="date" id="rep-f-desde"></div>
+          <div class="field" style="max-width:160px"><label>Hasta</label><input type="date" id="rep-f-hasta"></div>
+        </div>
+        <div class="form-foot">
+          <button type="button" class="btn-secondary" id="rep-f-limpiar">Limpiar filtros</button>
+          <button type="button" class="btn-primary" id="rep-f-buscar">Filtrar</button>
+        </div>
+        <div class="table-wrap">
+          <table id="tbl-rep-listado">
+            <thead><tr><th>Fecha</th><th>Orden / Suborden</th><th>Área</th><th>Operario</th><th>Estado</th><th>Motivo</th><th>Responsable</th><th class="num">Costo M.O.</th><th class="num">Costo adicional</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -783,6 +871,22 @@
         <div class="form-foot"><span id="m-mot-mode"></span><button type="button" class="btn-primary" id="m-mot-save">Agregar motivo</button></div>
         <div class="table-wrap" style="margin-top:12px">
           <table id="tbl-m-motivos-pausa">
+            <thead><tr><th>Motivo</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-m-motivos-reproceso">
+      <div class="card">
+        <div class="card-head"><h3>Motivos de reproceso</h3><span class="card-hint">las causas que se eligen al reprocesar un proceso ya completado (error de impresión, daño de máquina, material defectuoso, …) · "Retirar" no borra nada</span></div>
+        <div class="form-row">
+          <div class="field"><label>Motivo</label><input type="text" id="m-motrep-nombre" placeholder="ej. Error de impresión"></div>
+        </div>
+        <div class="form-foot"><span id="m-motrep-mode"></span><button type="button" class="btn-primary" id="m-motrep-save">Agregar motivo</button></div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table id="tbl-m-motivos-reproceso">
             <thead><tr><th>Motivo</th><th></th></tr></thead>
             <tbody></tbody>
           </table>

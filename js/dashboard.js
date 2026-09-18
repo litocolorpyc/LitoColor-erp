@@ -3,7 +3,7 @@ import { DB, normProd } from './store.js';
 import { fmtCOP, fmtNum, areaColor, rangoFechas, rangoAnterior, deltaBadge, exportarExcel, toast, wireTableScroll } from './helpers.js';
 import { mostrarDetalleOrden, tipoTrabajoLabel, renderOppRecent, subprocesosDeArea, getOrdenDetalleActual } from './ordenes.js';
 import { puedeEditarProduccion } from './auth.js';
-import { listaAreasDisponibles, materialSelectOptionsHTML, unidadNumericaDelMaterial, parseCantidadConsumo, descontarInventarioYCargarCosto, revertirConsumoDeRegistro, avisoConsumoNoReflejado } from './registrar.js';
+import { listaAreasDisponibles, materialSelectOptionsHTML, unidadNumericaDelMaterial, parseCantidadConsumo, descontarInventarioYCargarCosto, revertirConsumoDeRegistro, avisoConsumoNoReflejado, actualizarCostoAdicionalReproceso } from './registrar.js';
 import { renderInventario } from './inventario.js';
 
 // Cambia a la pestaña de Órdenes y abre el detalle completo de una orden —
@@ -543,6 +543,16 @@ function actualizarWrapMotivoPausa(){
   document.getElementById('ole-motivo-pausa-wrap').style.display = esPausa ? '' : 'none';
 }
 
+function poblarSelectMotivoReprocesoEdicion(valorActual){
+  const sel = document.getElementById('ole-motivo-reproceso');
+  const motivos = DB.motivos_reproceso.filter(m=>m.activo!==false);
+  sel.innerHTML = '<option value="">— elige un motivo —</option>' +
+    motivos.map(m=>`<option value="${m.nombre}"${m.nombre===valorActual?' selected':''}>${m.nombre}</option>`).join('');
+}
+function actualizarWrapReprocesoEdicion(){
+  document.getElementById('ole-reproceso-wrap').style.display = document.getElementById('ole-reproceso').value === 'Si' ? '' : 'none';
+}
+
 // Insumo consumido + Consumo — mismo desplegable y misma lógica que usa
 // Registrar (ver js/registrar.js), reutilizados acá para que Jefe de
 // Producción/Gerencia/Admin puedan AJUSTAR el consumo de materia prima de
@@ -660,6 +670,11 @@ function abrirEdicionRegistro(id){
   document.getElementById('ole-horas').value = row.tiempoHr ?? '';
   document.getElementById('ole-comentario').value = row.comentario || '';
   document.getElementById('ole-reproceso').value = row.reproceso === 'Si' ? 'Si' : 'No';
+  poblarSelectMotivoReprocesoEdicion(row.motivoReproceso || null);
+  document.getElementById('ole-responsable-reproceso').value = row.responsableReproceso || '';
+  document.getElementById('ole-costo-adicional-reproceso').value = row.costoAdicionalReproceso ?? '';
+  actualizarWrapReprocesoEdicion();
+  document.getElementById('ole-reproceso').onchange = actualizarWrapReprocesoEdicion;
   document.getElementById('ole-proceso-completo').value = row.procesoCompleto === false ? 'No' : 'Si';
   document.getElementById('ole-terminado-label').textContent = row.subproceso
     ? `¿Quedó terminado este subproceso (${row.subproceso})?`
@@ -805,6 +820,9 @@ async function guardarEdicionRegistro(){
     consumo_mp: consumoNuevoTexto,
     comentario: document.getElementById('ole-comentario').value || null,
     reproceso: document.getElementById('ole-reproceso').value,
+    motivo_reproceso: document.getElementById('ole-reproceso').value === 'Si' ? (document.getElementById('ole-motivo-reproceso').value || null) : null,
+    responsable_reproceso: document.getElementById('ole-reproceso').value === 'Si' ? (document.getElementById('ole-responsable-reproceso').value.trim() || null) : null,
+    costo_adicional_reproceso: document.getElementById('ole-reproceso').value === 'Si' ? (parseFloat(document.getElementById('ole-costo-adicional-reproceso').value) || 0) : null,
     proceso_completo: !esPausa,
     motivo_pausa: esPausa ? motivoPausa : null,
     tiempo_hr: horas,
@@ -840,6 +858,11 @@ async function guardarEdicionRegistro(){
         avisoConsumo = avisoConsumoNoReflejado(resultado, materiaNueva);
       }
     }
+
+    await actualizarCostoAdicionalReproceso({
+      produccionId: id, orden: data[0].orden, suborden: data[0].suborden,
+      fecha: data[0].fecha, valor: updates.costo_adicional_reproceso || 0
+    });
 
     toast('Registro corregido' + avisoConsumo, avisoConsumo ? 7000 : undefined);
     cerrarEdicionRegistro();

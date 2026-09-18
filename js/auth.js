@@ -5,9 +5,9 @@ import { sb } from './supabase-client.js';
 const PERMISOS = {
   admin:            null,
   gerente:          null,
-  jefe_produccion:  ['produccion', 'operario', 'ordenes', 'calendario', 'alertas', 'registrar', 'inventario', 'remisiones', 'm-empleados', 'm-areas', 'm-maquinas', 'm-actividades', 'm-motivos-pausa', 'm-subprocesos', 'm-cat-materia', 'm-materias', 'm-insumos', 'm-piezas-producto', 'm-clientes', 'm-proveedores', 'm-productos', 'm-documentos', 'ayuda'],
+  jefe_produccion:  ['produccion', 'operario', 'ordenes', 'calendario', 'alertas', 'registrar', 'reprocesos', 'inventario', 'remisiones', 'm-empleados', 'm-areas', 'm-maquinas', 'm-actividades', 'm-motivos-pausa', 'm-motivos-reproceso', 'm-subprocesos', 'm-cat-materia', 'm-materias', 'm-insumos', 'm-piezas-producto', 'm-clientes', 'm-proveedores', 'm-productos', 'm-documentos', 'ayuda'],
   disenador:        ['ordenes', 'registrar', 'm-productos', 'm-cat-materia', 'm-materias', 'm-insumos', 'm-piezas-producto', 'ayuda'],
-  administradora:   ['gerencial', 'ordenes', 'alertas', 'registrar', 'inventario', 'remisiones', 'm-empleados', 'm-clientes', 'm-proveedores', 'm-costos', 'registrar-costo', 'registrar-venta', 'm-documentos', 'ayuda'],
+  administradora:   ['gerencial', 'ordenes', 'alertas', 'registrar', 'reprocesos', 'inventario', 'remisiones', 'm-empleados', 'm-clientes', 'm-proveedores', 'm-costos', 'registrar-costo', 'registrar-venta', 'm-documentos', 'ayuda'],
 };
 
 let currentUser = null; // { email, nombre, rol, cargo }

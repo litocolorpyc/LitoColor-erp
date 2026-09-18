@@ -135,6 +135,7 @@ export function renderMaestros(){
   maquinasCtl.render();
   actividadesCtl.render();
   motivosPausaCtl.render();
+  motivosReprocesoCtl.render();
   subprocesosCtl.render();
   categoriasMateriaPrimaCtl.render();
   materiasCtl.render();
@@ -274,7 +275,7 @@ function poblarSelectProductoMaestro(){
   if(productos.some(p=>p.nombre===valorPrevio)) sel.value = valorPrevio;
 }
 
-let empleadosCtl, maquinasCtl, areasCtl, actividadesCtl, motivosPausaCtl, subprocesosCtl, categoriasMateriaPrimaCtl, materiasCtl, insumosCtl, clientesCtl, proveedoresCtl, productosCtl, piezasProductoCtl, documentosCtl;
+let empleadosCtl, maquinasCtl, areasCtl, actividadesCtl, motivosPausaCtl, motivosReprocesoCtl, subprocesosCtl, categoriasMateriaPrimaCtl, materiasCtl, insumosCtl, clientesCtl, proveedoresCtl, productosCtl, piezasProductoCtl, documentosCtl;
 
 export function initMaestros(onChange){
   empleadosCtl = wireCatalog({
@@ -336,6 +337,16 @@ export function initMaestros(onChange){
     saveBtnId: 'm-mot-save', modeId: 'm-mot-mode', addLabel: 'Agregar motivo',
     fields: [
       { id:'m-mot-nombre', col:'nombre', required:true }
+    ],
+    renderCols: r => [r.nombre],
+    onChange
+  });
+
+  motivosReprocesoCtl = wireCatalog({
+    table: 'motivos_reproceso', key: 'id', data: DB.motivos_reproceso, tableSel: '#tbl-m-motivos-reproceso',
+    saveBtnId: 'm-motrep-save', modeId: 'm-motrep-mode', addLabel: 'Agregar motivo',
+    fields: [
+      { id:'m-motrep-nombre', col:'nombre', required:true }
     ],
     renderCols: r => [r.nombre],
     onChange

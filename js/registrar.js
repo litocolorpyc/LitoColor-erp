@@ -64,6 +64,15 @@ function motivoPausaOptionsHTML(){
   return '<option value="">— elige un motivo —</option>' +
     motivos.map(m=>`<option value="${m.nombre}">${m.nombre}</option>`).join('');
 }
+// Motivos de reproceso (Error de impresión, Daño de máquina, …) — catálogo
+// en Maestros. Se piden cuando "¿Reproceso?" = Sí, sea al finalizar una
+// actividad espontáneamente marcada como reproceso, o al crearla ya
+// planeada desde el módulo Reprocesos.
+function motivoReprocesoOptionsHTML(seleccionado){
+  const motivos = DB.motivos_reproceso.filter(m=>m.activo!==false);
+  return '<option value="">— elige un motivo —</option>' +
+    motivos.map(m=>`<option value="${m.nombre}"${m.nombre===seleccionado?' selected':''}>${m.nombre}</option>`).join('');
+}
 // Pasos internos de un área (catálogo "Subprocesos" en Maestros, ej.
 // Terminado → Doblar pestañas/Engomado/Cerrar) — solo si el área tiene
 // alguno definido. Mientras no estén TODOS registrados como terminados,
@@ -141,6 +150,9 @@ export function populateReg(){
   populateMaquinaReg();
   populateSubprocesoReg();
   populateOrdenSelect();
+
+  const dlResp = document.getElementById('reg-responsables-datalist');
+  if(dlResp) dlResp.innerHTML = DB.personal.filter(p=>p.activo).map(p=>`<option value="${p.nombre}">`).join('');
 }
 
 // Arma el <select> de insumos disponibles para el área de esta actividad,
@@ -228,6 +240,7 @@ function runningCardPendienteHTML(row){
     <div class="reg-running-row"><span>Área asignada</span><b>${row.area || '—'}</b></div>
     ${row.asignado_por ? `<div class="reg-running-row"><span>Asignada por</span><b>${row.asignado_por}</b></div>` : ''}
     <span class="estado-chip pending">📌 asignada, sin iniciar</span>
+    ${row.reproceso === 'Si' ? `<div class="reg-running-row"><span>↺ Reproceso</span><b>${row.motivo_reproceso || 'sin motivo'}${row.responsable_reproceso ? ' — ' + row.responsable_reproceso : ''}</b></div>` : ''}
     <div class="form-row">
       <div class="field"><label>Actividad</label><select class="rc-actividad-select">${actividadOptionsHTML(row.area)}</select></div>
       <div class="field"><label>Máquina</label><select class="rc-maquina-select">${maquinaOptionsHTML(row.area)}</select></div>
@@ -258,6 +271,11 @@ function runningCardHTML(row){
     <div class="form-row">
       <div class="field"><label>Cantidad producida</label><input type="number" class="rc-cantidad" min="0" value="${row.cantidad ?? ''}"></div>
       <div class="field"><label>¿Reproceso?</label><select class="rc-reproceso"><option value="No"${row.reproceso!=='Si'?' selected':''}>No</option><option value="Si"${row.reproceso==='Si'?' selected':''}>Sí</option></select></div>
+    </div>
+    <div class="form-row rc-reproceso-wrap" style="display:none">
+      <div class="field"><label>Motivo del reproceso</label><select class="rc-motivo-reproceso">${motivoReprocesoOptionsHTML(row.motivo_reproceso)}</select></div>
+      <div class="field"><label>Responsable</label><input type="text" class="rc-responsable-reproceso" list="reg-responsables-datalist" placeholder="quién/qué lo causó" value="${row.responsable_reproceso || ''}"></div>
+      <div class="field"><label>Costo adicional <span class="card-hint">(opcional)</span></label><input type="number" class="rc-costo-adicional-reproceso" min="0" value="${row.costo_adicional_reproceso ?? ''}"></div>
     </div>
     <div class="form-row">
       <div class="field full">
@@ -301,6 +319,19 @@ function wirePausaToggle(card){
     card.querySelector('.rc-motivo-pausa-wrap').style.display = esPausa ? '' : 'none';
     card.querySelector('.rc-finish').textContent = esPausa ? '⏸ Pausar esta actividad' : '⏹ Finalizar esta actividad';
   };
+  sel.addEventListener('change', actualizar);
+  actualizar();
+}
+
+// Muestra/oculta Motivo/Responsable/Costo adicional según "¿Reproceso?" —
+// mismo patrón que wirePausaToggle. Si la tarjeta nació ya marcada como
+// reproceso (creada desde el módulo Reprocesos o el botón "↺" de la
+// orden), arranca abierta de una.
+function wireReprocesoToggle(card){
+  const sel = card.querySelector('.rc-reproceso');
+  const wrap = card.querySelector('.rc-reproceso-wrap');
+  if(!sel || !wrap) return;
+  const actualizar = () => { wrap.style.display = sel.value === 'Si' ? '' : 'none'; };
   sel.addEventListener('change', actualizar);
   actualizar();
 }
@@ -382,6 +413,7 @@ async function refreshRunningSessions(){
       card.querySelector('.rc-finish').addEventListener('click', () => finishActivity(row.id, row.hora_ini, row.fecha));
       wireMaterialSelect(card);
       wirePausaToggle(card);
+      wireReprocesoToggle(card);
       startCardTimer(row.id, row.fecha, row.hora_ini);
     } else {
       card.querySelector('.rc-empezar').addEventListener('click', () => empezarActividadAsignada(row.id));
@@ -795,6 +827,44 @@ export async function revertirConsumoDeRegistro(nombre, area, cantidad, producci
   }
 }
 
+// Deja el costo adicional de un reproceso en exactamente `valor`: borra el
+// movimiento anterior de ESTE registro (si había) y, si `valor` > 0, crea
+// uno nuevo — así sirve tanto para la primera vez (finishActivity) como
+// para una corrección posterior (Corregir registro, dashboard.js) sin
+// necesitar dos funciones distintas. Sigue el mismo patrón que
+// descontarInventarioYCargarCosto/revertirConsumoDeRegistro, pero sin
+// tocar inventario (esto no es consumo de material).
+export async function actualizarCostoAdicionalReproceso({ produccionId, orden, suborden, fecha, valor }){
+  if(produccionId == null) return;
+  try{
+    const { error } = await sb.from('costos_movimientos').delete()
+      .eq('produccion_id', produccionId).eq('comentario', 'Reproceso — costo adicional');
+    if(error) throw error;
+    let idx;
+    while((idx = DB.costos_movimientos.findIndex(m => m.produccion_id === produccionId && m.comentario === 'Reproceso — costo adicional')) >= 0){
+      DB.costos_movimientos.splice(idx, 1);
+    }
+  }catch(err){
+    console.error('No se pudo borrar el costo adicional anterior del reproceso:', err);
+  }
+
+  if(!valor || valor <= 0) return;
+  const concepto = DB.costos_conceptos.find(c => c.nombre === 'Reproceso (costo adicional)');
+  if(!concepto) return; // migración no aplicada todavía — no bloquea el resto
+  try{
+    const row = {
+      concepto_id: concepto.id, tipo: 'Variable', fecha: fecha || fechaHoyLocal(),
+      valor, proveedor: null, comentario: 'Reproceso — costo adicional',
+      orden: orden ?? null, suborden: suborden ?? null, produccion_id: produccionId
+    };
+    const { data, error } = await sb.from('costos_movimientos').insert([row]).select();
+    if(error) throw error;
+    DB.costos_movimientos.unshift(data[0]);
+  }catch(err){
+    console.error('No se pudo cargar el costo adicional del reproceso:', err);
+  }
+}
+
 async function finishActivity(id, horaIni, fecha){
   const card = document.querySelector(`.reg-running-card[data-id="${id}"]`);
   const btn = card.querySelector('.rc-finish');
@@ -835,6 +905,10 @@ async function finishActivity(id, horaIni, fecha){
       ? (consumoNum.value ? consumoNum.value + (consumoNum.dataset.unidad ? ' ' + consumoNum.dataset.unidad : '') : null)
       : (card.querySelector('.rc-consumo').value.trim() || null);
     const numeroRemision = esRemisionYDespacho ? (remisionInput.value.trim() || null) : null;
+    const esReproceso = card.querySelector('.rc-reproceso').value === 'Si';
+    const motivoReproceso = esReproceso ? (card.querySelector('.rc-motivo-reproceso').value || null) : null;
+    const responsableReproceso = esReproceso ? (card.querySelector('.rc-responsable-reproceso').value.trim() || null) : null;
+    const costoAdicionalReproceso = esReproceso ? (parseFloat(card.querySelector('.rc-costo-adicional-reproceso').value) || 0) : 0;
     const updates = {
       hora_fin: horaFin,
       cantidad: parseFloat(card.querySelector('.rc-cantidad').value || 0),
@@ -842,6 +916,9 @@ async function finishActivity(id, horaIni, fecha){
       consumo_mp: consumoMp,
       comentario: card.querySelector('.rc-comentario').value || null,
       reproceso: card.querySelector('.rc-reproceso').value,
+      motivo_reproceso: motivoReproceso,
+      responsable_reproceso: responsableReproceso,
+      costo_adicional_reproceso: costoAdicionalReproceso || null,
       proceso_completo: !esPausa,
       motivo_pausa: esPausa ? motivoPausa : null,
       numero_remision: numeroRemision,
@@ -865,6 +942,13 @@ async function finishActivity(id, horaIni, fecha){
         });
         avisoConsumo = avisoConsumoNoReflejado(resultado, materiaPrima);
       }
+    }
+
+    if(esReproceso){
+      await actualizarCostoAdicionalReproceso({
+        produccionId: data[0].id, orden: data[0].orden, suborden: data[0].suborden,
+        fecha: data[0].fecha, valor: costoAdicionalReproceso
+      });
     }
 
     let avisoCierre = '';

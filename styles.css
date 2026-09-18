@@ -192,7 +192,8 @@ select, input, textarea{ font-family:inherit; font-size:13px; padding:7px 9px; b
 .detalle-piezas-grid{ display:grid; grid-template-columns:1fr; gap:12px; }
 .detalle-pieza-card{ border:1px solid var(--line); border-radius:10px; padding:12px; }
 .detalle-pieza-head{ display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
-.detalle-pieza-chips{ display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px; }
+.detalle-pieza-chips{ display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-bottom:8px; }
+.chip-reprocesar{ padding:1px 7px; font-size:11px; line-height:1.6; margin-right:4px; }
 .detalle-pieza-materiales{ font-size:12px; color:var(--ink-soft); margin-bottom:8px; }
 .detalle-mini-table{ width:100%; font-size:11.5px; border-collapse:collapse; }
 .detalle-mini-table th{ text-align:left; color:var(--ink-faint); font-weight:600; padding:4px 6px; border-bottom:1px solid var(--line); }

@@ -1,7 +1,7 @@
 import { loadAll } from './store.js';
 import { renderGerencial, renderProduccion, renderOperario, populateOperarioSelect, initDashboardFilters, abrirEdicionRegistroDesdeOrden } from './dashboard.js';
 import { initRegistrar, populateReg } from './registrar.js';
-import { initOppForm, renderOppRecent, populateClienteSelect, populateProductoSelect, refreshPapelPliegoSelects, setAjustarConsumoHandler } from './ordenes.js';
+import { initOppForm, renderOppRecent, populateClienteSelect, populateProductoSelect, refreshPapelPliegoSelects, setAjustarConsumoHandler, setReprocesarHandler } from './ordenes.js';
 import { initMaestros, renderMaestros } from './maestros.js';
 import { initUsuarios } from './usuarios.js';
 import { initCalendario, renderCalendario } from './calendario.js';
@@ -12,6 +12,7 @@ import { initVentas, repararValorNetoFacturasVenta } from './ventas.js';
 import { initConsultaTiempos, renderConsultaTiempos } from './consulta-tiempos.js';
 import { initInventario, renderInventario } from './inventario.js';
 import { initRemisiones, actualizarNumeroPreview } from './remisiones.js';
+import { initReprocesos, abrirNuevoReprocesoDesdeOrden, renderListadoReprocesos, renderInformeReprocesos, poblarOperarioRep, poblarMotivoRep } from './reprocesos.js';
 import { restaurarSesion, iniciarSesion, cerrarSesion, cambiarContrasena, crearCuentaPropia, getCurrentUser, aplicarPermisos } from './auth.js';
 
 // ---------- pestañas ----------
@@ -33,6 +34,8 @@ function onRegistrarChange(){
   pasoSeguro('refrescar Alertas', renderAlertas);
   pasoSeguro('refrescar Inventario', renderInventario);
   pasoSeguro('refrescar lista de operarios (consulta de tiempos)', renderConsultaTiempos);
+  pasoSeguro('refrescar listado de Reprocesos', renderListadoReprocesos);
+  pasoSeguro('refrescar informe de Reprocesos', renderInformeReprocesos);
 }
 
 function onMaestrosChange(){
@@ -45,6 +48,8 @@ function onMaestrosChange(){
   pasoSeguro('refrescar Inventario', renderInventario);
   pasoSeguro('refrescar lista de operarios (consulta de tiempos)', renderConsultaTiempos);
   pasoSeguro('refrescar numeración de Remisión', actualizarNumeroPreview);
+  pasoSeguro('refrescar operarios de Reprocesos', poblarOperarioRep);
+  pasoSeguro('refrescar motivos de Reprocesos', poblarMotivoRep);
 }
 
 // Corre cada paso de arranque de forma aislada: si uno falla (por ejemplo,
@@ -81,6 +86,7 @@ async function arrancarApp(){
   pasoSeguro('Registrar', () => initRegistrar(onRegistrarChange));
   pasoSeguro('Órdenes (formulario)', () => initOppForm(populateReg));
   pasoSeguro('Ajustar consumo desde Historial', () => setAjustarConsumoHandler(abrirEdicionRegistroDesdeOrden));
+  pasoSeguro('Reprocesar desde el detalle de la orden', () => setReprocesarHandler(abrirNuevoReprocesoDesdeOrden));
   pasoSeguro('Órdenes (tablas)', renderOppRecent);
   pasoSeguro('Maestros', () => initMaestros(onMaestrosChange));
   pasoSeguro('Usuarios', initUsuarios);
@@ -97,6 +103,7 @@ async function arrancarApp(){
   pasoSeguro('Consulta de tiempos por operario', initConsultaTiempos);
   pasoSeguro('Inventario', initInventario);
   pasoSeguro('Remisiones', initRemisiones);
+  pasoSeguro('Reprocesos', initReprocesos);
 
   pasoSeguro('Permisos', aplicarPermisos);
 }

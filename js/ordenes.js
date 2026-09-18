@@ -1162,6 +1162,13 @@ export function getOrdenDetalleActual(){ return ordenDetalleActual; }
 let onAjustarConsumoCallback = null;
 export function setAjustarConsumoHandler(fn){ onAjustarConsumoCallback = fn; }
 
+// Botón "↺" (Reprocesar) junto a un proceso ya completado — abre el
+// módulo Reprocesos (js/reprocesos.js) con esa orden/suborden/área ya
+// preseleccionadas. Mismo motivo que arriba para inyectar el handler
+// desde app.js en vez de importar reprocesos.js directo.
+let onReprocesarCallback = null;
+export function setReprocesarHandler(fn){ onReprocesarCallback = fn; }
+
 // ---------- presupuesto vs. real, por orden ----------
 function comparativoPresupuestoHTML(pres, costoReal, ingresoReal, costoMateriales){
   const totalCosto = (pres.total_costo != null) ? pres.total_costo : ((pres.costo || 0) + (pres.imprevistos || 0));
@@ -1350,7 +1357,11 @@ export function mostrarDetalleOrden(orden){
     const recsPieza = registros.filter(r => r.op === p.op || (r.suborden === p.suborden));
     const requeridos = Array.isArray(p.procesos_requeridos) ? p.procesos_requeridos : [];
     const completados = areasCompletadasPorPieza(p);
-    const chips = requeridos.map(a => `<span class="estado-chip ${completados.has(a)?'done':'pending'}">${completados.has(a)?'✓':'·'} ${a}</span>`).join('') || '<span class="card-hint">sin procesos definidos</span>';
+    const chips = requeridos.map(a => {
+      const done = completados.has(a);
+      const boton = done ? `<button type="button" class="row-btn chip-reprocesar" data-reprocesar-orden="${orden}" data-reprocesar-suborden="${p.suborden}" data-reprocesar-op="${p.op||''}" data-reprocesar-area="${a}" title="Reprocesar ${a}">↺</button>` : '';
+      return `<span class="estado-chip ${done?'done':'pending'}">${done?'✓':'·'} ${a}</span>${boton}`;
+    }).join('') || '<span class="card-hint">sin procesos definidos</span>';
 
     const materiales = materialesConsumidosConCosto(recsPieza, orden, p.suborden);
 
@@ -1461,6 +1472,18 @@ export function mostrarDetalleOrden(orden){
   document.querySelectorAll('#opp-detalle-body [data-ajustar]').forEach(btn => {
     btn.addEventListener('click', () => {
       if(onAjustarConsumoCallback) onAjustarConsumoCallback(parseInt(btn.dataset.ajustar, 10));
+    });
+  });
+
+  document.querySelectorAll('#opp-detalle-body [data-reprocesar-orden]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if(!onReprocesarCallback) return;
+      onReprocesarCallback(
+        parseInt(btn.dataset.reprocesarOrden, 10),
+        parseInt(btn.dataset.reprocesarSuborden, 10),
+        btn.dataset.reprocesarOp || null,
+        btn.dataset.reprocesarArea
+      );
     });
   });
 

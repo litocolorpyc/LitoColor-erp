@@ -10,7 +10,8 @@ export const DB = {
   piezas_producto: [], presupuesto_orden: [], recibos_caja: [], motivos_pausa: [], subprocesos: [],
   categorias_materia_prima: [], materias_primas_areas: [], areas: [], prioridad_area: [],
   alertas_faltante_material: [], inventario_ajustes: [], facturas_venta: [], facturas_venta_items: [],
-  consecutivos_documentos: [], remisiones: [], remision_ordenes: [], remision_items: []
+  consecutivos_documentos: [], remisiones: [], remision_ordenes: [], remision_items: [],
+  motivos_reproceso: []
 };
 
 export function normProd(r){
@@ -46,7 +47,16 @@ export function normProd(r){
     // "Remisión y Despacho" que cerró la orden (ver finishActivity en
     // js/registrar.js). Por ahora es manual; la generación automática de
     // la remisión completa queda pendiente para más adelante.
-    numeroRemision: r.numero_remision
+    numeroRemision: r.numero_remision,
+    // Contexto del reproceso (solo cuando reproceso === 'Si') — módulo
+    // Reprocesos, 18sep26. motivoReproceso sale del catálogo "Motivos de
+    // reproceso"; responsableReproceso es texto libre (quién/qué lo
+    // causó); costoAdicionalReproceso es un valor manual que, si es mayor
+    // a 0, genera un costos_movimientos ligado a esta orden/suborden (ver
+    // actualizarCostoAdicionalReproceso en js/registrar.js).
+    motivoReproceso: r.motivo_reproceso,
+    responsableReproceso: r.responsable_reproceso,
+    costoAdicionalReproceso: r.costo_adicional_reproceso
   };
 }
 
@@ -103,9 +113,10 @@ export async function loadCatalogos(){
     sb.from('consecutivos_documentos').select('*'),
     sb.from('remisiones').select('*').order('numero', { ascending: false }),
     sb.from('remision_ordenes').select('*'),
-    sb.from('remision_items').select('*')
+    sb.from('remision_items').select('*'),
+    sb.from('motivos_reproceso').select('*').order('nombre')
   ]);
-  const [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22, p23, p24, p25, p26, p27, p28] = results;
+  const [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22, p23, p24, p25, p26, p27, p28, p29] = results;
   // Solo personal/maquinas/actividades/pedidos son indispensables para arrancar.
   // Las tablas más nuevas (materias_primas, clientes, proveedores, insumos_area)
   // pueden no existir todavía si no se ha corrido el SQL más reciente — no
@@ -144,6 +155,7 @@ export async function loadCatalogos(){
   DB.remisiones = p26.data || [];
   DB.remision_ordenes = p27.data || [];
   DB.remision_items = p28.data || [];
+  DB.motivos_reproceso = p29.data || [];
 }
 
 export async function loadProduccion(){
