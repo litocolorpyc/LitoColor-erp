@@ -1178,6 +1178,9 @@
           <a href="#ayuda-primeros">Primeros pasos</a>
           <a href="#ayuda-operarios">Operarios</a>
           <a href="#ayuda-produccion">Jefe de Producción / Diseño</a>
+          <a href="#ayuda-costos">Cómo se costean los materiales</a>
+          <a href="#ayuda-remision">Remisión</a>
+          <a href="#ayuda-reprocesos">Reprocesos</a>
           <a href="#ayuda-admin">Administradora</a>
           <a href="#ayuda-gerente">Gerente / Admin</a>
           <a href="#ayuda-glosario">Glosario</a>
@@ -1192,8 +1195,8 @@
           <thead><tr><th>Rol</th><th>Qué usa</th></tr></thead>
           <tbody>
             <tr><td>Operario</td><td>Solo la pantalla de Registro de tiempos</td></tr>
-            <tr><td>Jefe de Producción / Diseñador</td><td>Producción, Calendario, Alertas, Órdenes, Registrar, y sus maestros</td></tr>
-            <tr><td>Administradora</td><td>Maestros de Clientes/Proveedores/Empleados, y Alertas</td></tr>
+            <tr><td>Jefe de Producción / Diseñador</td><td>Producción, Calendario, Alertas, Órdenes, Registrar, Reprocesos, Remisión, y sus maestros</td></tr>
+            <tr><td>Administradora</td><td>Maestros de Clientes/Proveedores/Empleados, Registrar costo, Registrar Venta, Remisión, y Alertas</td></tr>
             <tr><td>Gerente / Admin</td><td>Todo lo anterior, más Gerencial y Usuarios</td></tr>
           </tbody>
         </table>
@@ -1275,6 +1278,61 @@
         <p>Se generan solas: órdenes sin movimiento en 3+ días, actividades abiertas 4+ horas sin finalizar, y órdenes de más de una semana sin empezar.</p>
       </div>
 
+      <div class="card" id="ayuda-costos">
+        <div class="card-head"><h3>Cómo se costean los materiales</h3><span class="card-hint">de dónde sale el costo que aparece en cada orden</span></div>
+        <h4>1. Cómo se registra el consumo</h4>
+        <p>Cuando un operario finaliza una actividad en Producción, en la tarjeta indica qué materia prima o insumo usó y la cantidad (ej. "50 pliegos"). En ese mismo momento, el sistema automáticamente:</p>
+        <ul>
+          <li>Descuenta el stock de ese material (Materias primas o Materiales por área, según corresponda).</li>
+          <li>Si el material tiene un <b>costo unitario</b> cargado, genera el costo de esa orden: cantidad × costo unitario.</li>
+          <li>Si el material no tiene costo unitario todavía, igual descuenta el stock, pero <b>no genera costo</b> — queda "pendiente de costear" (ver punto 5).</li>
+        </ul>
+        <h4>2. De dónde sale el costo unitario</h4>
+        <p>No es un cálculo automático (no hay promedio ponderado ni nada parecido) — es simplemente <b>el último valor que se cargó</b>, desde alguno de estos tres lugares:</p>
+        <ul>
+          <li><b>Importar factura de compra</b> (Registrar costo → Importar compra): al importar el PDF, el sistema calcula el costo neto por unidad (descontando IVA y retención) y lo guarda como costo unitario del material.</li>
+          <li><b>Ajustar / Inventario físico</b> (Inventario): al corregir el stock a mano, también se puede corregir el costo por unidad ahí mismo.</li>
+          <li><b>Editar directamente en Maestros</b> (Materias primas / Materiales por área): edición manual del campo, sin dejar rastro de por qué cambió.</li>
+        </ul>
+        <h4>3. Directo vs. Indirecto</h4>
+        <p>Los insumos por área tienen una marca "Directo" o "Indirecto" (las materias primas — papel, cartón, etc. — siempre son Directo, ver también "Insumo Directo vs. Indirecto" en Operarios): <b>Directo</b> pega el costo a esa orden/suborden puntual; <b>Indirecto</b> (ej. pegante, insumos generales) descuenta el stock igual, pero su costo queda como gasto general y se reparte en Gerencial entre todas las órdenes según cuánto facturó cada una.</p>
+        <h4>4. Dónde se ve el costo aplicado</h4>
+        <ul>
+          <li>En el <b>detalle de la orden</b>, "Materiales consumidos" muestra cada material con su costo, y entra en el margen de la orden.</li>
+          <li>En <b>Costos</b> → movimientos recientes / resumen del mes / Informe de costos.</li>
+          <li>En el <b>Kardex</b> (Inventario → Movimientos): cada salida muestra valor unitario, valor total, y si es Directo o Indirecto.</li>
+          <li>En <b>Gerencial → Rentabilidad por orden/producto</b>: los directos van 100% a su orden; los indirectos se prorratean.</li>
+        </ul>
+        <h4>5. Consumos que quedaron sin costo</h4>
+        <p>En Costos, la tarjeta <b>"Consumos de material sin costo"</b>: con "Buscar" encuentra los consumos cuyo material no tenía costo unitario cuando se registraron pero ya lo tiene ahora — con "Aplicar costeo" se generan de golpe los costos que faltaban, sin tocar el stock (ese ya se descontó al registrar la actividad).</p>
+        <div class="help-tip"><b>Tip:</b> cada vez que se importa una factura o se ajusta un costo en Inventario, el sistema ya intenta recostear solo los consumos pendientes de ese material puntual — la lista de "sin costo" no debería volver a acumularse.</div>
+      </div>
+
+      <div class="card" id="ayuda-remision">
+        <div class="card-head"><h3>Remisión</h3><span class="card-hint">documento de despacho, con numeración automática</span></div>
+        <h4>Crear una remisión</h4>
+        <p>En la pestaña <b>Remisión</b>, click en <b>"+ Crear remisión"</b>. Escribe el nombre del cliente — un desplegable va filtrando mientras escribes, según el maestro de Clientes. Al elegirlo, se llenan solos el NIT, teléfono y dirección, y aparece la lista de <b>órdenes activas</b> de ese cliente.</p>
+        <p>Marca las órdenes que se están despachando: cada una agrega una línea a la tabla de ítems, con el producto de la orden como descripción y el precio de venta que tenga cargado en su pestaña <b>Presupuesto</b> (si no lo tiene, el valor queda en 0 para completarlo a mano). Todo es editable — descripción, cantidad, valor unitario, valor total — y se puede agregar una línea manual con "+ Agregar línea".</p>
+        <p>Al terminar, click en <b>"Revisar y guardar"</b>: muestra el total y pide confirmar antes de guardar. El número de remisión se asigna solo al guardar, y después pregunta si quieres imprimirla de una vez.</p>
+        <h4>Numeración</h4>
+        <p>El próximo número de remisión se configura en <b>Maestros → Documentos (numeración)</b> — ajústalo ahí si hace falta continuar la numeración de un talonario o sistema anterior.</p>
+        <h4>Listado, ver, editar, eliminar</h4>
+        <p>Debajo del formulario está el listado de remisiones, con filtros por cliente, número, orden y fecha. <b>"Ver"</b> muestra el detalle y permite imprimir; <b>"Editar"</b> reabre la remisión completa arriba (el número no cambia); <b>"Eliminar"</b> la borra por completo y no se puede deshacer.</p>
+        <div class="help-tip"><b>Tip:</b> la tarjeta "Informe de remisiones" (al final de la misma pestaña) muestra el total despachado por cliente en un rango de fechas — imprimible o exportable a Excel.</div>
+      </div>
+
+      <div class="card" id="ayuda-reprocesos">
+        <div class="card-head"><h3>Reprocesos</h3><span class="card-hint">reabrir un proceso ya terminado</span></div>
+        <p>Un reproceso es volver a hacer un proceso que ya se había dado por terminado (ej. una plancha salió mal y hay que reimprimir). Hay dos formas de crear uno:</p>
+        <ol>
+          <li>Desde el <b>detalle de la orden</b>: junto a cada proceso marcado con ✓ aparece un botón <b>"↺"</b> — ábrelo y te lleva a Reprocesos con la orden, suborden y área ya elegidas.</li>
+          <li>Desde la pestaña <b>Reprocesos</b>, botón <b>"+ Nuevo reproceso"</b>: elige la orden, la suborden y el área (solo aparecen las áreas que esa pieza ya tiene completadas — reprocesar es volver a abrir algo que ya se había dado por hecho).</li>
+        </ol>
+        <p>En ambos casos hay que asignar un <b>operario</b>, elegir el <b>motivo</b> (catálogo en Maestros → "Motivos de reproceso"), y opcionalmente anotar el <b>responsable</b> (quién o qué lo causó) y un <b>costo adicional</b> (si aplica, se carga como un costo más de esa orden).</p>
+        <p>El operario asignado lo ve en <b>Registrar</b> como una actividad más ("📌 asignada, sin iniciar") — la empieza y la termina igual que cualquier otra, y el tiempo/costo de mano de obra queda registrado solo, sin nada especial que hacer. Si un operario marca "¿Reproceso?" = Sí por su cuenta al finalizar una actividad normal (sin pasar por el botón "↺"), también se le piden esos mismos 3 datos ahí mismo.</p>
+        <div class="help-tip"><b>Tip:</b> la pestaña Reprocesos también tiene su propio informe (KPIs, por área, por motivo, por operario) y el listado completo de reprocesos, ambos imprimibles y exportables a Excel.</div>
+      </div>
+
       <div class="card" id="ayuda-admin">
         <div class="card-head"><h3>Para Administradora</h3></div>
         <p>Todos los maestros (Empleados, Áreas, Máquinas, Actividades, Motivos de pausa, Subprocesos, Categorías de materia prima, Materias primas, Materiales por área, Clientes, Proveedores, Productos, Piezas por producto) funcionan igual: llena el formulario y "Agregar"; "Editar" carga la fila para corregirla; "Retirar" desactiva sin borrar nada (y se puede "Reactivar"). La excepción es "Áreas que consumen una materia prima" (dentro de Materias primas), que no agrega filas sino que marca/desmarca casillas.</p>
@@ -1287,10 +1345,13 @@
       <div class="card" id="ayuda-gerente">
         <div class="card-head"><h3>Para Gerente y Admin</h3></div>
         <p><b>Gerencial:</b> ingresos, costo de mano de obra, margen — con comparación automática vs. el periodo anterior, filtros de fecha, y rentabilidad por orden (la vista principal) y por producto (agrupada, para un rango de fechas).</p>
+        <h4>"Otros costos" y "Ingreso presupuestado"</h4>
+        <p><b>"Otros costos"</b> es todo lo que no es mano de obra: costos <b>Fijos</b> (arriendo, nómina administrativa, servicios) y <b>Variables</b> (compras, materia prima, impuestos — incluye los automáticos por consumo de material). En "Rentabilidad por orden", un costo que ya tenga esa orden asociada (ej. una compra cargada con el N° de OP, o un consumo automático) va 100% a esa orden; el resto (arriendo, nómina, servicios generales, sin orden asociada) se reparte proporcional entre todas las órdenes del periodo, según qué tanto facturó cada una — por eso a veces se ve "otros costos" en una orden que en apariencia no tiene relación directa: es su parte proporcional de los gastos generales.</p>
+        <p><b>"Ingreso presupuestado"</b> es un valor manual, no calculado — sale del campo <b>"Precio venta antes de IVA"</b> que se carga en la pestaña Presupuesto del detalle de la orden. Sirve de respaldo cuando la orden todavía no tiene ingreso facturado, para que no se vea con margen negativo solo porque falta facturarla; en cuanto hay una factura de venta cargada con esa orden, el ingreso facturado manda y el presupuestado queda solo como referencia de comparación.</p>
         <p><b>Presupuesto vs. Real (por orden):</b> en el detalle de cada orden, solo Gerente/Jefe de Producción/Admin pueden cargar Costo, Imprevistos, Precio de venta antes y con IVA — el sistema calcula solo el Total Costo, la Rentabilidad esperada, y compara contra el costo real de mano de obra y el ingreso facturado.</p>
         <p><b>Prioridad de producción:</b> desde Órdenes, arrastra las filas de la tarjeta "Prioridad de producción" para decidir en qué orden se debe trabajar — se guarda solo, sin botón aparte.</p>
         <p><b>Horas por área (Producción):</b> hacé click en una barra del gráfico (o en una fila de la tabla "Producción por área", debajo) para desplegar las órdenes y subórdenes que componen esas horas, en el rango de fechas elegido — y click en una de esas órdenes para abrir su detalle completo.</p>
-        <p><b>Exportar:</b> casi toda tabla tiene "⬇ Exportar a Excel". El botón "⬇ Respaldo completo" descarga Pedidos, Producción, Órdenes, Empleados, Máquinas y Clientes en un solo archivo.</p>
+        <p><b>Imprimir y exportar:</b> Gerencial, Producción, Operario, Registrar costo, Registrar Venta, Remisión, Reprocesos e Inventario tienen botones <b>"🖨 Imprimir"</b> y/o <b>"⬇ Exportar a Excel"</b> junto a sus filtros de fecha, para sacar el informe de ese rango en limpio. El botón "⬇ Respaldo completo" (en Gerencial) descarga Pedidos, Producción, Órdenes, Empleados, Máquinas y Clientes en un solo archivo.</p>
         <p><b>Usuarios:</b> para dar acceso a alguien nuevo, ponle correo y rol ahí, y dile que use "¿Primera vez? Crea tu contraseña aquí" en el login — sin pedir ningún SQL.</p>
       </div>
 
@@ -1308,6 +1369,12 @@
             <tr><td><b>Insumo por área</b></td><td>Lo que consume cada área al producir (planchas, colbón, grapas…), distinto del papel de la orden</td></tr>
             <tr><td><b>Prioridad de producción</b></td><td>Orden en que se deben trabajar las órdenes activas — lo decide Gerente/Jefe de Producción arrastrando</td></tr>
             <tr><td><b>Presupuesto de la orden</b></td><td>Costo, imprevistos y precio de venta que carga el gerente ANTES de producir, para comparar contra lo real</td></tr>
+            <tr><td><b>Consumo Directo / Indirecto</b></td><td>Si el costo de un insumo se le carga a la orden puntual (Directo) o queda como gasto general repartido entre todas (Indirecto)</td></tr>
+            <tr><td><b>Costo unitario</b></td><td>Valor por unidad de un material — se carga al importar una compra, al ajustar inventario, o a mano en Maestros; nunca se calcula solo</td></tr>
+            <tr><td><b>Otros costos</b></td><td>Costos Fijos + Variables de una orden (todo menos mano de obra), en Gerencial</td></tr>
+            <tr><td><b>Ingreso presupuestado</b></td><td>Precio de venta antes de IVA cargado en Presupuesto — respaldo mientras la orden no tenga factura de venta</td></tr>
+            <tr><td><b>Remisión</b></td><td>Documento de despacho con numeración automática — cliente, ítems y valores de una o más órdenes</td></tr>
+            <tr><td><b>Reproceso</b></td><td>Reabrir un proceso ya completado de una suborden, con motivo, responsable y costo adicional</td></tr>
           </tbody>
         </table>
       </div>
@@ -1321,6 +1388,8 @@
         <p><b>Subí una foto del recibo de caja y no leyó nada:</b> por ahora la lectura automática solo funciona con el PDF real descargado de Siigo (tiene texto adentro). Con fotos, se llena la tabla a mano.</p>
         <p><b>Olvidé mi contraseña:</b> pide a un Admin o Gerente que entre a "Usuarios" — todavía no hay recuperación automática.</p>
         <p><b>¿Los datos están seguros?</b> Sí — editar información exige sesión iniciada. Solo la captura de tiempos de operarios queda sin contraseña, a propósito.</p>
+        <p><b>Un consumo de material no generó costo en la orden:</b> el material probablemente no tenía costo unitario cargado en el momento del consumo (ver "Cómo se costean los materiales"). En cuanto le cargues el costo (importando una compra, ajustando en Inventario, o a mano en Maestros), usa "Consumos de material sin costo" en Costos para costear de golpe lo que quedó pendiente.</p>
+        <p><b>Quiero que la Remisión siga la numeración de mi talonario/Excel viejo:</b> entra a Maestros → Documentos (numeración) y pon el "Próximo número" correcto ANTES de crear la primera remisión real — por defecto arranca en 1.</p>
       </div>
     </section>
 
