@@ -24,6 +24,13 @@ let ordenesSeleccionadas = new Set();
 let itemsActuales = [];
 let remisionEditandoId = null;
 
+function mostrarCrearCard(){
+  document.getElementById('rem-crear-card').style.display = '';
+}
+function ocultarCrearCard(){
+  document.getElementById('rem-crear-card').style.display = 'none';
+}
+
 function limpiarFormularioRemision(){
   clienteActual = null;
   ordenesSeleccionadas = new Set();
@@ -35,7 +42,7 @@ function limpiarFormularioRemision(){
   document.getElementById('rem-direccion').value = '';
   document.getElementById('rem-observaciones').value = '';
   document.getElementById('rem-fecha').value = fechaHoyLocal();
-  document.getElementById('rem-ordenes-list').innerHTML = 'Elige un cliente arriba para ver sus órdenes.';
+  renderOrdenesDelCliente('');
   document.getElementById('rem-guardar').textContent = 'Revisar y guardar';
   const aviso = document.getElementById('rem-editando-aviso');
   if(aviso) aviso.style.display = 'none';
@@ -105,17 +112,33 @@ function ordenesDelCliente(nombreCliente){
 }
 
 function renderOrdenesDelCliente(nombreCliente){
-  const cont = document.getElementById('rem-ordenes-list');
+  const hint = document.getElementById('rem-ordenes-hint');
+  const wrap = document.getElementById('rem-ordenes-wrap');
+  const tbody = document.querySelector('#tbl-rem-ordenes-cliente tbody');
   const ordenes = ordenesDelCliente(nombreCliente);
   if(!ordenes.length){
-    cont.innerHTML = 'Este cliente no tiene órdenes activas en el sistema — puedes agregar líneas manuales abajo igual.';
+    wrap.style.display = 'none';
+    hint.style.display = '';
+    hint.textContent = nombreCliente
+      ? 'Este cliente no tiene órdenes activas en el sistema — puedes agregar líneas manuales abajo igual.'
+      : 'Elige un cliente arriba para ver sus órdenes.';
     return;
   }
-  cont.innerHTML = ordenes.map(o => `<label>
-    <input type="checkbox" class="rem-orden-check" value="${o.orden}" ${ordenesSeleccionadas.has(o.orden)?'checked':''}>
-    <b>${o.orden}</b> — ${o.producto || '(sin producto)'} ${o.fecha ? '· ' + o.fecha.slice(0,10) : ''}
-  </label>`).join('');
-  cont.querySelectorAll('.rem-orden-check').forEach(chk => {
+  hint.style.display = 'none';
+  wrap.style.display = '';
+  tbody.innerHTML = ordenes.map(o => `<tr data-orden="${o.orden}">
+    <td><input type="checkbox" class="rem-orden-check" value="${o.orden}" ${ordenesSeleccionadas.has(o.orden)?'checked':''}></td>
+    <td><b>${o.orden}</b></td>
+    <td>${o.producto || '(sin producto)'}</td>
+    <td>${o.fecha ? o.fecha.slice(0,10) : ''}</td>
+  </tr>`).join('');
+  tbody.querySelectorAll('tr').forEach(tr => {
+    const chk = tr.querySelector('.rem-orden-check');
+    const disparar = () => { chk.checked = !chk.checked; toggleOrdenSeleccionada(parseInt(chk.value,10), chk.checked); };
+    // clic en cualquier parte de la fila marca/desmarca — clic directo en el
+    // checkbox no debe disparar dos veces (uno del propio checkbox, otro de
+    // la fila), por eso la fila ignora clics que ya vinieron del checkbox.
+    tr.addEventListener('click', e => { if(e.target !== chk) disparar(); });
     chk.addEventListener('change', () => toggleOrdenSeleccionada(parseInt(chk.value,10), chk.checked));
   });
 }
@@ -266,6 +289,7 @@ async function guardarRemision(){
     const numeroFinal = remisionGuardada.numero;
     const idFinal = remisionId;
     limpiarFormularioRemision();
+    ocultarCrearCard();
     renderListadoRemisiones();
 
     if(confirm(`Remisión ${numeroFinal} guardada. ¿Deseas imprimirla ahora?`)){
@@ -304,7 +328,8 @@ function editarRemision(id){
   document.getElementById('rem-guardar').textContent = 'Guardar cambios';
   const aviso = document.getElementById('rem-editando-aviso');
   aviso.style.display = '';
-  aviso.textContent = `Editando la remisión N° ${r.numero} (${r.cliente || ''}) — al guardar se corrige esta remisión, el número no cambia. "Limpiar" cancela la edición.`;
+  aviso.textContent = `Editando la remisión N° ${r.numero} (${r.cliente || ''}) — al guardar se corrige esta remisión, el número no cambia. "Cancelar" cierra sin guardar cambios.`;
+  mostrarCrearCard();
   document.getElementById('rem-crear-card').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
@@ -323,7 +348,7 @@ async function eliminarRemision(id){
     DB.remisiones = DB.remisiones.filter(x => x.id !== id);
     DB.remision_items = DB.remision_items.filter(x => x.remision_id !== id);
     DB.remision_ordenes = DB.remision_ordenes.filter(x => x.remision_id !== id);
-    if(remisionEditandoId === id) limpiarFormularioRemision();
+    if(remisionEditandoId === id){ limpiarFormularioRemision(); ocultarCrearCard(); }
     renderListadoRemisiones();
     toast('Remisión eliminada');
   }catch(err){
@@ -485,6 +510,11 @@ export function initRemisiones(){
     }
   });
 
+  document.getElementById('rem-abrir-crear').addEventListener('click', () => {
+    mostrarCrearCard();
+    document.getElementById('rem-crear-card').scrollIntoView({ behavior:'smooth', block:'start' });
+    clienteInput.focus();
+  });
   document.getElementById('rem-add-item').addEventListener('click', () => {
     itemsActuales.push({ orden:null, descripcion:'', cantidad:0, unidad:'', valor_unitario:0, valor_total:0 });
     renderTablaItemsRemision();
@@ -492,8 +522,9 @@ export function initRemisiones(){
   });
   document.getElementById('rem-guardar').addEventListener('click', guardarRemision);
   document.getElementById('rem-limpiar').addEventListener('click', () => {
-    if(itemsActuales.length && !confirm('¿Limpiar el formulario? Se perderá lo que no hayas guardado.')) return;
+    if(itemsActuales.length && !confirm('¿Cerrar sin guardar? Se perderá lo que no hayas guardado.')) return;
     limpiarFormularioRemision();
+    ocultarCrearCard();
   });
 
   document.getElementById('rem-f-buscar').addEventListener('click', renderListadoRemisiones);

@@ -1480,7 +1480,12 @@
     </section>
 
     <section class="tab-panel" id="panel-remisiones">
-      <div class="card" id="rem-crear-card">
+      <div class="card-head" style="margin-bottom:14px">
+        <h3 style="margin:0">Remisión</h3>
+        <button type="button" class="btn-primary" id="rem-abrir-crear" style="margin:0">+ Crear remisión</button>
+      </div>
+
+      <div class="card" id="rem-crear-card" style="display:none">
         <div class="card-head"><h3>Crear remisión</h3><span class="card-hint">elige el cliente, marca las órdenes que se despachan, revisa los ítems y guarda — el N° de remisión se asigna solo al guardar, según el consecutivo de Maestros &gt; Documentos</span></div>
         <p class="card-hint" id="rem-editando-aviso" style="display:none;background:#2E8FC022;color:#2E8FC0;padding:6px 10px;border-radius:8px;font-weight:600"></p>
 
@@ -1501,7 +1506,13 @@
 
         <div class="field full">
           <label>Órdenes del cliente</label>
-          <div id="rem-ordenes-list" class="card-hint">Elige un cliente arriba para ver sus órdenes.</div>
+          <p class="card-hint" id="rem-ordenes-hint">Elige un cliente arriba para ver sus órdenes.</p>
+          <div class="table-wrap" id="rem-ordenes-wrap" style="display:none;max-height:220px;overflow-y:auto">
+            <table id="tbl-rem-ordenes-cliente">
+              <thead><tr><th style="width:34px"></th><th>N°</th><th>Producto</th><th>Fecha</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </div>
 
         <span class="card-hint">Las líneas se llenan solas con las piezas de las órdenes marcadas — se puede corregir la descripción, cantidad y valores, o agregar una línea manual.</span>
@@ -1516,7 +1527,7 @@
         </div>
         <div class="form-foot">
           <button type="button" class="row-btn" id="rem-add-item">+ Agregar línea</button>
-          <button type="button" class="btn-secondary" id="rem-limpiar">Limpiar</button>
+          <button type="button" class="btn-secondary" id="rem-limpiar">Cancelar</button>
           <span class="card-hint" id="rem-total-hint"></span>
           <button type="button" class="btn-primary" id="rem-guardar">Revisar y guardar</button>
         </div>

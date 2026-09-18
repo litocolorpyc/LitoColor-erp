@@ -240,6 +240,6 @@ select, input, textarea{ font-family:inherit; font-size:13px; padding:7px 9px; b
 .autocomplete-dropdown .ac-item{ padding:7px 12px; font-size:13px; cursor:pointer; }
 .autocomplete-dropdown .ac-item:hover, .autocomplete-dropdown .ac-item.ac-active{ background:var(--accent); color:#fff; }
 .autocomplete-dropdown .ac-empty{ padding:7px 12px; font-size:12px; color:var(--ink-faint); }
-#rem-ordenes-list{ display:flex; flex-direction:column; gap:5px; max-height:180px; overflow-y:auto; margin:6px 0 12px; }
-#rem-ordenes-list label{ display:flex; align-items:center; gap:8px; font-size:13px; border:1px solid var(--line); border-radius:8px; padding:6px 10px; cursor:pointer; }
+#tbl-rem-ordenes-cliente tbody tr{ cursor:pointer; }
+#tbl-rem-ordenes-cliente tbody tr:hover{ background:rgba(194,74,31,.06); }
 .toast.show{ opacity:1; transform:translateY(0); }
