@@ -11,6 +11,7 @@ import { initRecibosCaja } from './recibos.js';
 import { initVentas, repararValorNetoFacturasVenta } from './ventas.js';
 import { initConsultaTiempos, renderConsultaTiempos } from './consulta-tiempos.js';
 import { initInventario, renderInventario } from './inventario.js';
+import { initRemisiones, actualizarNumeroPreview } from './remisiones.js';
 import { restaurarSesion, iniciarSesion, cerrarSesion, cambiarContrasena, crearCuentaPropia, getCurrentUser, aplicarPermisos } from './auth.js';
 
 // ---------- pestañas ----------
@@ -43,6 +44,7 @@ function onMaestrosChange(){
   pasoSeguro('refrescar Proveedores', poblarDatalistProveedores);
   pasoSeguro('refrescar Inventario', renderInventario);
   pasoSeguro('refrescar lista de operarios (consulta de tiempos)', renderConsultaTiempos);
+  pasoSeguro('refrescar numeración de Remisión', actualizarNumeroPreview);
 }
 
 // Corre cada paso de arranque de forma aislada: si uno falla (por ejemplo,
@@ -94,6 +96,7 @@ async function arrancarApp(){
   });
   pasoSeguro('Consulta de tiempos por operario', initConsultaTiempos);
   pasoSeguro('Inventario', initInventario);
+  pasoSeguro('Remisiones', initRemisiones);
 
   pasoSeguro('Permisos', aplicarPermisos);
 }

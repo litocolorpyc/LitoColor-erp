@@ -143,6 +143,7 @@ export function renderMaestros(){
   proveedoresCtl.render();
   productosCtl.render();
   piezasProductoCtl.render();
+  documentosCtl.render();
   poblarSelectsAreasEnMaestros();
   poblarSelectProductoMaestro();
   poblarSelectCategoriaMateriaPrima();
@@ -273,7 +274,7 @@ function poblarSelectProductoMaestro(){
   if(productos.some(p=>p.nombre===valorPrevio)) sel.value = valorPrevio;
 }
 
-let empleadosCtl, maquinasCtl, areasCtl, actividadesCtl, motivosPausaCtl, subprocesosCtl, categoriasMateriaPrimaCtl, materiasCtl, insumosCtl, clientesCtl, proveedoresCtl, productosCtl, piezasProductoCtl;
+let empleadosCtl, maquinasCtl, areasCtl, actividadesCtl, motivosPausaCtl, subprocesosCtl, categoriasMateriaPrimaCtl, materiasCtl, insumosCtl, clientesCtl, proveedoresCtl, productosCtl, piezasProductoCtl, documentosCtl;
 
 export function initMaestros(onChange){
   empleadosCtl = wireCatalog({
@@ -472,6 +473,22 @@ export function initMaestros(onChange){
     ],
     renderCols: r => [r.producto, r.pieza],
     onChange
+  });
+
+  // Numeración de documentos (por ahora solo "remision") — el próximo
+  // número lo consume de forma atómica la función SQL siguiente_consecutivo
+  // (ver migración 20260917120000_remisiones.sql y js/remisiones.js), así
+  // que editarlo acá solo cambia DESDE DÓNDE sigue contando.
+  documentosCtl = wireCatalog({
+    table: 'consecutivos_documentos', key: 'tipo', data: DB.consecutivos_documentos, tableSel: '#tbl-m-documentos',
+    saveBtnId: 'm-doc-save', modeId: 'm-doc-mode', addLabel: 'Agregar tipo de documento',
+    fields: [
+      { id:'m-doc-tipo', col:'tipo', required:true },
+      { id:'m-doc-desc', col:'descripcion' },
+      { id:'m-doc-siguiente', col:'siguiente_numero', type:'number', required:true }
+    ],
+    renderCols: r => [r.tipo, r.descripcion||'—', r.siguiente_numero],
+    onChange: () => { if(onChange) onChange(); }
   });
 
   // Botones "Ir al principio"/"Ir al final" solo en los catálogos que

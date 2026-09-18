@@ -54,6 +54,7 @@
         <button class="tab-btn" data-tab="registrar" role="tab">Registrar</button>
         <button class="tab-btn" data-tab="registrar-costo" role="tab">Registrar costo</button>
         <button class="tab-btn" data-tab="registrar-venta" role="tab">Registrar Venta</button>
+        <button class="tab-btn" data-tab="remisiones" role="tab">Remisión</button>
         <button class="tab-btn" data-tab="inventario" role="tab">Inventario</button>
       </div>
       <div class="sidebar-group">
@@ -72,6 +73,7 @@
         <button class="tab-btn" data-tab="m-proveedores" role="tab">Proveedores</button>
         <button class="tab-btn" data-tab="m-productos" role="tab">Productos</button>
         <button class="tab-btn" data-tab="m-costos" role="tab">Conceptos de costo</button>
+        <button class="tab-btn" data-tab="m-documentos" role="tab">Documentos (numeración)</button>
       </div>
       <div class="sidebar-group">
         <div class="sidebar-group-label">Seguridad</div>
@@ -1235,6 +1237,24 @@
       </div>
     </section>
 
+    <section class="tab-panel" id="panel-m-documentos">
+      <div class="card">
+        <div class="card-head"><h3>Documentos — numeración</h3><span class="card-hint">consecutivo automático de cada tipo de documento (ej. Remisión) — ajusta "Próximo número" acá si hace falta continuar la numeración de otro sistema/talonario</span></div>
+        <div class="form-row">
+          <div class="field"><label>Tipo</label><input type="text" id="m-doc-tipo" placeholder="ej. remision"></div>
+          <div class="field"><label>Descripción</label><input type="text" id="m-doc-desc" placeholder="ej. Remisión de despacho"></div>
+          <div class="field"><label>Próximo número</label><input type="number" id="m-doc-siguiente" min="1"></div>
+        </div>
+        <div class="form-foot"><span id="m-doc-mode"></span><button type="button" class="btn-primary" id="m-doc-save">Agregar tipo de documento</button></div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table id="tbl-m-documentos">
+            <thead><tr><th>Tipo</th><th>Descripción</th><th>Próximo número</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <section class="tab-panel" id="panel-registrar-costo">
       <div class="card">
         <div class="card-head"><h3>Registrar un costo</h3><span class="card-hint">facturas, arriendo, nómina, servicios, impuestos, materia prima…</span></div>
@@ -1454,6 +1474,89 @@
             <span class="card-hint" id="fv-detalle-hint"></span>
             <button type="button" class="btn-secondary" id="fv-detalle-cerrar">Cerrar</button>
             <button type="button" class="btn-primary" id="fv-detalle-guardar">Guardar cambios</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-remisiones">
+      <div class="card" id="rem-crear-card">
+        <div class="card-head"><h3>Crear remisión</h3><span class="card-hint">elige el cliente, marca las órdenes que se despachan, revisa los ítems y guarda — el N° de remisión se asigna solo al guardar, según el consecutivo de Maestros &gt; Documentos</span></div>
+        <p class="card-hint" id="rem-editando-aviso" style="display:none;background:#2E8FC022;color:#2E8FC0;padding:6px 10px;border-radius:8px;font-weight:600"></p>
+
+        <div class="form-row">
+          <div class="field" style="position:relative">
+            <label>Cliente</label>
+            <input type="text" id="rem-cliente-input" autocomplete="off" placeholder="Escribe para buscar…">
+            <div id="rem-cliente-dropdown" class="autocomplete-dropdown" style="display:none"></div>
+          </div>
+          <div class="field"><label>N° de remisión</label><input type="text" id="rem-numero" readonly placeholder="se asigna al guardar"></div>
+          <div class="field"><label>Fecha</label><input type="date" id="rem-fecha"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>NIT</label><input type="text" id="rem-nit"></div>
+          <div class="field"><label>Teléfono</label><input type="text" id="rem-telefono"></div>
+          <div class="field full"><label>Dirección</label><input type="text" id="rem-direccion"></div>
+        </div>
+
+        <div class="field full">
+          <label>Órdenes del cliente</label>
+          <div id="rem-ordenes-list" class="card-hint">Elige un cliente arriba para ver sus órdenes.</div>
+        </div>
+
+        <span class="card-hint">Las líneas se llenan solas con las piezas de las órdenes marcadas — se puede corregir la descripción, cantidad y valores, o agregar una línea manual.</span>
+        <div class="table-wrap" style="margin-top:8px">
+          <table id="tbl-rem-items">
+            <thead><tr><th>Descripción</th><th class="num">Cantidad</th><th>Unidad</th><th class="num">Valor unitario</th><th class="num">Valor total</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="form-row">
+          <div class="field full"><label>Observaciones</label><input type="text" id="rem-observaciones" placeholder="opcional"></div>
+        </div>
+        <div class="form-foot">
+          <button type="button" class="row-btn" id="rem-add-item">+ Agregar línea</button>
+          <button type="button" class="btn-secondary" id="rem-limpiar">Limpiar</button>
+          <span class="card-hint" id="rem-total-hint"></span>
+          <button type="button" class="btn-primary" id="rem-guardar">Revisar y guardar</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Remisiones registradas</h3><span class="card-hint">"Ver" muestra el detalle e imprime — "Editar" reabre la remisión completa arriba — "Eliminar" la borra por completo (no se puede deshacer)</span></div>
+        <div class="form-row">
+          <div class="field"><label>Cliente</label><input type="text" id="rem-f-cliente" placeholder="contiene…"></div>
+          <div class="field"><label>N° de remisión</label><input type="text" id="rem-f-numero"></div>
+          <div class="field"><label>N° de orden</label><input type="number" id="rem-f-orden"></div>
+          <div class="field" style="max-width:160px"><label>Desde</label><input type="date" id="rem-f-desde"></div>
+          <div class="field" style="max-width:160px"><label>Hasta</label><input type="date" id="rem-f-hasta"></div>
+        </div>
+        <div class="form-foot">
+          <button type="button" class="btn-secondary" id="rem-f-limpiar">Limpiar filtros</button>
+          <button type="button" class="btn-primary" id="rem-f-buscar">Filtrar</button>
+        </div>
+        <div class="table-wrap">
+          <table id="tbl-rem-listado">
+            <thead><tr><th>N°</th><th>Fecha</th><th>Cliente</th><th class="num">Total</th><th>Órdenes</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-overlay" id="rem-detalle-modal" style="display:none">
+        <div class="modal-card" style="max-width:760px">
+          <h3 id="rem-detalle-titulo">Detalle de la remisión</h3>
+          <p class="card-hint" id="rem-detalle-cabecera"></p>
+          <div class="table-wrap" style="margin-top:8px;max-height:360px;overflow-y:auto">
+            <table id="tbl-rem-detalle">
+              <thead><tr><th>Descripción</th><th class="num">Cantidad</th><th class="num">Vr. unitario</th><th class="num">Vr. total</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="form-foot">
+            <span class="card-hint" id="rem-detalle-total"></span>
+            <button type="button" class="btn-secondary" id="rem-detalle-cerrar">Cerrar</button>
+            <button type="button" class="btn-primary" id="rem-detalle-imprimir">Imprimir</button>
           </div>
         </div>
       </div>
