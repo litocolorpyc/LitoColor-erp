@@ -190,17 +190,24 @@ function renderTablaItemsRemision(){
   tbody.querySelectorAll('tr').forEach(tr => {
     const i = parseInt(tr.dataset.i, 10);
     if(isNaN(i)) return;
+    // Ojo: los campos de cantidad/valor unitario NO deben volver a dibujar
+    // toda la tabla en cada tecla — eso destruye el <input> y le quita el
+    // foco a mitad de la escritura, dejando solo la primera tecla puesta
+    // (bug reportado 17sep26: no dejaba cambiar 1000 por 500). Solo se
+    // actualiza la celda de "Valor total" de ESTA fila a mano.
     tr.querySelector('.rem-it-desc').addEventListener('input', e => itemsActuales[i].descripcion = e.target.value);
     tr.querySelector('.rem-it-cant').addEventListener('input', e => {
       itemsActuales[i].cantidad = parseFloat(e.target.value)||0;
       itemsActuales[i].valor_total = itemsActuales[i].cantidad * (itemsActuales[i].valor_unitario||0);
-      renderTablaItemsRemision(); actualizarTotalRemision();
+      tr.querySelector('.rem-it-total').value = itemsActuales[i].valor_total;
+      actualizarTotalRemision();
     });
     tr.querySelector('.rem-it-unidad').addEventListener('input', e => itemsActuales[i].unidad = e.target.value);
     tr.querySelector('.rem-it-unit').addEventListener('input', e => {
       itemsActuales[i].valor_unitario = parseFloat(e.target.value)||0;
       itemsActuales[i].valor_total = itemsActuales[i].cantidad * itemsActuales[i].valor_unitario;
-      renderTablaItemsRemision(); actualizarTotalRemision();
+      tr.querySelector('.rem-it-total').value = itemsActuales[i].valor_total;
+      actualizarTotalRemision();
     });
     tr.querySelector('.rem-it-total').addEventListener('input', e => {
       itemsActuales[i].valor_total = parseFloat(e.target.value)||0;
