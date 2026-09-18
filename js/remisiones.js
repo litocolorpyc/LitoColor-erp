@@ -143,17 +143,30 @@ function renderOrdenesDelCliente(nombreCliente){
   });
 }
 
+// Un ítem por ORDEN completa (no por sub-pieza/componente interno como
+// "Bolsillo" o "Cuartilla 1 x2" — eso es detalle de fabricación, no algo
+// que tenga sentido mostrarle al cliente en la remisión). La descripción
+// sale de opp_ordenes.producto; la cantidad, de la primera pieza (la
+// principal) de esa orden. El valor sale del "Precio venta antes de IVA"
+// que se haya cargado en la pestaña Presupuesto de esa orden
+// (presupuesto_orden), si existe — pedido explícito 17sep26.
 function toggleOrdenSeleccionada(orden, marcada){
   if(marcada){
     ordenesSeleccionadas.add(orden);
+    const o = DB.opp_ordenes.find(x => x.orden === orden);
     const piezas = DB.opp_piezas.filter(p => p.orden === orden).sort((a,b)=>(a.suborden||0)-(b.suborden||0));
-    piezas.forEach(p => {
-      itemsActuales.push({
-        orden, descripcion: p.pieza || ('Pieza ' + (p.suborden||'')),
-        cantidad: p.cantidad || 0, unidad: '', valor_unitario: 0, valor_total: 0
-      });
+    const cantidad = piezas.length ? (piezas[0].cantidad || 0) : 0;
+    const pres = DB.presupuesto_orden.find(p => p.orden === orden);
+    let valorTotal = 0, valorUnitario = 0;
+    if(pres && pres.precio_venta_antes_iva){
+      valorTotal = pres.precio_venta_antes_iva;
+      valorUnitario = cantidad ? Math.round(valorTotal / cantidad) : valorTotal;
+    }
+    itemsActuales.push({
+      orden, descripcion: (o && o.producto) || ('Orden ' + orden),
+      cantidad, unidad: '', valor_unitario: valorUnitario, valor_total: valorTotal
     });
-    if(!piezas.length) toast('La orden ' + orden + ' no tiene piezas cargadas — agrega la línea a mano si hace falta');
+    if(!pres || !pres.precio_venta_antes_iva) toast('La orden ' + orden + ' no tiene precio de venta registrado en Presupuesto — complétalo a mano');
   } else {
     ordenesSeleccionadas.delete(orden);
     itemsActuales = itemsActuales.filter(it => it.orden !== orden);
