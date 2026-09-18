@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
-import { toast, fmtCOP, fmtNum, fechaHoyLocal } from './helpers.js';
+import { toast, fmtCOP, fmtNum, fechaHoyLocal, imprimirInforme, exportarExcel } from './helpers.js';
 import { buscarConsumosSinCostear, aplicarCosteoConsumosPendientes } from './registrar.js';
 
 // ---------- Maestro: Conceptos de costo ----------
@@ -160,6 +160,7 @@ export function renderMovimientosRecientes(){
     if(editingMovimientoId === m.id) resetFormMovimiento();
     renderMovimientosRecientes();
     renderResumenCostosMes();
+    renderInformeCostos();
     toast('Costo eliminado');
   }));
 }
@@ -186,6 +187,65 @@ export function renderResumenCostosMes(){
     <div class="kpi"><div class="lbl">Costos fijos · este mes</div><div class="val">${fmtCOP(fijo)}</div></div>
     <div class="kpi"><div class="lbl">Costos variables · este mes</div><div class="val">${fmtCOP(variable)}</div></div>
     <div class="kpi"><div class="lbl">Total registrado · este mes</div><div class="val">${fmtCOP(fijo+variable)}</div></div>`;
+}
+
+// ---------- Informe de costos (por rango, agrupado por categoría) ----------
+let ultimoInformeCostos = null;
+
+export function renderInformeCostos(){
+  const kpisEl = document.getElementById('rc-inf-kpis');
+  if(!kpisEl) return;
+  const desde = document.getElementById('rc-inf-desde').value || '2024-01-01';
+  const hasta = document.getElementById('rc-inf-hasta').value || fechaHoyLocal();
+  const conceptoPorId = new Map(DB.costos_conceptos.map(c => [c.id, c]));
+  const filas = DB.costos_movimientos.filter(m => (m.fecha||'') >= desde && (m.fecha||'') <= hasta);
+
+  const fijo = filas.filter(m=>m.tipo==='Fijo').reduce((s,m)=>s+(m.valor||0),0);
+  const variable = filas.filter(m=>m.tipo==='Variable').reduce((s,m)=>s+(m.valor||0),0);
+  kpisEl.innerHTML = `
+    <div class="kpi"><div class="lbl">Costos fijos</div><div class="val">${fmtCOP(fijo)}</div><div class="sub">${desde} a ${hasta}</div></div>
+    <div class="kpi"><div class="lbl">Costos variables</div><div class="val">${fmtCOP(variable)}</div></div>
+    <div class="kpi"><div class="lbl">Total</div><div class="val">${fmtCOP(fijo+variable)}</div></div>
+    <div class="kpi"><div class="lbl">Movimientos</div><div class="val">${filas.length}</div></div>`;
+
+  const porCategoria = {};
+  filas.forEach(m => {
+    const cat = (conceptoPorId.get(m.concepto_id)?.categoria) || m.comentario?.split(' — ')[0] || 'Sin categoría';
+    const key = cat + '|' + m.tipo;
+    porCategoria[key] = porCategoria[key] || { categoria: cat, tipo: m.tipo, n: 0, total: 0 };
+    porCategoria[key].n++;
+    porCategoria[key].total += (m.valor || 0);
+  });
+  const filasCategoria = Object.values(porCategoria).sort((a,b) => b.total - a.total);
+
+  document.querySelector('#tbl-rc-inf-categoria tbody').innerHTML = filasCategoria.map(f => `<tr>
+    <td>${f.categoria}</td><td>${f.tipo}</td><td class="num">${f.n}</td><td class="num">${fmtCOP(f.total)}</td>
+  </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--ink-faint)">Sin costos en este rango</td></tr>';
+
+  ultimoInformeCostos = { desde, hasta, fijo, variable, movimientos: filas.length, filasCategoria };
+}
+
+function imprimirInformeCostos(){
+  if(!ultimoInformeCostos) return;
+  const k = ultimoInformeCostos;
+  imprimirInforme({
+    titulo: 'Informe de costos',
+    subtitulo: `${k.desde} a ${k.hasta} · Fijos ${fmtCOP(k.fijo)} · Variables ${fmtCOP(k.variable)} · Total ${fmtCOP(k.fijo+k.variable)} · ${k.movimientos} movimiento(s)`,
+    secciones: [{
+      titulo: 'Por categoría',
+      columnas: [{ key:'categoria', label:'Categoría' }, { key:'tipo', label:'Tipo' }, { key:'n', label:'Movimientos', num:true }, { key:'total', label:'Total', num:true }],
+      filas: k.filasCategoria.map(f => ({ categoria:f.categoria, tipo:f.tipo, n:f.n, total:fmtCOP(f.total) }))
+    }]
+  });
+}
+
+function exportarInformeCostos(){
+  if(!ultimoInformeCostos) return;
+  const k = ultimoInformeCostos;
+  exportarExcel(`LitoColor_costos_${k.desde}_a_${k.hasta}.xlsx`, [{
+    nombre: 'Por categoría',
+    filas: k.filasCategoria.map(f => ({ Categoría: f.categoria, Tipo: f.tipo, Movimientos: f.n, Total: f.total }))
+  }]);
 }
 
 async function guardarMovimiento(){
@@ -233,6 +293,7 @@ async function guardarMovimiento(){
     resetFormMovimiento();
     renderMovimientosRecientes();
     renderResumenCostosMes();
+    renderInformeCostos();
   }catch(err){
     console.error(err);
     toast('Error al guardar — revisa la consola');
@@ -278,6 +339,7 @@ async function aplicarConsumosSinCostear(){
   toast(`Se costearon ${creados} consumo(s)` + (errores.length ? ` · ${errores.length} con error, revisa la consola` : ''));
   renderMovimientosRecientes();
   renderResumenCostosMes();
+  renderInformeCostos();
   buscarYMostrarConsumosSinCostear();
   btn.textContent = 'Aplicar costeo';
 }
@@ -297,4 +359,10 @@ export function initCostos(){
   document.getElementById('csc-buscar').addEventListener('click', buscarYMostrarConsumosSinCostear);
   document.getElementById('csc-aplicar').addEventListener('click', aplicarConsumosSinCostear);
   buscarYMostrarConsumosSinCostear();
+
+  document.getElementById('rc-inf-desde').addEventListener('change', renderInformeCostos);
+  document.getElementById('rc-inf-hasta').addEventListener('change', renderInformeCostos);
+  document.getElementById('rc-inf-imprimir').addEventListener('click', imprimirInformeCostos);
+  document.getElementById('rc-inf-exportar').addEventListener('click', exportarInformeCostos);
+  renderInformeCostos();
 }

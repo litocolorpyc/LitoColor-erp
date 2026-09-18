@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
-import { fmtCOP, fmtNum, areaColor, rangoFechas, rangoAnterior, deltaBadge, exportarExcel, toast, wireTableScroll } from './helpers.js';
+import { fmtCOP, fmtNum, areaColor, rangoFechas, rangoAnterior, deltaBadge, exportarExcel, imprimirInforme, toast, wireTableScroll } from './helpers.js';
 import { mostrarDetalleOrden, tipoTrabajoLabel, renderOppRecent, subprocesosDeArea, getOrdenDetalleActual } from './ordenes.js';
 import { puedeEditarProduccion } from './auth.js';
 import { listaAreasDisponibles, materialSelectOptionsHTML, unidadNumericaDelMaterial, parseCantidadConsumo, descontarInventarioYCargarCosto, revertirConsumoDeRegistro, avisoConsumoNoReflejado, actualizarCostoAdicionalReproceso } from './registrar.js';
@@ -52,6 +52,7 @@ function codeFromLabel(label){
 let rangoGer = rangoFechas('todo');
 let ultimaRentabilidad = [];
 let ultimaRentabilidadProducto = [];
+let ultimoGerencialKpis = null;
 
 // "Registrar Venta" (facturas de venta importadas, ver ventas.js) es la
 // fuente de ingresos facturados que reemplaza al Excel histórico de
@@ -126,6 +127,8 @@ export function renderGerencial(){
     <div class="kpi"><div class="lbl">Otros costos (fijos + variables)</div><div class="val">${fmtCOP(actual.otrosCostos)} ${deltaBadge(actual.otrosCostos, anterior.otrosCostos)}</div><div class="sub">arriendo, nómina, materia prima, impuestos…</div></div>
     <div class="kpi"><div class="lbl">Margen estimado</div><div class="val ${actual.margen>=0?'pos':'neg'}">${fmtCOP(actual.margen)} ${deltaBadge(actual.margen, anterior.margen)}</div><div class="sub">ingresos − mano de obra − otros costos</div></div>
     <div class="kpi"><div class="lbl">Órdenes con valor</div><div class="val">${actual.ordenes} ${deltaBadge(actual.ordenes, anterior.ordenes)}</div><div class="sub">vs. periodo anterior equivalente</div></div>`;
+
+  ultimoGerencialKpis = { desde, hasta, ...actual };
 
   const mesesMap = {};
   actual.pedidos.forEach(p=>{ if(!p.fecha) return; const k=p.fecha.slice(0,7); mesesMap[k]=mesesMap[k]||{ing:0,cost:0}; mesesMap[k].ing+=(p.total||0); });
@@ -340,6 +343,7 @@ function wireRangePresets(presetContainerId, desdeId, hastaId, getRango, setRang
 // ---------- PRODUCCION ----------
 let rangoProd = rangoFechas('todo');
 let ultimaProduccionArea = [];
+let ultimoProduccionKpis = null;
 
 export function renderProduccion(){
   const { desde, hasta } = rangoProd;
@@ -370,6 +374,8 @@ export function renderProduccion(){
     <div class="kpi"><div class="lbl">Horas registradas</div><div class="val">${fmtNum(horasTot)} ${deltaBadge(horasTot, horasAntBase)}</div><div class="sub">${produccion.length} registros</div></div>
     <div class="kpi"><div class="lbl">Órdenes con movimiento</div><div class="val">${ordenesConMovimiento} ${deltaBadge(ordenesConMovimiento, ordenesAntBase)}</div><div class="sub">órdenes con al menos un registro en el rango</div></div>
     <div class="kpi"><div class="lbl">% tiempo directo</div><div class="val">${fmtNum(eficiencia,0)}%</div><div class="sub">horas directas / horas totales</div></div>`;
+
+  ultimoProduccionKpis = { desde, hasta, horasTot, ordenesConMovimiento, eficiencia, registros: produccion.length };
 
   const areaMap = {};
   produccion.forEach(r=>{ const a=r.area||'General'; areaMap[a]=areaMap[a]||{h:0,p:0,c:0,n:0}; areaMap[a].h+=(r.tiempoHr||0); areaMap[a].p+=(r.cantidad||0); areaMap[a].c+=(r.valorActividad||0); areaMap[a].n+=1; });
@@ -422,6 +428,23 @@ export function renderProduccion(){
   });
 }
 
+function imprimirProduccion(){
+  if(!ultimoProduccionKpis) return;
+  const k = ultimoProduccionKpis;
+  imprimirInforme({
+    titulo: 'Informe de Producción',
+    subtitulo: `${k.desde} a ${k.hasta} · ${fmtNum(k.horasTot)} horas registradas · ${k.ordenesConMovimiento} orden(es) con movimiento · ${fmtNum(k.eficiencia,0)}% tiempo directo · ${k.registros} registro(s)`,
+    secciones: [{
+      titulo: 'Producción por área',
+      columnas: [
+        { key:'area', label:'Área' }, { key:'horas', label:'Horas', num:true }, { key:'cantidad', label:'Cantidad reportada', num:true },
+        { key:'costo', label:'Costo M.O.', num:true }, { key:'registros', label:'Registros', num:true }
+      ],
+      filas: ultimaProduccionArea.map(r => ({ area:r.area, horas:fmtNum(r.horas), cantidad:fmtNum(r.piezas,0), costo:fmtCOP(r.costo), registros:r.registros }))
+    }]
+  });
+}
+
 // Pedido: "que cuando se presione la barra del área, despliegue una
 // pantalla con los datos de las órdenes y subórdenes asociadas y que
 // cuando presione una orden, toda la información de la orden" — se
@@ -451,6 +474,8 @@ function mostrarDetalleProduccionArea(area){
 
 // ---------- OPERARIO ----------
 let rangoOp = rangoFechas('todo');
+let ultimoOperarioLog = [];
+let ultimoOperarioKpis = null;
 export function populateOperarioSelect(){
   const sel = document.getElementById('op-select');
   const names = new Set(DB.personal.filter(p=>p.activo).map(p=>p.nombre));
@@ -475,6 +500,9 @@ export function renderOperario(){
     <div class="kpi"><div class="lbl">Horas trabajadas</div><div class="val">${fmtNum(horas)}</div><div class="sub">${recs.length} registros</div></div>
     <div class="kpi"><div class="lbl">Valor generado</div><div class="val">${fmtCOP(valor)}</div><div class="sub">costo de mano de obra</div></div>
     <div class="kpi"><div class="lbl">Promedio por registro</div><div class="val">${fmtNum(recs.length?horas/recs.length:0,2)} h</div><div class="sub">duración típica de actividad</div></div>`;
+
+  ultimoOperarioLog = recs;
+  ultimoOperarioKpis = { desde, hasta, quien: sel==='__ALL__' ? 'Toda la planta' : sel, horas, valor, registros: recs.length };
 
   const areaMap = {};
   recs.forEach(r=>{ const a=r.area||'General'; areaMap[a]=(areaMap[a]||0)+(r.tiempoHr||0); });
@@ -508,6 +536,26 @@ export function renderOperario(){
     document.querySelectorAll('#tbl-op-log [data-editar-reg]').forEach(b => b.addEventListener('click', () => abrirEdicionRegistro(parseInt(b.dataset.editarReg, 10))));
     document.querySelectorAll('#tbl-op-log [data-eliminar-reg]').forEach(b => b.addEventListener('click', () => eliminarRegistroLog(parseInt(b.dataset.eliminarReg, 10))));
   }
+}
+
+function imprimirOperario(){
+  if(!ultimoOperarioKpis) return;
+  const k = ultimoOperarioKpis;
+  imprimirInforme({
+    titulo: 'Informe por Operario',
+    subtitulo: `${k.quien} · ${k.desde} a ${k.hasta} · ${fmtNum(k.horas)} horas trabajadas · ${fmtCOP(k.valor)} de valor generado · ${k.registros} registro(s)`,
+    secciones: [{
+      titulo: 'Bitácora',
+      columnas: [
+        { key:'fecha', label:'Fecha' }, { key:'operario', label:'Operario' }, { key:'actividad', label:'Actividad' }, { key:'orden', label:'Orden' },
+        { key:'cantidad', label:'Cant.', num:true }, { key:'horas', label:'Horas', num:true }, { key:'valor', label:'Valor', num:true }
+      ],
+      filas: ultimoOperarioLog.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')).map(r => ({
+        fecha:(r.fecha||'').slice(0,10), operario:r.operario||'—', actividad:r.actividad||'—', orden:r.orden??'—',
+        cantidad:fmtNum(r.cantidad,0), horas:fmtNum(r.tiempoHr,2), valor:fmtCOP(r.valorActividad)
+      }))
+    }]
+  });
 }
 
 // ---------- corregir / borrar un registro de producción (solo Admin/Gerente/Jefe de Producción) ----------
@@ -991,7 +1039,41 @@ export function initDashboardFilters(){
   });
 }
 
+function imprimirGerencial(){
+  if(!ultimoGerencialKpis) return;
+  const k = ultimoGerencialKpis;
+  imprimirInforme({
+    titulo: 'Informe Gerencial',
+    subtitulo: `${k.desde} a ${k.hasta} · Ingresos facturados ${fmtCOP(k.ingresos)} · Ingresos presupuestados ${fmtCOP(k.ingresosPresupuestados)} · Costo M.O. ${fmtCOP(k.costoMO)} · Otros costos ${fmtCOP(k.otrosCostos)} · Margen estimado ${fmtCOP(k.margen)} · ${k.ordenes} orden(es) con valor`,
+    secciones: [
+      {
+        titulo: 'Rentabilidad por orden',
+        columnas: [
+          { key:'orden', label:'Orden' }, { key:'cliente', label:'Cliente' }, { key:'trabajo', label:'Trabajo' },
+          { key:'ingreso', label:'Ingreso', num:true }, { key:'ingresoPres', label:'Ingreso presupuestado', num:true },
+          { key:'costoMO', label:'Costo M.O.', num:true }, { key:'otros', label:'Otros costos', num:true }, { key:'margen', label:'Margen', num:true }
+        ],
+        filas: ultimaRentabilidad.map(r => {
+          const base = r.ing > 0 ? r.ing : (r.ingPres || 0);
+          return { orden:r.orden, cliente:r.cliente||'—', trabajo:r.trabajo||'—', ingreso:fmtCOP(r.ing), ingresoPres:r.ingPres!=null?fmtCOP(r.ingPres):'—', costoMO:fmtCOP(r.cost), otros:fmtCOP(r.otros), margen:fmtCOP(base-r.cost-r.otros) };
+        })
+      },
+      {
+        titulo: 'Rentabilidad por tipo de producto',
+        columnas: [
+          { key:'producto', label:'Producto' }, { key:'ordenes', label:'Órdenes', num:true }, { key:'ingreso', label:'Ingreso', num:true },
+          { key:'costoMO', label:'Costo M.O.', num:true }, { key:'otros', label:'Otros costos', num:true }, { key:'margen', label:'Margen', num:true }, { key:'margenPct', label:'Margen %', num:true }
+        ],
+        filas: ultimaRentabilidadProducto.map(f => ({ producto:f.producto, ordenes:f.ordenes, ingreso:fmtCOP(f.ing), costoMO:fmtCOP(f.cost), otros:fmtCOP(f.otros), margen:fmtCOP(f.margen), margenPct: fmtNum(f.margenPct,0)+'%' }))
+      }
+    ]
+  });
+}
+
 function wireExportButtons(){
+  const btnGerImprimir = document.getElementById('ger-imprimir');
+  if(btnGerImprimir) btnGerImprimir.addEventListener('click', imprimirGerencial);
+
   const btnRent = document.getElementById('export-rentabilidad');
   if(btnRent) btnRent.addEventListener('click', () => {
     exportarExcel('LitoColor_rentabilidad_por_orden.xlsx', [{
@@ -1013,6 +1095,20 @@ function wireExportButtons(){
     exportarExcel('LitoColor_produccion_por_area.xlsx', [{
       nombre: 'Producción por área',
       filas: ultimaProduccionArea.map(r => ({ Área: r.area, Horas: r.horas, 'Cantidad reportada': r.piezas, 'Costo M.O.': r.costo, Registros: r.registros }))
+    }]);
+  });
+
+  const btnProdImprimir = document.getElementById('prod-imprimir');
+  if(btnProdImprimir) btnProdImprimir.addEventListener('click', imprimirProduccion);
+
+  const btnOpImprimir = document.getElementById('op-imprimir');
+  if(btnOpImprimir) btnOpImprimir.addEventListener('click', imprimirOperario);
+
+  const btnOpExportar = document.getElementById('op-exportar');
+  if(btnOpExportar) btnOpExportar.addEventListener('click', () => {
+    exportarExcel('LitoColor_bitacora_operario.xlsx', [{
+      nombre: 'Bitácora',
+      filas: ultimoOperarioLog.map(r => ({ Fecha: (r.fecha||'').slice(0,10), Operario: r.operario, Actividad: r.actividad, Orden: r.orden, Cantidad: r.cantidad, 'Horas': r.tiempoHr, Valor: r.valorActividad }))
     }]);
   });
 

@@ -2,7 +2,7 @@ import { sb } from './supabase-client.js';
 import { DB } from './store.js';
 import { toast, fmtCOP, fechaHoyLocal } from './helpers.js';
 import { getCurrentUser } from './auth.js';
-import { renderMovimientosRecientes, renderResumenCostosMes } from './costos.js';
+import { renderMovimientosRecientes, renderResumenCostosMes, renderInformeCostos } from './costos.js';
 import { renderInventario, invalidarEntradasInventario } from './inventario.js';
 import { recostearConsumosDeMaterial } from './registrar.js';
 
@@ -1038,6 +1038,7 @@ async function guardarRecibo(){
         movimientosCreados = costosData.length;
         renderMovimientosRecientes();
         renderResumenCostosMes();
+        renderInformeCostos();
       }
     }
 
@@ -1149,6 +1150,7 @@ async function eliminarRecibo(reciboId, reciboConocido){
     renderInventario();
     renderMovimientosRecientes();
     renderResumenCostosMes();
+    renderInformeCostos();
     renderRecibosCargados();
     document.getElementById('informe-compra-detalle-modal')?.style.setProperty('display', 'none');
     if(document.getElementById('informe-compras-buscar')) buscarInformeCompras();

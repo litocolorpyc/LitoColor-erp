@@ -119,7 +119,8 @@
         </div>
         <div class="field" style="max-width:140px"><label>Desde</label><input type="date" id="ger-desde"></div>
         <div class="field" style="max-width:140px"><label>Hasta</label><input type="date" id="ger-hasta"></div>
-        <button type="button" class="btn-secondary" id="export-respaldo" style="margin-left:auto">⬇ Respaldo completo (.xlsx)</button>
+        <button type="button" class="btn-secondary" id="ger-imprimir" style="margin-left:auto">🖨 Imprimir informe</button>
+        <button type="button" class="btn-secondary" id="export-respaldo">⬇ Respaldo completo (.xlsx)</button>
       </div>
       <div class="kpi-row" id="ger-kpis"></div>
       <div class="grid-2">
@@ -195,7 +196,7 @@
       </div>
       <div class="card">
         <div class="card-head"><h3>Producción por área</h3><span class="card-hint">una fila por cada área — no sumar la columna "Cantidad reportada" entre filas, ver nota abajo</span></div>
-        <div class="form-foot" style="margin-top:0;margin-bottom:10px"><span></span><button type="button" class="btn-secondary" id="export-produccion" style="margin:0">⬇ Exportar a Excel</button></div>
+        <div class="form-foot" style="margin-top:0;margin-bottom:10px"><span></span><button type="button" class="btn-secondary" id="prod-imprimir" style="margin:0">🖨 Imprimir</button><button type="button" class="btn-secondary" id="export-produccion" style="margin:0">⬇ Exportar a Excel</button></div>
         <div class="table-wrap">
           <table id="tbl-prod-area">
             <thead><tr><th>Área</th><th class="num">Horas</th><th class="num">Cantidad reportada *</th><th class="num">Costo M.O. **</th><th class="num">Registros ***</th><th class="num">Horas prom./día ****</th><th class="num">Horas prom./registro</th></tr></thead>
@@ -264,6 +265,8 @@
         </div>
         <div class="field" style="max-width:140px"><label>Desde</label><input type="date" id="op-desde"></div>
         <div class="field" style="max-width:140px"><label>Hasta</label><input type="date" id="op-hasta"></div>
+        <button type="button" class="btn-secondary" id="op-imprimir" style="margin-left:auto">🖨 Imprimir</button>
+        <button type="button" class="btn-secondary" id="op-exportar">⬇ Exportar a Excel</button>
       </div>
       <div class="kpi-row" id="op-kpis"></div>
       <div class="grid-2">
@@ -1515,6 +1518,23 @@
           </div>
         </div>
       </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Informe de costos</h3><span class="card-hint">costos fijos y variables del periodo, por categoría — imprime o exporta a Excel</span></div>
+        <div class="form-row">
+          <div class="field" style="max-width:160px"><label>Desde</label><input type="date" id="rc-inf-desde"></div>
+          <div class="field" style="max-width:160px"><label>Hasta</label><input type="date" id="rc-inf-hasta"></div>
+          <button type="button" class="btn-secondary" id="rc-inf-imprimir" style="margin-left:auto">🖨 Imprimir</button>
+          <button type="button" class="btn-secondary" id="rc-inf-exportar">⬇ Exportar a Excel</button>
+        </div>
+        <div class="kpi-row" id="rc-inf-kpis"></div>
+        <div class="table-wrap">
+          <table id="tbl-rc-inf-categoria">
+            <thead><tr><th>Categoría</th><th>Tipo</th><th class="num">Movimientos</th><th class="num">Total</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <section class="tab-panel" id="panel-registrar-venta">
@@ -1579,6 +1599,23 @@
             <button type="button" class="btn-secondary" id="fv-detalle-cerrar">Cerrar</button>
             <button type="button" class="btn-primary" id="fv-detalle-guardar">Guardar cambios</button>
           </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Informe de ventas</h3><span class="card-hint">totales por cliente en el periodo — imprime o exporta a Excel</span></div>
+        <div class="form-row">
+          <div class="field" style="max-width:160px"><label>Desde</label><input type="date" id="fv-inf-desde"></div>
+          <div class="field" style="max-width:160px"><label>Hasta</label><input type="date" id="fv-inf-hasta"></div>
+          <button type="button" class="btn-secondary" id="fv-inf-imprimir" style="margin-left:auto">🖨 Imprimir</button>
+          <button type="button" class="btn-secondary" id="fv-inf-exportar">⬇ Exportar a Excel</button>
+        </div>
+        <div class="kpi-row" id="fv-inf-kpis"></div>
+        <div class="table-wrap">
+          <table id="tbl-fv-inf-cliente">
+            <thead><tr><th>Cliente</th><th class="num">Facturas</th><th class="num">Total (con IVA)</th><th class="num">Valor neto asociado a órdenes</th></tr></thead>
+            <tbody></tbody>
+          </table>
         </div>
       </div>
     </section>
@@ -1658,6 +1695,23 @@
         </div>
       </div>
 
+      <div class="card">
+        <div class="card-head"><h3>Informe de remisiones</h3><span class="card-hint">totales por cliente en el periodo — imprime o exporta a Excel</span></div>
+        <div class="form-row">
+          <div class="field" style="max-width:160px"><label>Desde</label><input type="date" id="rem-inf-desde"></div>
+          <div class="field" style="max-width:160px"><label>Hasta</label><input type="date" id="rem-inf-hasta"></div>
+          <button type="button" class="btn-secondary" id="rem-inf-imprimir" style="margin-left:auto">🖨 Imprimir</button>
+          <button type="button" class="btn-secondary" id="rem-inf-exportar">⬇ Exportar a Excel</button>
+        </div>
+        <div class="kpi-row" id="rem-inf-kpis"></div>
+        <div class="table-wrap">
+          <table id="tbl-rem-inf-cliente">
+            <thead><tr><th>Cliente</th><th class="num">Remisiones</th><th class="num">Total</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="modal-overlay" id="rem-detalle-modal" style="display:none">
         <div class="modal-card" style="max-width:760px">
           <h3 id="rem-detalle-titulo">Detalle de la remisión</h3>
@@ -1683,6 +1737,8 @@
           <h3>Inventario de materia prima</h3>
           <span style="display:flex;align-items:baseline;gap:10px">
             <span class="card-hint">papel (Materias primas) e insumos por área — el consumo del operario descuenta solo, y crear una orden avisa si falta stock</span>
+            <button type="button" class="btn-secondary" id="inv-imprimir" style="padding:4px 10px;margin-top:0">🖨 Imprimir informe</button>
+            <button type="button" class="btn-secondary" id="inv-exportar" style="padding:4px 10px;margin-top:0">⬇ Exportar a Excel</button>
             <button type="button" class="btn-secondary" id="inv-ir-final" style="padding:4px 10px;margin-top:0">Ir al final ⬇</button>
           </span>
         </div>

@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
-import { toast, fmtCOP, fmtNum, fechaHoyLocal } from './helpers.js';
+import { toast, fmtCOP, fmtNum, fechaHoyLocal, imprimirInforme, exportarExcel } from './helpers.js';
 import { getCurrentUser } from './auth.js';
 
 // "Remisión" (pedido explícito 17sep26): documento de despacho real —
@@ -311,6 +311,7 @@ async function guardarRemision(){
     limpiarFormularioRemision();
     ocultarCrearCard();
     renderListadoRemisiones();
+    renderInformeRemisiones();
 
     if(confirm(`Remisión ${numeroFinal} guardada. ¿Deseas imprimirla ahora?`)){
       imprimirRemision(idFinal);
@@ -370,6 +371,7 @@ async function eliminarRemision(id){
     DB.remision_ordenes = DB.remision_ordenes.filter(x => x.remision_id !== id);
     if(remisionEditandoId === id){ limpiarFormularioRemision(); ocultarCrearCard(); }
     renderListadoRemisiones();
+    renderInformeRemisiones();
     toast('Remisión eliminada');
   }catch(err){
     console.error(err);
@@ -508,6 +510,60 @@ export function renderListadoRemisiones(){
   tbody.querySelectorAll('[data-del-rem]').forEach(b => b.addEventListener('click', () => eliminarRemision(parseInt(b.dataset.delRem,10))));
 }
 
+// ---------- informe (por rango, agrupado por cliente) ----------
+let ultimoInformeRemisiones = null;
+
+export function renderInformeRemisiones(){
+  const kpisEl = document.getElementById('rem-inf-kpis');
+  if(!kpisEl) return;
+  const desde = document.getElementById('rem-inf-desde').value || '2024-01-01';
+  const hasta = document.getElementById('rem-inf-hasta').value || fechaHoyLocal();
+  const filas = DB.remisiones.filter(r => (r.fecha||'') >= desde && (r.fecha||'') <= hasta);
+  const total = filas.reduce((s,r)=>s+(r.total||0),0);
+
+  kpisEl.innerHTML = `
+    <div class="kpi"><div class="lbl">Remisiones</div><div class="val">${filas.length}</div><div class="sub">${desde} a ${hasta}</div></div>
+    <div class="kpi"><div class="lbl">Total despachado</div><div class="val">${fmtCOP(total)}</div></div>`;
+
+  const porCliente = {};
+  filas.forEach(r => {
+    const cliente = r.cliente || 'Sin cliente';
+    porCliente[cliente] = porCliente[cliente] || { cliente, n:0, total:0 };
+    porCliente[cliente].n++;
+    porCliente[cliente].total += (r.total||0);
+  });
+  const filasCliente = Object.values(porCliente).sort((a,b) => b.total - a.total);
+
+  document.querySelector('#tbl-rem-inf-cliente tbody').innerHTML = filasCliente.map(f => `<tr>
+    <td>${f.cliente}</td><td class="num">${f.n}</td><td class="num">${fmtCOP(f.total)}</td>
+  </tr>`).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--ink-faint)">Sin remisiones en este rango</td></tr>';
+
+  ultimoInformeRemisiones = { desde, hasta, n: filas.length, total, filasCliente };
+}
+
+function imprimirInformeRemisiones(){
+  if(!ultimoInformeRemisiones) return;
+  const k = ultimoInformeRemisiones;
+  imprimirInforme({
+    titulo: 'Informe de remisiones',
+    subtitulo: `${k.desde} a ${k.hasta} · ${k.n} remisión(es) · Total despachado ${fmtCOP(k.total)}`,
+    secciones: [{
+      titulo: 'Por cliente',
+      columnas: [{ key:'cliente', label:'Cliente' }, { key:'n', label:'Remisiones', num:true }, { key:'total', label:'Total', num:true }],
+      filas: k.filasCliente.map(f => ({ cliente:f.cliente, n:f.n, total:fmtCOP(f.total) }))
+    }]
+  });
+}
+
+function exportarInformeRemisiones(){
+  if(!ultimoInformeRemisiones) return;
+  const k = ultimoInformeRemisiones;
+  exportarExcel(`LitoColor_remisiones_${k.desde}_a_${k.hasta}.xlsx`, [{
+    nombre: 'Por cliente',
+    filas: k.filasCliente.map(f => ({ Cliente: f.cliente, Remisiones: f.n, Total: f.total }))
+  }]);
+}
+
 // ---------- init ----------
 export function initRemisiones(){
   const clienteInput = document.getElementById('rem-cliente-input');
@@ -561,9 +617,15 @@ export function initRemisiones(){
     if(id) imprimirRemision(id);
   });
 
+  document.getElementById('rem-inf-desde').addEventListener('change', renderInformeRemisiones);
+  document.getElementById('rem-inf-hasta').addEventListener('change', renderInformeRemisiones);
+  document.getElementById('rem-inf-imprimir').addEventListener('click', imprimirInformeRemisiones);
+  document.getElementById('rem-inf-exportar').addEventListener('click', exportarInformeRemisiones);
+
   document.getElementById('rem-fecha').value = fechaHoyLocal();
   actualizarNumeroPreview();
   renderTablaItemsRemision();
   actualizarTotalRemision();
   renderListadoRemisiones();
+  renderInformeRemisiones();
 }

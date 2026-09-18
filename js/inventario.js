@@ -6,7 +6,7 @@
 // editando desde Maestros > "Materias primas" o "Materiales por área".
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
-import { fmtNum, fmtCOP, toast, fechaHoyLocal, wireTableScroll } from './helpers.js';
+import { fmtNum, fmtCOP, toast, fechaHoyLocal, wireTableScroll, imprimirInforme, exportarExcel } from './helpers.js';
 import { mostrarDetalleOrden } from './ordenes.js';
 import { recostearConsumosDeMaterial } from './registrar.js';
 import { parseCantidadConsumo, listaAreasDisponibles } from './registrar.js';
@@ -72,6 +72,8 @@ export function renderInventario(){
   const esperando = enSeguimiento.filter(f => f.esperando.length > 0);
   const valorTotal = enSeguimiento.reduce((s,f) => s + (f.costo ? f.costo * f.stock : 0), 0);
 
+  ultimoInventarioResumen = { total: enSeguimiento.length, negativos: negativos.length, bajoMinimo: bajoMinimo.length, esperando: esperando.length, valorTotal };
+
   const cont = document.getElementById('inv-kpis');
   if(cont){
     cont.innerHTML = `
@@ -117,6 +119,38 @@ export function renderInventario(){
   refrescarMovimientosInventario();
 }
 let filasActuales = []; // última tanda de filasInventario() renderizada en tbl-inventario
+let ultimoInventarioResumen = null;
+
+function imprimirInventario(){
+  if(!ultimoInventarioResumen) return;
+  const r = ultimoInventarioResumen;
+  imprimirInforme({
+    titulo: 'Informe de inventario',
+    subtitulo: `${r.total} material(es) en seguimiento · Valor estimado ${fmtCOP(r.valorTotal)} · ${r.negativos} en stock negativo · ${r.bajoMinimo} bajo el mínimo · ${r.esperando} con órdenes esperando`,
+    secciones: [{
+      titulo: 'Materiales en seguimiento',
+      columnas: [
+        { key:'tipo', label:'Tipo' }, { key:'codigo', label:'Código' }, { key:'nombre', label:'Nombre' }, { key:'grupo', label:'Categoría / área' },
+        { key:'stock', label:'Stock actual', num:true }, { key:'minimo', label:'Mínimo', num:true }, { key:'costo', label:'Costo/unidad', num:true }, { key:'valor', label:'Valor', num:true }
+      ],
+      filas: filasActuales.map(f => ({
+        tipo:f.tipo, codigo:f.codigo||'—', nombre:f.nombre, grupo:f.grupo,
+        stock: fmtNum(f.stock,2)+' '+f.unidad, minimo: fmtNum(f.minimo,2),
+        costo: f.costo!=null?fmtCOP(f.costo):'—', valor: fmtCOP(f.costo?f.costo*f.stock:0)
+      }))
+    }]
+  });
+}
+
+function exportarInventario(){
+  exportarExcel('LitoColor_inventario.xlsx', [{
+    nombre: 'Inventario',
+    filas: filasActuales.map(f => ({
+      Tipo: f.tipo, Código: f.codigo||'', Nombre: f.nombre, 'Categoría/área': f.grupo,
+      'Stock actual': f.stock, Unidad: f.unidad, Mínimo: f.minimo, 'Costo/unidad': f.costo||0, Valor: f.costo?f.costo*f.stock:0
+    }))
+  }]);
+}
 
 // Cambia a la pestaña de Órdenes y abre el detalle completo — mismo
 // patrón que usa dashboard.js (irAOrdenYVerDetalle) para sus tablas.
@@ -602,4 +636,8 @@ export function initInventario(){
       renderInventario();
     });
   }
+  const btnImprimir = document.getElementById('inv-imprimir');
+  if(btnImprimir) btnImprimir.addEventListener('click', imprimirInventario);
+  const btnExportar = document.getElementById('inv-exportar');
+  if(btnExportar) btnExportar.addEventListener('click', exportarInventario);
 }

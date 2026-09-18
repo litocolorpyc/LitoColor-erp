@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
-import { toast, fmtCOP } from './helpers.js';
+import { toast, fmtCOP, imprimirInforme, exportarExcel } from './helpers.js';
 import { getCurrentUser } from './auth.js';
 import { renderGerencial } from './dashboard.js';
 import { renderOppRecent } from './ordenes.js';
@@ -610,6 +610,7 @@ async function guardarFacturaVenta(){
     DB.facturas_venta_items.push(...(itemsGuardados||[]));
     limpiarFormularioVenta();
     renderFacturasVentaCargadas();
+    renderInformeVentas();
     // El ingreso de estas líneas (si tienen orden asociada) ya afecta
     // Gerencial y el detalle de esa orden — refresca ambos para que no
     // haga falta recargar la página.
@@ -676,6 +677,7 @@ async function eliminarFacturaVenta(facturaId){
     DB.facturas_venta_items = DB.facturas_venta_items.filter(it => it.factura_id !== facturaId);
     if(facturaEditandoId === facturaId) limpiarFormularioVenta();
     renderFacturasVentaCargadas();
+    renderInformeVentas();
     renderGerencial();
     renderOppRecent();
     toast('Factura eliminada');
@@ -804,6 +806,70 @@ export function renderFacturasVentaCargadas(){
   tbody.querySelectorAll('[data-del-fv]').forEach(b => b.addEventListener('click', () => eliminarFacturaVenta(parseInt(b.dataset.delFv, 10))));
 }
 
+// ---------- Informe de ventas (por rango, agrupado por cliente) ----------
+let ultimoInformeVentas = null;
+
+export function renderInformeVentas(){
+  const kpisEl = document.getElementById('fv-inf-kpis');
+  if(!kpisEl) return;
+  const desde = document.getElementById('fv-inf-desde').value || '2024-01-01';
+  const hasta = document.getElementById('fv-inf-hasta').value || new Date().toISOString().slice(0,10);
+  const facturas = DB.facturas_venta.filter(f => (f.fecha||'') >= desde && (f.fecha||'') <= hasta);
+  const facturaIds = new Set(facturas.map(f => f.id));
+  const items = DB.facturas_venta_items.filter(it => facturaIds.has(it.factura_id));
+
+  const totalBruto = facturas.reduce((s,f)=>s+(f.valor_total||0),0);
+  const netoAsociado = items.filter(it=>it.orden).reduce((s,it)=>s+(it.valor_neto||0),0);
+  kpisEl.innerHTML = `
+    <div class="kpi"><div class="lbl">Facturas</div><div class="val">${facturas.length}</div><div class="sub">${desde} a ${hasta}</div></div>
+    <div class="kpi"><div class="lbl">Total facturado (con IVA)</div><div class="val">${fmtCOP(totalBruto)}</div></div>
+    <div class="kpi"><div class="lbl">Valor neto asociado a órdenes</div><div class="val">${fmtCOP(netoAsociado)}</div><div class="sub">solo líneas con orden de producción</div></div>`;
+
+  const porCliente = {};
+  facturas.forEach(f => {
+    const cliente = f.cliente || 'Sin cliente';
+    porCliente[cliente] = porCliente[cliente] || { cliente, n:0, total:0, neto:0 };
+    porCliente[cliente].n++;
+    porCliente[cliente].total += (f.valor_total||0);
+  });
+  items.forEach(it => {
+    if(!it.orden) return;
+    const factura = DB.facturas_venta.find(f => f.id === it.factura_id);
+    const cliente = (factura && factura.cliente) || 'Sin cliente';
+    if(porCliente[cliente]) porCliente[cliente].neto += (it.valor_neto||0);
+  });
+  const filasCliente = Object.values(porCliente).sort((a,b) => b.total - a.total);
+
+  document.querySelector('#tbl-fv-inf-cliente tbody').innerHTML = filasCliente.map(f => `<tr>
+    <td>${f.cliente}</td><td class="num">${f.n}</td><td class="num">${fmtCOP(f.total)}</td><td class="num">${fmtCOP(f.neto)}</td>
+  </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--ink-faint)">Sin facturas en este rango</td></tr>';
+
+  ultimoInformeVentas = { desde, hasta, facturas: facturas.length, totalBruto, netoAsociado, filasCliente };
+}
+
+function imprimirInformeVentas(){
+  if(!ultimoInformeVentas) return;
+  const k = ultimoInformeVentas;
+  imprimirInforme({
+    titulo: 'Informe de ventas',
+    subtitulo: `${k.desde} a ${k.hasta} · ${k.facturas} factura(s) · Total facturado (con IVA) ${fmtCOP(k.totalBruto)} · Valor neto asociado a órdenes ${fmtCOP(k.netoAsociado)}`,
+    secciones: [{
+      titulo: 'Por cliente',
+      columnas: [{ key:'cliente', label:'Cliente' }, { key:'n', label:'Facturas', num:true }, { key:'total', label:'Total (con IVA)', num:true }, { key:'neto', label:'Valor neto asociado a órdenes', num:true }],
+      filas: k.filasCliente.map(f => ({ cliente:f.cliente, n:f.n, total:fmtCOP(f.total), neto:fmtCOP(f.neto) }))
+    }]
+  });
+}
+
+function exportarInformeVentas(){
+  if(!ultimoInformeVentas) return;
+  const k = ultimoInformeVentas;
+  exportarExcel(`LitoColor_ventas_${k.desde}_a_${k.hasta}.xlsx`, [{
+    nombre: 'Por cliente',
+    filas: k.filasCliente.map(f => ({ Cliente: f.cliente, Facturas: f.n, 'Total (con IVA)': f.total, 'Valor neto asociado a órdenes': f.neto }))
+  }]);
+}
+
 export function initVentas(){
   const fileInput = document.getElementById('fv-file');
   if(!fileInput) return; // esta pestaña no existe para este rol/página
@@ -835,4 +901,10 @@ export function initVentas(){
   });
   document.getElementById('fv-detalle-guardar').addEventListener('click', guardarDetalleFacturaVenta);
   renderFacturasVentaCargadas();
+
+  document.getElementById('fv-inf-desde').addEventListener('change', renderInformeVentas);
+  document.getElementById('fv-inf-hasta').addEventListener('change', renderInformeVentas);
+  document.getElementById('fv-inf-imprimir').addEventListener('click', imprimirInformeVentas);
+  document.getElementById('fv-inf-exportar').addEventListener('click', exportarInformeVentas);
+  renderInformeVentas();
 }

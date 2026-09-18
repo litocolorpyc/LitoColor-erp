@@ -112,6 +112,45 @@ export function wireTableScroll(tablaId, btnInicioId, btnFinalId){
   });
 }
 
+// Imprime un informe genérico (título + subtítulo + una o más tablas) en
+// una ventana nueva — mismo patrón que ya usaban por separado Órdenes,
+// Remisión y Reprocesos para imprimir; centralizado acá porque de aquí en
+// adelante varios módulos más (Gerencial, Producción, Operario, Registrar
+// costo, Registrar Venta, Inventario) necesitan la misma mecánica.
+// `secciones`: [{ titulo, resumen?, columnas:[{key,label,num?}], filas:[{...}] }]
+export function imprimirInforme({ titulo, subtitulo, secciones }){
+  const seccionesHTML = (secciones||[]).map(sec => `
+    <h2>${sec.titulo}</h2>
+    ${sec.resumen ? `<p class="resumen">${sec.resumen}</p>` : ''}
+    <table>
+      <thead><tr>${sec.columnas.map(c=>`<th${c.num?' class="num"':''}>${c.label}</th>`).join('')}</tr></thead>
+      <tbody>${(sec.filas||[]).map(fila => `<tr>${sec.columnas.map(c=>`<td${c.num?' class="num"':''}>${fila[c.key] ?? ''}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${sec.columnas.length}" style="text-align:center">Sin datos</td></tr>`}</tbody>
+    </table>`).join('');
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>${titulo}</title>
+<style>
+  body{ font-family: Arial, Helvetica, sans-serif; color:#111; margin:20px; }
+  h1{ font-size:20px; margin:0 0 2px; } .sub{ color:#444; font-size:13px; margin-bottom:16px; }
+  h2{ font-size:15px; margin:18px 0 6px; border-bottom:1px solid #999; padding-bottom:3px; }
+  .resumen{ font-size:12.5px; color:#333; margin:0 0 8px; }
+  table{ border-collapse:collapse; width:100%; margin-bottom:6px; font-size:12px; }
+  td, th{ border:1px solid #ccc; padding:5px 7px; text-align:left; } th{ background:#f2f2f2; }
+  .num{ text-align:right; }
+  @media print{ body{ margin:10mm; } }
+</style></head><body>
+  <h1>${titulo}</h1>
+  <div class="sub">${subtitulo||''}</div>
+  ${seccionesHTML}
+</body></html>`;
+
+  const w = window.open('', '_blank');
+  if(!w){ toast('El navegador bloqueó la ventana de impresión — permite ventanas emergentes para este sitio'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 300);
+}
+
 export function exportarExcel(nombreArchivo, hojas){
   const wb = XLSX.utils.book_new();
   hojas.forEach(h => {
