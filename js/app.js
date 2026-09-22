@@ -1,4 +1,5 @@
 import { loadAll } from './store.js';
+import { activarExcelEnTarjetas } from './helpers.js';
 import { renderGerencial, renderProduccion, renderOperario, populateOperarioSelect, initDashboardFilters, abrirEdicionRegistroDesdeOrden } from './dashboard.js';
 import { initRegistrar, populateReg } from './registrar.js';
 import { initOppForm, renderOppRecent, populateClienteSelect, populateProductoSelect, refreshPapelPliegoSelects, setAjustarConsumoHandler, setReprocesarHandler } from './ordenes.js';
@@ -105,6 +106,7 @@ async function arrancarApp(){
   pasoSeguro('Remisiones', initRemisiones);
   pasoSeguro('Reprocesos', initReprocesos);
 
+  pasoSeguro('Botón Excel en todas las tablas', () => activarExcelEnTarjetas());
   pasoSeguro('Permisos', aplicarPermisos);
 }
 

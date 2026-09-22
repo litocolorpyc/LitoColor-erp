@@ -1,5 +1,5 @@
 import { DB } from './store.js';
-import { fmtNum, rangoFechas, toast } from './helpers.js';
+import { fmtNum, rangoFechas, toast, agregarBotonExcelVentana } from './helpers.js';
 
 // Pedido 16sep26: saber, por rango de fechas y por operario (uno, varios o
 // todos), cuántos registros de tiempos hizo cada uno por orden — e
@@ -140,6 +140,7 @@ function imprimirResultado(){
   if(!w){ toast('El navegador bloqueó la ventana de impresión — permite ventanas emergentes para este sitio'); return; }
   w.document.write(html);
   w.document.close();
+  agregarBotonExcelVentana(w, w.document.title);
   w.focus();
   setTimeout(() => w.print(), 300);
 }

@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
-import { toast, fmtCOP, fmtNum, fechaHoyLocal, imprimirInforme, exportarExcel } from './helpers.js';
+import { toast, fmtCOP, fmtNum, fechaHoyLocal, imprimirInforme, exportarExcel, agregarBotonExcelVentana } from './helpers.js';
 import { getCurrentUser } from './auth.js';
 import { renderGerencial } from './dashboard.js';
 import { renderOppRecent } from './ordenes.js';
@@ -112,12 +112,34 @@ function seleccionarCliente(cliente){
 }
 
 // ---------- órdenes del cliente elegido ----------
+// Número(s) de remisión en que ya aparece cada orden — sin contar la
+// remisión que se está editando ahora mismo (sus órdenes deben seguir
+// saliendo marcadas).
+function remisionesPorOrden(){
+  const mapa = new Map();
+  DB.remision_ordenes.forEach(ro => {
+    if(remisionEditandoId != null && ro.remision_id === remisionEditandoId) return;
+    const r = DB.remisiones.find(x => x.id === ro.remision_id);
+    if(!r) return;
+    if(!mapa.has(ro.orden)) mapa.set(ro.orden, []);
+    mapa.get(ro.orden).push(numeroConPrefijo(r.numero));
+  });
+  return mapa;
+}
+
+// Por defecto solo las órdenes PENDIENTES de remisión (pedido 22sep26:
+// antes salían todas las del cliente, incluso las ya despachadas). La
+// casilla "Mostrar también…" deja ver las ya remitidas, para entregas
+// parciales de una misma orden.
 function ordenesDelCliente(nombreCliente){
   const texto = normalizarTexto(nombreCliente);
   if(!texto) return [];
+  const verRemitidas = document.getElementById('rem-mostrar-remitidas')?.checked;
+  const remitidas = remisionesPorOrden();
   return DB.opp_ordenes
     .filter(o => o.estado !== 'Cancelada' && normalizarTexto(o.cliente) === texto)
-    .slice()
+    .filter(o => verRemitidas || !remitidas.has(o.orden) || ordenesSeleccionadas.has(o.orden))
+    .map(o => ({ ...o, remisionesPrevias: remitidas.get(o.orden) || [] }))
     .sort((a,b) => b.orden - a.orden);
 }
 
@@ -130,7 +152,7 @@ function renderOrdenesDelCliente(nombreCliente){
     wrap.style.display = 'none';
     hint.style.display = '';
     hint.textContent = nombreCliente
-      ? 'Este cliente no tiene órdenes activas en el sistema — puedes agregar líneas manuales abajo igual.'
+      ? 'Este cliente no tiene órdenes pendientes de remisión — puedes agregar líneas manuales abajo igual, o marcar "Mostrar también…" para ver las ya remitidas.'
       : 'Elige un cliente arriba para ver sus órdenes.';
     return;
   }
@@ -141,6 +163,7 @@ function renderOrdenesDelCliente(nombreCliente){
     <td><b>${o.orden}</b></td>
     <td>${o.producto || '(sin producto)'}</td>
     <td>${o.fecha ? o.fecha.slice(0,10) : ''}</td>
+    <td>${o.remisionesPrevias.length ? `<span class="estado-chip done">ya en ${o.remisionesPrevias.join(', ')}</span>` : '<span class="estado-chip pending">pendiente</span>'}</td>
   </tr>`).join('');
   tbody.querySelectorAll('tr').forEach(tr => {
     const chk = tr.querySelector('.rem-orden-check');
@@ -516,6 +539,7 @@ function imprimirRemision(id){
   if(!w){ toast('El navegador bloqueó la ventana de impresión — permite ventanas emergentes para este sitio'); return; }
   w.document.write(html);
   w.document.close();
+  agregarBotonExcelVentana(w, w.document.title);
   w.focus();
   setTimeout(() => w.print(), 300);
 }
@@ -623,6 +647,7 @@ export function initRemisiones(){
     renderDropdownClientes(clienteInput.value);
   });
   clienteInput.addEventListener('focus', () => renderDropdownClientes(clienteInput.value));
+  document.getElementById('rem-mostrar-remitidas').addEventListener('change', () => renderOrdenesDelCliente(clienteInput.value));
   clienteInput.addEventListener('blur', () => setTimeout(ocultarDropdownClientes, 150));
   clienteInput.addEventListener('change', () => {
     // si escribió un nombre que sí calza con un cliente del maestro (aunque

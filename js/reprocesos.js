@@ -1,8 +1,9 @@
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
-import { toast, fmtCOP, fmtNum, fechaHoyLocal, exportarExcel } from './helpers.js';
+import { toast, fmtCOP, fmtNum, fechaHoyLocal, exportarExcel, agregarBotonExcelVentana } from './helpers.js';
 import { getCurrentUser } from './auth.js';
 import { areasCompletadasPorPieza, mostrarDetalleOrden } from './ordenes.js';
+import { actualizarCostoAdicionalReproceso } from './registrar.js';
 
 // "Reprocesos" (pedido 17-18sep26): reabrir un proceso YA completado de
 // una suborden, con motivo/responsable/costo adicional — se guarda como
@@ -206,8 +207,22 @@ export function renderListadoReprocesos(){
     <td>${r.responsableReproceso || '—'}</td>
     <td class="num">${fmtCOP(r.valorActividad||0)}</td>
     <td class="num">${fmtCOP(r.costoAdicionalReproceso||0)}</td>
-    <td>${r.orden!=null ? '<button type="button" class="row-btn" data-ver-orden-rep>Ver orden</button>' : ''}</td>
+    <td style="white-space:nowrap">
+      <button type="button" class="row-btn" data-editar-rep="${r.id}">${r.motivoReproceso ? '✎ Editar' : '✎ Poner motivo'}</button>
+      ${r.orden!=null ? '<button type="button" class="row-btn" data-ver-orden-rep>Ver orden</button>' : ''}
+    </td>
   </tr>`).join('') || '<tr><td colspan="10" style="text-align:center;color:var(--ink-faint)">Sin reprocesos registrados todavía</td></tr>';
+
+  const sinMotivo = filas.filter(r => !r.motivoReproceso).length;
+  const aviso = document.getElementById('rep-sin-motivo-aviso');
+  if(aviso){
+    aviso.style.display = sinMotivo ? '' : 'none';
+    aviso.textContent = `${sinMotivo} reproceso(s) de esta lista no tienen motivo — casi todos son registros donde el operario marcó "¿Reproceso? = Sí" al terminar, antes de que existiera este módulo. Usa "✎ Poner motivo" para completarlos y que salgan en el gráfico "Por motivo".`;
+  }
+
+  tbody.querySelectorAll('[data-editar-rep]').forEach(btn => {
+    btn.addEventListener('click', () => abrirEdicionReproceso(btn.closest('tr'), parseInt(btn.dataset.editarRep, 10)));
+  });
 
   tbody.querySelectorAll('[data-ver-orden-rep]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -215,6 +230,61 @@ export function renderListadoReprocesos(){
       if(!isNaN(orden)) irAOrdenYVerDetalle(orden);
     });
   });
+}
+
+// Completar/corregir motivo, responsable y costo adicional de un reproceso
+// ya existente (pedido 22sep26) — sobre todo los que se marcaron desde
+// Registrar sin motivo, que antes solo se podían arreglar por "Corregir
+// registro" (Operario) sin que eso fuera evidente.
+function abrirEdicionReproceso(tr, id){
+  const r = DB.produccion.find(x => x.id === id);
+  if(!r) return;
+  const previa = tr.parentElement.querySelector('tr.rep-edit-row');
+  if(previa) previa.remove();
+  const motivos = DB.motivos_reproceso.filter(m => m.activo !== false || m.nombre === r.motivoReproceso);
+  const fila = document.createElement('tr');
+  fila.className = 'rep-edit-row';
+  fila.innerHTML = `<td colspan="10" style="background:var(--bg-soft, #f6f4ef)">
+    <div class="form-row" style="align-items:flex-end">
+      <div class="field"><label>Motivo del reproceso</label><select class="rep-ed-motivo"><option value="">— elige un motivo —</option>${motivos.map(m=>`<option value="${m.nombre}"${m.nombre===r.motivoReproceso?' selected':''}>${m.nombre}</option>`).join('')}</select></div>
+      <div class="field"><label>Responsable</label><input type="text" class="rep-ed-responsable" list="reg-responsables-datalist" placeholder="quién/qué lo causó" value="${(r.responsableReproceso||'').replace(/"/g,'&quot;')}"></div>
+      <div class="field"><label>Costo adicional</label><input type="number" class="rep-ed-costo" min="0" value="${r.costoAdicionalReproceso ?? ''}"></div>
+      <div class="field full"><label>Comentario</label><input type="text" class="rep-ed-comentario" value="${(r.comentario||'').replace(/"/g,'&quot;')}"></div>
+    </div>
+    <div class="form-foot"><span class="card-hint">Orden ${r.orden ?? '—'} · ${r.area || ''} · ${r.operario || ''} · ${(r.fecha||'').slice(0,10)}</span>
+      <button type="button" class="btn-secondary rep-ed-cancelar">Cancelar</button>
+      <button type="button" class="btn-primary rep-ed-guardar">Guardar</button></div>
+  </td>`;
+  tr.after(fila);
+  fila.querySelector('.rep-ed-cancelar').addEventListener('click', () => fila.remove());
+  fila.querySelector('.rep-ed-guardar').addEventListener('click', async () => {
+    const motivo = fila.querySelector('.rep-ed-motivo').value || null;
+    if(!motivo){ toast('Elige el motivo del reproceso'); return; }
+    const costo = parseFloat(fila.querySelector('.rep-ed-costo').value) || 0;
+    const updates = {
+      motivo_reproceso: motivo,
+      responsable_reproceso: fila.querySelector('.rep-ed-responsable').value.trim() || null,
+      costo_adicional_reproceso: costo || null,
+      comentario: fila.querySelector('.rep-ed-comentario').value.trim() || null
+    };
+    const btn = fila.querySelector('.rep-ed-guardar');
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    try{
+      const { data, error } = await sb.from('produccion').update(updates).eq('id', id).select();
+      if(error) throw error;
+      const idx = DB.produccion.findIndex(x => x.id === id);
+      if(idx >= 0 && data && data[0]) DB.produccion[idx] = normProd(data[0]);
+      await actualizarCostoAdicionalReproceso({ produccionId: id, orden: r.orden, suborden: r.suborden, fecha: r.fecha, valor: costo });
+      toast('Reproceso actualizado');
+      renderListadoReprocesos();
+      renderInformeReprocesos();
+    }catch(err){
+      console.error(err);
+      toast('No se pudo guardar el reproceso — revisa la consola');
+      btn.disabled = false; btn.textContent = 'Guardar';
+    }
+  });
+  fila.querySelector('.rep-ed-motivo').focus();
 }
 
 // ---------- informe ----------
@@ -236,7 +306,8 @@ export function renderInformeReprocesos(){
     const motivo = r.motivoReproceso || 'Sin motivo';
     porMotivo[motivo] = (porMotivo[motivo]||0) + 1;
     const persona = r.operario || 'Sin operario';
-    if(!porPersona[persona]) porPersona[persona] = { operario: persona, responsables: new Set(), n:0, mo:0, adic:0 };
+    if(!porPersona[persona]) porPersona[persona] = { operario: persona, responsables: new Set(), motivos: {}, n:0, mo:0, adic:0 };
+    porPersona[persona].motivos[motivo] = (porPersona[persona].motivos[motivo]||0) + 1;
     porPersona[persona].n++;
     porPersona[persona].mo += (r.valorActividad||0);
     porPersona[persona].adic += (r.costoAdicionalReproceso||0);
@@ -267,12 +338,13 @@ export function renderInformeReprocesos(){
   const filasPersona = Object.values(porPersona).sort((a,b)=>b.n-a.n);
   document.querySelector('#tbl-rep-por-operario tbody').innerHTML = filasPersona.map(p => `<tr>
     <td>${p.operario}</td>
+    <td>${Object.entries(p.motivos).sort((a,b)=>b[1]-a[1]).map(([m,n])=>`${m} (${n})`).join(', ')}</td>
     <td>${[...p.responsables].join(', ') || '—'}</td>
     <td class="num">${p.n}</td>
     <td class="num">${fmtCOP(p.mo)}</td>
     <td class="num">${fmtCOP(p.adic)}</td>
     <td class="num">${fmtCOP(p.mo+p.adic)}</td>
-  </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin datos en este rango</td></tr>';
+  </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint)">Sin datos en este rango</td></tr>';
 }
 
 function imprimirInformeReprocesos(){
@@ -307,7 +379,9 @@ function imprimirInformeReprocesos(){
 
   const w = window.open('', '_blank');
   if(!w){ toast('El navegador bloqueó la ventana de impresión — permite ventanas emergentes para este sitio'); return; }
-  w.document.write(html); w.document.close(); w.focus();
+  w.document.write(html); w.document.close();
+  agregarBotonExcelVentana(w, w.document.title);
+  w.focus();
   setTimeout(() => w.print(), 300);
 }
 

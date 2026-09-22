@@ -281,7 +281,7 @@
           <div class="card-head"><h3>Horas por área</h3><span class="card-hint" id="op-chart-hint">de este operario</span></div>
           <canvas id="chart-op-area" height="220"></canvas>
         </div>
-        <div class="card" id="op-log-card">
+        <div class="card" id="op-log-card" data-no-excel>
           <div class="card-head">
             <h3>Bitácora</h3>
             <span style="display:flex;align-items:baseline;gap:10px">
@@ -472,7 +472,7 @@
         </div>
       </div>
 
-      <div class="card" id="opp-detalle-card" style="display:none">
+      <div class="card" id="opp-detalle-card" style="display:none" data-excel>
         <div class="card-head"><h3 id="opp-detalle-titulo">Detalle de la orden</h3><span class="card-hint"><button type="button" class="row-btn" id="opp-detalle-imprimir">🖨 Imprimir</button> <button type="button" class="row-btn" id="opp-detalle-cerrar">Cerrar ✕</button></span></div>
         <div id="opp-detalle-body"></div>
       </div>
@@ -633,7 +633,7 @@
       </div>
     </section>
 
-    <section class="tab-panel" id="panel-registrar">
+    <section class="tab-panel" id="panel-registrar" data-no-excel>
       <datalist id="reg-responsables-datalist"></datalist>
       <div class="card">
         <div class="card-head">
@@ -759,14 +759,15 @@
         </div>
         <div class="table-wrap">
           <table id="tbl-rep-por-operario">
-            <thead><tr><th>Operario</th><th>Responsable</th><th class="num">Reprocesos</th><th class="num">Costo M.O.</th><th class="num">Costo adicional</th><th class="num">Total</th></tr></thead>
+            <thead><tr><th>Operario</th><th>Motivos</th><th>Responsable</th><th class="num">Reprocesos</th><th class="num">Costo M.O.</th><th class="num">Costo adicional</th><th class="num">Total</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
       </div>
 
       <div class="card">
-        <div class="card-head"><h3>Reprocesos registrados</h3><span class="card-hint">"Ver detalle" abre esa orden</span></div>
+        <div class="card-head"><h3>Reprocesos registrados</h3><span class="card-hint">"Ver orden" abre esa orden · "✎" completa o corrige motivo, responsable y costo adicional</span></div>
+        <p class="card-hint" id="rep-sin-motivo-aviso" style="display:none;color:var(--bad)"></p>
         <div class="form-row">
           <div class="field"><label>N° de orden</label><input type="number" id="rep-f-orden"></div>
           <div class="field"><label>Área</label><input type="text" id="rep-f-area" placeholder="contiene…"></div>
@@ -1177,7 +1178,7 @@
       </div>
     </section>
 
-    <section class="tab-panel" id="panel-ayuda">
+    <section class="tab-panel" id="panel-ayuda" data-no-excel>
       <div class="card">
         <div class="card-head"><h3>Ayuda y Manual de Usuario</h3><span class="card-hint">salta directo a tu sección</span></div>
         <div class="help-toc">
@@ -1318,7 +1319,7 @@
       <div class="card" id="ayuda-remision">
         <div class="card-head"><h3>Remisión</h3><span class="card-hint">documento de despacho, con numeración automática</span></div>
         <h4>Crear una remisión</h4>
-        <p>En la pestaña <b>Remisión</b>, click en <b>"+ Crear remisión"</b>. Escribe el nombre del cliente — un desplegable va filtrando mientras escribes, según el maestro de Clientes. Al elegirlo, se llenan solos el NIT, teléfono y dirección, y aparece la lista de <b>órdenes activas</b> de ese cliente.</p>
+        <p>En la pestaña <b>Remisión</b>, click en <b>"+ Crear remisión"</b>. Escribe el nombre del cliente — un desplegable va filtrando mientras escribes, según el maestro de Clientes. Al elegirlo, se llenan solos el NIT, teléfono y dirección, y aparece la lista de <b>órdenes pendientes de remisión</b> de ese cliente (las que ya salieron en otra remisión se ocultan; marca "Mostrar también…" si necesitas una entrega parcial de una orden ya remitida).</p>
         <p>Marca las órdenes que se están despachando: cada una agrega una línea a la tabla de ítems, con el producto de la orden como descripción y el precio de venta que tenga cargado en su pestaña <b>Presupuesto</b> (si no lo tiene, el valor queda en 0 para completarlo a mano). Todo es editable — descripción, cantidad, valor unitario, valor total — y se puede agregar una línea manual con "+ Agregar línea".</p>
         <p>Al terminar, click en <b>"Revisar y guardar"</b>: muestra el total y pide confirmar antes de guardar. El número de remisión se asigna solo al guardar, y después pregunta si quieres imprimirla de una vez.</p>
         <h4>Numeración</h4>
@@ -1337,6 +1338,8 @@
         </ol>
         <p>En ambos casos hay que asignar un <b>operario</b>, elegir el <b>motivo</b> (catálogo en Maestros → "Motivos de reproceso"), y opcionalmente anotar el <b>responsable</b> (quién o qué lo causó) y un <b>costo adicional</b> (si aplica, se carga como un costo más de esa orden).</p>
         <p>El operario asignado lo ve en <b>Registrar</b> como una actividad más ("📌 asignada, sin iniciar") — la empieza y la termina igual que cualquier otra, y el tiempo/costo de mano de obra queda registrado solo, sin nada especial que hacer. Si un operario marca "¿Reproceso?" = Sí por su cuenta al finalizar una actividad normal (sin pasar por el botón "↺"), también se le piden esos mismos 3 datos ahí mismo.</p>
+        <p><b>¿Dónde ver un reproceso?</b> En la pestaña <b>Reprocesos</b> (informe con gráfico "Por motivo" y tabla por operario con sus motivos, más el listado completo abajo), y en el <b>detalle de cada orden</b>, en el recuadro <b>"↺ Reprocesos de esta orden"</b> (sale arriba del Presupuesto, solo si la orden tiene reprocesos).</p>
+        <p><b>Reprocesos sin motivo:</b> si un operario marcó "¿Reproceso? = Sí" sin elegir motivo, en el listado aparece el botón <b>"✎ Poner motivo"</b> — ahí se completa motivo, responsable y costo adicional, y desde ese momento cuenta en el gráfico "Por motivo".</p>
         <div class="help-tip"><b>Tip:</b> la pestaña Reprocesos también tiene su propio informe (KPIs, por área, por motivo, por operario) y el listado completo de reprocesos, ambos imprimibles y exportables a Excel.</div>
       </div>
 
@@ -1358,7 +1361,7 @@
         <p><b>Presupuesto vs. Real (por orden):</b> en el detalle de cada orden, solo Gerente/Jefe de Producción/Admin pueden cargar Costo, Imprevistos, Precio de venta antes y con IVA — el sistema calcula solo el Total Costo, la Rentabilidad esperada, y compara contra el costo real de mano de obra y el ingreso facturado.</p>
         <p><b>Prioridad de producción:</b> desde Órdenes, arrastra las filas de la tarjeta "Prioridad de producción" para decidir en qué orden se debe trabajar — se guarda solo, sin botón aparte.</p>
         <p><b>Horas por área (Producción):</b> hacé click en una barra del gráfico (o en una fila de la tabla "Producción por área", debajo) para desplegar las órdenes y subórdenes que componen esas horas, en el rango de fechas elegido — y click en una de esas órdenes para abrir su detalle completo.</p>
-        <p><b>Imprimir y exportar:</b> Gerencial, Producción, Operario, Registrar costo, Registrar Venta, Remisión, Reprocesos e Inventario tienen botones <b>"🖨 Imprimir"</b> y/o <b>"⬇ Exportar a Excel"</b> junto a sus filtros de fecha, para sacar el informe de ese rango en limpio. El botón "⬇ Respaldo completo" (en Gerencial) descarga Pedidos, Producción, Órdenes, Empleados, Máquinas y Clientes en un solo archivo.</p>
+        <p><b>Imprimir y exportar:</b> Gerencial, Producción, Operario, Registrar costo, Registrar Venta, Remisión, Reprocesos e Inventario tienen botones <b>"🖨 Imprimir"</b> y/o <b>"⬇ Exportar a Excel"</b> junto a sus filtros de fecha, para sacar el informe de ese rango en limpio. Además, <b>toda tabla del sistema</b> tiene un botón <b>"⬇ Excel"</b> en su encabezado (descarga lo que se ve en pantalla, con los filtros aplicados), y toda ventana de impresión tiene arriba un botón <b>"⬇ Descargar en Excel"</b> (no sale en el papel). El botón "⬇ Respaldo completo" (en Gerencial) descarga Pedidos, Producción, Órdenes, Empleados, Máquinas y Clientes en un solo archivo.</p>
         <p><b>Usuarios:</b> para dar acceso a alguien nuevo, ponle correo y rol ahí, y dile que use "¿Primera vez? Crea tu contraseña aquí" en el login — sin pedir ningún SQL.</p>
       </div>
 
@@ -1464,7 +1467,7 @@
         <div class="form-foot"><span></span><button type="button" class="btn-primary" id="rc-save">Guardar costo</button></div>
       </div>
 
-      <div class="card" id="recibo-import-card">
+      <div class="card" id="recibo-import-card" data-no-excel>
         <div class="card-head"><h3>Importar compra / costo (PDF de Siigo)</h3><span class="card-hint">los documentos "Compra" que descarga Siigo — revisa y corrige antes de guardar, nada se guarda automático</span></div>
         <div class="form-row">
           <div class="field full">
@@ -1614,7 +1617,7 @@
     </section>
 
     <section class="tab-panel" id="panel-registrar-venta">
-      <div class="card" id="fv-import-card">
+      <div class="card" id="fv-import-card" data-no-excel>
         <div class="card-head"><h3>Registrar Venta — Importar factura de venta (PDF de Siigo)</h3><span class="card-hint">las "Factura electrónica de venta" (FE) que descarga la administradora — revisa y corrige antes de guardar, nada se guarda automático</span></div>
         <div class="form-row">
           <div class="field full">
@@ -1702,7 +1705,7 @@
         <button type="button" class="btn-primary" id="rem-abrir-crear" style="margin:0">+ Crear remisión</button>
       </div>
 
-      <div class="card" id="rem-crear-card" style="display:none">
+      <div class="card" id="rem-crear-card" style="display:none" data-no-excel>
         <div class="card-head"><h3>Crear remisión</h3><span class="card-hint">elige el cliente, marca las órdenes que se despachan, revisa los ítems y guarda — el N° de remisión sugiere el siguiente consecutivo de Maestros &gt; Documentos, pero se puede escribir a mano el que corresponda (ej. el del talonario físico)</span></div>
         <p class="card-hint" id="rem-editando-aviso" style="display:none;background:#2E8FC022;color:#2E8FC0;padding:6px 10px;border-radius:8px;font-weight:600"></p>
 
@@ -1727,11 +1730,12 @@
         </div>
 
         <div class="field full">
-          <label>Órdenes del cliente</label>
+          <label>Órdenes del cliente pendientes de remisión</label>
+          <label class="card-hint" style="display:flex;align-items:center;gap:6px;font-weight:normal;margin:2px 0 4px"><input type="checkbox" id="rem-mostrar-remitidas" style="width:auto;margin:0"> Mostrar también las órdenes que ya tienen remisión (entregas parciales)</label>
           <p class="card-hint" id="rem-ordenes-hint">Elige un cliente arriba para ver sus órdenes.</p>
           <div class="table-wrap" id="rem-ordenes-wrap" style="display:none;max-height:220px;overflow-y:auto">
             <table id="tbl-rem-ordenes-cliente">
-              <thead><tr><th style="width:34px"></th><th>N°</th><th>Producto</th><th>Fecha</th></tr></thead>
+              <thead><tr><th style="width:34px"></th><th>N°</th><th>Producto</th><th>Fecha</th><th>Remisión</th></tr></thead>
               <tbody></tbody>
             </table>
           </div>

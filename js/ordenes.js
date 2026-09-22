@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
-import { toast, fmtNum, exportarExcel, fechaHoyLocal, wireTableScroll } from './helpers.js';
+import { toast, fmtNum, exportarExcel, fechaHoyLocal, wireTableScroll, agregarBotonExcelVentana } from './helpers.js';
 import { getCurrentUser, puedeEditarProduccion } from './auth.js';
 import { poblarDatalistProveedores } from './costos.js';
 
@@ -1306,9 +1306,38 @@ function estadoRegistroHTML(r){
   else if(!r.horaFin) chips.push('<span class="estado-chip estado-chip-warn">⏱ en curso</span>');
   else if(r.procesoCompleto === false) chips.push(`<span class="estado-chip estado-chip-warn">⏸ pausa${r.motivoPausa ? ' — ' + r.motivoPausa : ''}</span>`);
   else chips.push('<span class="estado-chip done">✓ terminado</span>');
-  if(r.reproceso === 'Si') chips.push('<span class="estado-chip pending">↺ reproceso</span>');
+  if(r.reproceso === 'Si') chips.push(`<span class="estado-chip pending">↺ reproceso${r.motivoReproceso ? ' — ' + r.motivoReproceso : ''}</span>`);
   if(r.numeroRemision) chips.push(`<span class="estado-chip done">🚚 remisión ${r.numeroRemision}</span>`);
   return chips.join(' ');
+}
+
+// Tarjeta "Reprocesos de esta orden" (pedido 22sep26): antes un reproceso
+// solo se veía como un chip "↺ reproceso" perdido dentro del Historial de
+// producción, y no quedaba claro dónde mirarlo al abrir la orden.
+function reprocesosOrdenHTML(registros, piezas){
+  const reps = historialOrdenRows(registros.filter(r => r.reproceso === 'Si'));
+  if(!reps.length) return '';
+  const totalMO = reps.reduce((s,r)=>s+(r.valorActividad||0),0);
+  const totalAdic = reps.reduce((s,r)=>s+(r.costoAdicionalReproceso||0),0);
+  const filas = reps.map(r => `<tr>
+      <td>${(r.fecha||'').slice(0,10)}</td>
+      <td>${piezaLabelDeRegistro(r, piezas)}</td>
+      <td>${r.area || '—'}</td>
+      <td>${r.operario || '—'}</td>
+      <td>${r.motivoReproceso || '<span class="card-hint">sin motivo</span>'}</td>
+      <td>${r.responsableReproceso || '—'}</td>
+      <td class="num">${r.tiempoHr != null ? fmtNum(r.tiempoHr,2) : '—'}</td>
+      <td class="num">${fmtCOPlocal(r.valorActividad||0)}</td>
+      <td class="num">${fmtCOPlocal(r.costoAdicionalReproceso||0)}</td>
+      <td>${r.comentario || ''}</td>
+    </tr>`).join('');
+  return `<div class="card" style="margin:0 0 16px;border-left:4px solid #C24A1F">
+      <div class="card-head"><h3>↺ Reprocesos de esta orden (${reps.length})</h3><span class="card-hint">costo mano de obra ${fmtCOPlocal(totalMO)} · costo adicional ${fmtCOPlocal(totalAdic)} — para completar el motivo ve a la pestaña Reprocesos</span></div>
+      <div class="table-wrap"><table class="detalle-mini-table">
+        <thead><tr><th>Fecha</th><th>Pieza</th><th>Área</th><th>Operario</th><th>Motivo</th><th>Responsable</th><th class="num">Horas</th><th class="num">Costo M.O.</th><th class="num">Costo adicional</th><th>Comentario</th></tr></thead>
+        <tbody>${filas}</tbody>
+      </table></div>
+    </div>`;
 }
 
 function historialOrdenHTML(registros, piezas){
@@ -1399,7 +1428,7 @@ export function mostrarDetalleOrden(orden){
 
     const filasOM = agruparPorAreaOperarioMaquina(recsPieza);
 
-    return `<div class="detalle-pieza-card">
+    return `<div class="detalle-pieza-card" data-excel-nombre="${(p.suborden + '. ' + (p.pieza || 'Pieza')).replace(/"/g,'')}">
       <div class="detalle-pieza-head">
         <b>${p.pieza || ('Pieza ' + p.suborden)}</b>
         <span class="card-hint">${p.cantidad ? fmtNum(p.cantidad,0)+' uds solicitadas' : ''}</span>
@@ -1448,6 +1477,7 @@ export function mostrarDetalleOrden(orden){
     ${areas.length ? '<canvas id="chart-detalle-area" height="90" style="margin-bottom:16px"></canvas>' : ''}
     ${o.observaciones ? `<div class="detalle-orden-obs"><b>Observaciones de la orden:</b> ${o.observaciones}</div>` : ''}
     ${comprasSinPiezaHTML}
+    ${reprocesosOrdenHTML(registros, piezas)}
 
     <div class="card presupuesto-card" style="margin:0 0 16px">
       <div class="card-head"><h3>Presupuesto vs. Real</h3><span class="card-hint">${puedeEditar ? 'como lo entrega el gerente a producción' : 'solo gerente/jefe de producción pueden editar estos valores'}</span></div>
@@ -1509,7 +1539,7 @@ function estadoRegistroTexto(r){
   else if(!r.horaFin) partes.push('en curso');
   else if(r.procesoCompleto === false) partes.push('pausa' + (r.motivoPausa ? ' — ' + r.motivoPausa : ''));
   else partes.push('terminado');
-  if(r.reproceso === 'Si') partes.push('reproceso');
+  if(r.reproceso === 'Si') partes.push('reproceso' + (r.motivoReproceso ? ' — ' + r.motivoReproceso : ''));
   return partes.join(' · ');
 }
 
@@ -1640,6 +1670,7 @@ export function imprimirDetalleOrden(orden){
   if(!w){ toast('El navegador bloqueó la ventana de impresión — permite ventanas emergentes para este sitio'); return; }
   w.document.write(html);
   w.document.close();
+  agregarBotonExcelVentana(w, w.document.title);
   w.focus();
   setTimeout(() => w.print(), 300);
 }
@@ -2471,7 +2502,7 @@ export function fichaOrdenParaOperarioHTML(orden){
 
     const filasOM = agruparPorAreaOperarioMaquina(recsPieza);
 
-    return `<div class="detalle-pieza-card">
+    return `<div class="detalle-pieza-card" data-excel-nombre="${(p.suborden + '. ' + (p.pieza || 'Pieza')).replace(/"/g,'')}">
       <div class="detalle-pieza-head">
         <b>${p.pieza || ('Pieza ' + p.suborden)}</b>
         <span class="card-hint">${p.cantidad ? fmtNum(p.cantidad,0)+' uds solicitadas' : ''}</span>
