@@ -369,7 +369,7 @@
       <div class="card">
         <div class="card-head"><h3>Consultar orden</h3><span class="card-hint">tamaño, material, corte, tintas, tiempos y consumo — todo en un solo lugar</span></div>
         <div class="form-row" style="align-items:flex-end">
-          <div class="field"><label>N° de orden</label><input type="number" id="opp-consultar-orden" placeholder="ej. 5944"></div>
+          <div class="field"><label>N° de orden</label><input type="text" id="opp-consultar-orden" placeholder="ej. 5944 o S-0001"></div>
           <button type="button" class="btn-primary" id="opp-consultar-btn" style="margin:0">Ver detalle completo</button>
         </div>
       </div>
@@ -398,7 +398,7 @@
           </span>
         </div>
         <div class="form-row">
-          <div class="field"><label>Orden N°</label><input type="number" id="opp-orden" required></div>
+          <div class="field"><label>Orden N° <span class="card-hint">(servicio: S-0001)</span></label><input type="text" id="opp-orden" required placeholder="ej. 6025 o S-0001"><span class="card-hint" id="opp-orden-hint" style="margin-top:3px"></span></div>
           <div class="field"><label>Fecha</label><input type="date" id="opp-fecha" required></div>
         </div>
         <div class="form-row">
@@ -718,7 +718,7 @@
       <div class="card" id="rep-crear-card" style="display:none">
         <div class="card-head"><h3>Nuevo reproceso</h3><span class="card-hint">reabre un proceso ya completado de una suborden — el operario asignado lo ve en Registrar y, al terminarlo, genera tiempo y costo de mano de obra como cualquier actividad</span></div>
         <div class="form-row">
-          <div class="field"><label>N° de orden</label><input type="number" id="rep-orden" placeholder="ej. 5944"></div>
+          <div class="field"><label>N° de orden</label><input type="text" id="rep-orden" placeholder="ej. 5944 o S-0001"></div>
           <div class="field"><label>Suborden / Pieza</label><select id="rep-pieza" disabled><option value="">— elige la orden primero —</option></select></div>
           <div class="field"><label>Área a reprocesar</label><select id="rep-area" disabled><option value="">— elige la pieza primero —</option></select></div>
         </div>
@@ -769,7 +769,7 @@
         <div class="card-head"><h3>Reprocesos registrados</h3><span class="card-hint">"Ver orden" abre esa orden · "✎" completa o corrige motivo, responsable y costo adicional</span></div>
         <p class="card-hint" id="rep-sin-motivo-aviso" style="display:none;color:var(--bad)"></p>
         <div class="form-row">
-          <div class="field"><label>N° de orden</label><input type="number" id="rep-f-orden"></div>
+          <div class="field"><label>N° de orden</label><input type="text" id="rep-f-orden" placeholder="ej. 5944 o S-0001"></div>
           <div class="field"><label>Área</label><input type="text" id="rep-f-area" placeholder="contiene…"></div>
           <div class="field"><label>Motivo</label><input type="text" id="rep-f-motivo" placeholder="contiene…"></div>
           <div class="field"><label>Operario / Responsable</label><input type="text" id="rep-f-persona" placeholder="contiene…"></div>
@@ -1399,6 +1399,7 @@
         <p><b>Olvidé mi contraseña:</b> pide a un Admin o Gerente que entre a "Usuarios" — todavía no hay recuperación automática.</p>
         <p><b>¿Los datos están seguros?</b> Sí — editar información exige sesión iniciada. Solo la captura de tiempos de operarios queda sin contraseña, a propósito.</p>
         <p><b>Un consumo de material no generó costo en la orden:</b> el material probablemente no tenía costo unitario cargado en el momento del consumo (ver "Cómo se costean los materiales"). En cuanto le cargues el costo (importando una compra, ajustando en Inventario, o a mano en Maestros), usa "Consumos de material sin costo" en Costos para costear de golpe lo que quedó pendiente.</p>
+        <p><b>¿Cómo monto una Orden de Servicio?</b> Igual que una orden de producción (a mano o con "Importar desde Excel", mismo formato), pero en "Orden N°" escribe <b>S-</b> y el número, ej. <b>S-0001</b> — en el Excel también puedes poner "S-0001" en la fila "Orden". Debajo del campo se ve cuál sigue en cada serie. Las de servicio tienen su propia numeración y no afectan el consecutivo de producción. Si el cliente trae las planchas o el papel, anótalo en Observaciones y el operario no registra ese consumo (así no se descuenta del inventario ni se costea).</p>
         <p><b>Quiero que la Remisión siga la numeración de mi talonario/Excel viejo:</b> entra a Maestros → Documentos (numeración) y pon el "Próximo número" correcto ANTES de crear la primera remisión real — por defecto arranca en 1.</p>
       </div>
     </section>
@@ -1764,7 +1765,7 @@
         <div class="form-row">
           <div class="field"><label>Cliente</label><input type="text" id="rem-f-cliente" placeholder="contiene…"></div>
           <div class="field"><label>N° de remisión</label><input type="text" id="rem-f-numero" placeholder="ej. 4478 o RM 4478"></div>
-          <div class="field"><label>N° de orden</label><input type="number" id="rem-f-orden"></div>
+          <div class="field"><label>N° de orden</label><input type="text" id="rem-f-orden" placeholder="ej. 5944 o S-0001"></div>
           <div class="field" style="max-width:160px"><label>Desde</label><input type="date" id="rem-f-desde"></div>
           <div class="field" style="max-width:160px"><label>Hasta</label><input type="date" id="rem-f-hasta"></div>
         </div>

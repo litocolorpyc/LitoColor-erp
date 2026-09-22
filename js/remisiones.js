@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
-import { toast, fmtCOP, fmtNum, fechaHoyLocal, imprimirInforme, exportarExcel, agregarBotonExcelVentana } from './helpers.js';
+import { toast, fmtCOP, fmtNum, fechaHoyLocal, imprimirInforme, exportarExcel, agregarBotonExcelVentana, etiquetaOrden, parseOrden } from './helpers.js';
 import { getCurrentUser } from './auth.js';
 import { renderGerencial } from './dashboard.js';
 import { renderOppRecent } from './ordenes.js';
@@ -160,7 +160,7 @@ function renderOrdenesDelCliente(nombreCliente){
   wrap.style.display = '';
   tbody.innerHTML = ordenes.map(o => `<tr data-orden="${o.orden}">
     <td><input type="checkbox" class="rem-orden-check" value="${o.orden}" ${ordenesSeleccionadas.has(o.orden)?'checked':''}></td>
-    <td><b>${o.orden}</b></td>
+    <td><b>${etiquetaOrden(o.orden)}</b></td>
     <td>${o.producto || '(sin producto)'}</td>
     <td>${o.fecha ? o.fecha.slice(0,10) : ''}</td>
     <td>${o.remisionesPrevias.length ? `<span class="estado-chip done">ya en ${o.remisionesPrevias.join(', ')}</span>` : '<span class="estado-chip pending">pendiente</span>'}</td>
@@ -196,10 +196,10 @@ function toggleOrdenSeleccionada(orden, marcada){
       valorUnitario = cantidad ? Math.round(valorTotal / cantidad) : valorTotal;
     }
     itemsActuales.push({
-      orden, descripcion: (o && o.producto) || ('Orden ' + orden),
+      orden, descripcion: (o && o.producto) || ('Orden ' + etiquetaOrden(orden)),
       cantidad, unidad: '', valor_unitario: valorUnitario, valor_total: valorTotal
     });
-    if(!pres || !pres.precio_venta_antes_iva) toast('La orden ' + orden + ' no tiene precio de venta registrado en Presupuesto — complétalo a mano');
+    if(!pres || !pres.precio_venta_antes_iva) toast('La orden ' + etiquetaOrden(orden) + ' no tiene precio de venta registrado en Presupuesto — complétalo a mano');
   } else {
     ordenesSeleccionadas.delete(orden);
     itemsActuales = itemsActuales.filter(it => it.orden !== orden);
@@ -516,7 +516,7 @@ function imprimirRemision(id){
       <td class="titulo" colspan="2">${r.cliente || ''}</td>
       <td class="cab remnum"><div class="lbl">REMISIÓN No.</div><div class="num">${numeroConPrefijo(r.numero)}</div></td>
     </tr>
-    <tr><td class="cab">PEDIDO No.</td><td colspan="2">${ordenes.join(', ') || '—'}</td><td>${(r.fecha||'').slice(0,10)}</td></tr>
+    <tr><td class="cab">PEDIDO No.</td><td colspan="2">${ordenes.map(etiquetaOrden).join(', ') || '—'}</td><td>${(r.fecha||'').slice(0,10)}</td></tr>
     <tr><td class="cab">TELÉFONO</td><td colspan="3">${r.telefono || ''}</td></tr>
     <tr><td class="cab">DIRECCIÓN</td><td colspan="3">${r.direccion || ''}</td></tr>
   </table>
@@ -551,7 +551,7 @@ export function renderListadoRemisiones(){
 
   const fCliente = normalizarTexto(document.getElementById('rem-f-cliente')?.value || '');
   const fNumero = (document.getElementById('rem-f-numero')?.value || '').trim().replace(/^rm\s*/i, '');
-  const fOrden = document.getElementById('rem-f-orden')?.value ? parseInt(document.getElementById('rem-f-orden').value,10) : null;
+  const fOrden = document.getElementById('rem-f-orden')?.value ? parseOrden(document.getElementById('rem-f-orden').value) : null;
   const fDesde = document.getElementById('rem-f-desde')?.value || '';
   const fHasta = document.getElementById('rem-f-hasta')?.value || '';
 
@@ -570,7 +570,7 @@ export function renderListadoRemisiones(){
     <td>${(r.fecha||'').slice(0,10) || '—'}</td>
     <td>${r.cliente || '—'}</td>
     <td class="num">${fmtCOP(r.total||0)}</td>
-    <td>${(ordenesPorRemision[r.id]||[]).join(', ') || '—'}</td>
+    <td>${(ordenesPorRemision[r.id]||[]).map(etiquetaOrden).join(', ') || '—'}</td>
     <td><div class="row-actions">
       <button type="button" class="row-btn" data-ver-rem="${r.id}">Ver</button>
       <button type="button" class="row-btn" data-edit-rem="${r.id}">Editar</button>

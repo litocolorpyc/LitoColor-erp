@@ -1,4 +1,5 @@
 import { loadAll } from './store.js';
+import { etiquetaOrden } from './helpers.js';
 import { initRegistrar } from './registrar.js';
 import { getPiezasPendientesPorPrioridad, chipsProcesosHTML, fichaOrdenParaOperarioHTML, tipoTrabajoLabel, estadoOrden, estadoBadgeHTML, imprimirDetalleOrden } from './ordenes.js';
 
@@ -24,7 +25,7 @@ function renderPrioridadOperario(){
     return `<div class="prioridad-row" data-orden="${o.orden}">
       <span class="prioridad-num">${i + 1}</span>
       <span class="prioridad-info">
-        <div><b>Orden ${o.orden}-${p.suborden}</b> — ${o.cliente || '—'} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span>${p.pieza ? ' · ' + p.pieza : ''}</div>
+        <div><b>Orden ${etiquetaOrden(o.orden)}-${p.suborden}</b> — ${o.cliente || '—'} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span>${p.pieza ? ' · ' + p.pieza : ''}</div>
         <div class="detalle-pieza-chips" style="margin-top:4px;margin-bottom:0">${chipsProcesosHTML(p)}</div>
       </span>
       ${estadoBadgeHTML(estadoOrden(o))}
@@ -40,7 +41,7 @@ let ordenDetalleOperarioActual = null;
 
 function mostrarDetalleOperario(orden){
   ordenDetalleOperarioActual = orden;
-  document.getElementById('reg-detalle-titulo').textContent = `Orden ${orden}`;
+  document.getElementById('reg-detalle-titulo').textContent = `Orden ${etiquetaOrden(orden)}`;
   document.getElementById('reg-detalle-body').innerHTML = fichaOrdenParaOperarioHTML(orden);
   const card = document.getElementById('reg-detalle-card');
   card.style.display = '';

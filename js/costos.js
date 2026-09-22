@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
-import { toast, fmtCOP, fmtNum, fechaHoyLocal, imprimirInforme, exportarExcel } from './helpers.js';
+import { toast, fmtCOP, fmtNum, fechaHoyLocal, imprimirInforme, exportarExcel, etiquetaOrden } from './helpers.js';
 import { buscarConsumosSinCostear, aplicarCosteoConsumosPendientes } from './registrar.js';
 
 // ---------- Maestro: Conceptos de costo ----------
@@ -92,7 +92,7 @@ function poblarSelectOrdenCosto(){
   if(!sel) return;
   const activas = DB.opp_ordenes.slice().sort((a,b) => b.orden - a.orden).slice(0, 200);
   sel.innerHTML = '<option value="">— Sin orden asociada (se reparte entre todas) —</option>' +
-    activas.map(o => `<option value="${o.orden}">${o.orden} — ${o.cliente||''}</option>`).join('');
+    activas.map(o => `<option value="${o.orden}">${etiquetaOrden(o.orden)} — ${o.cliente||''}</option>`).join('');
 }
 
 // ---------- Registrar un movimiento de costo ----------
@@ -126,7 +126,7 @@ export function renderMovimientosRecientes(){
     <td><span class="badge" style="background:${m.tipo==='Fijo'?'#2E8FC022':'#D8854A22'};color:${m.tipo==='Fijo'?'#2E8FC0':'#D8854A'}">${m.tipo}</span></td>
     <td>${conceptoNombre(m.concepto_id)}</td>
     <td>${m.proveedor || '—'}</td>
-    <td>${m.orden != null ? m.orden + (m.suborden != null ? '-' + m.suborden : '') : '—'}</td>
+    <td>${m.orden != null ? etiquetaOrden(m.orden) + (m.suborden != null ? '-' + m.suborden : '') : '—'}</td>
     <td class="num">${fmtCOP(m.valor)}</td>
     <td>${editable ? `<div class="row-actions">
       <button type="button" class="row-btn" data-edit-mov="${m.id}">Editar</button>
@@ -314,7 +314,7 @@ function renderConsumosSinCostear(candidatos){
   if(btnAplicar) btnAplicar.disabled = !candidatos.length;
   tbody.innerHTML = candidatos.map(c => `<tr>
     <td>${(c.registro.fecha||'').slice(0,10) || '—'}</td>
-    <td>${c.registro.orden != null ? c.registro.orden + (c.registro.suborden ? '-' + c.registro.suborden : '') : '—'}</td>
+    <td>${c.registro.orden != null ? etiquetaOrden(c.registro.orden) + (c.registro.suborden ? '-' + c.registro.suborden : '') : '—'}</td>
     <td>${c.registro.materiaPrima}</td>
     <td class="num">${fmtNum(c.cantidad,2)}</td>
     <td class="num">${fmtCOP(c.mat.costo_unitario)}</td>

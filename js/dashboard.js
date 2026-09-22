@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
-import { fmtCOP, fmtNum, areaColor, rangoFechas, rangoAnterior, deltaBadge, exportarExcel, imprimirInforme, toast, wireTableScroll } from './helpers.js';
+import { fmtCOP, fmtNum, areaColor, rangoFechas, rangoAnterior, deltaBadge, exportarExcel, imprimirInforme, toast, wireTableScroll, etiquetaOrden } from './helpers.js';
 import { mostrarDetalleOrden, tipoTrabajoLabel, renderOppRecent, subprocesosDeArea, getOrdenDetalleActual } from './ordenes.js';
 import { puedeEditarProduccion } from './auth.js';
 import { listaAreasDisponibles, materialSelectOptionsHTML, unidadNumericaDelMaterial, parseCantidadConsumo, descontarInventarioYCargarCosto, revertirConsumoDeRegistro, avisoConsumoNoReflejado, actualizarCostoAdicionalReproceso } from './registrar.js';
@@ -288,7 +288,7 @@ export function renderGerencial(){
     const otrosTitle = r.otrosDirecto > 0
       ? `Incluye ${fmtCOP(r.otrosDirecto)} de costos con esta orden asociada directamente`
       : 'Prorrateado según el ingreso de esta orden';
-    return `<tr class="fila-clicable" data-orden="${r.orden}"><td>${r.orden}</td><td>${r.cliente||'—'}</td><td>${(r.trabajo||'—').toString().trim()}</td><td class="num">${fmtCOP(r.ing)}</td><td class="num">${r.ingPres!=null?fmtCOP(r.ingPres):'—'}</td><td class="num">${fmtCOP(r.cost)}</td><td class="num" title="${otrosTitle}">${fmtCOP(r.otros)}</td><td class="num" style="color:${m>=0?'var(--good)':'var(--bad)'}">${fmtCOP(m)}</td></tr>`;
+    return `<tr class="fila-clicable" data-orden="${r.orden}"><td>${etiquetaOrden(r.orden)}</td><td>${r.cliente||'—'}</td><td>${(r.trabajo||'—').toString().trim()}</td><td class="num">${fmtCOP(r.ing)}</td><td class="num">${r.ingPres!=null?fmtCOP(r.ingPres):'—'}</td><td class="num">${fmtCOP(r.cost)}</td><td class="num" title="${otrosTitle}">${fmtCOP(r.otros)}</td><td class="num" style="color:${m>=0?'var(--good)':'var(--bad)'}">${fmtCOP(m)}</td></tr>`;
   }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--ink-faint)">Sin datos en este rango</td></tr>';
   document.querySelectorAll('#tbl-ger-ordenes tbody tr[data-orden]').forEach(tr => {
     tr.addEventListener('click', () => irAOrdenYVerDetalle(parseInt(tr.dataset.orden, 10)));
@@ -511,7 +511,7 @@ function mostrarDetalleProduccionArea(area){
   const filas = detalleProdPorArea[area] || [];
   document.getElementById('prod-area-detalle-titulo').textContent = `Órdenes de ${area}`;
   document.querySelector('#tbl-prod-area-detalle tbody').innerHTML = filas.map(f => `<tr class="fila-clicable" data-orden="${f.orden}">
-      <td>${f.orden}${f.suborden!=null ? '-' + f.suborden : ''}</td>
+      <td>${etiquetaOrden(f.orden)}${f.suborden!=null ? '-' + f.suborden : ''}</td>
       <td>${f.cliente || '—'}</td>
       <td>${f.pieza || '—'}</td>
       <td class="num">${fmtNum(f.horas,2)}</td>
@@ -581,7 +581,7 @@ export function renderOperario(){
         <button type="button" class="row-btn" data-editar-reg="${r.id}">Editar</button>
         <button type="button" class="row-btn row-btn-danger" data-eliminar-reg="${r.id}">Eliminar</button>
       </div></td>` : '';
-    return `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td class="${r.orden!=null?'fila-clicable':''}" data-orden="${r.orden??''}">${r.orden??'—'}</td><td class="num">${fmtNum(r.cantidad,0)}</td><td class="num">${fmtNum(r.tiempoHr,2)}</td><td class="num">${fmtCOP(r.valorActividad)}</td>${acciones}</tr>`;
+    return `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td class="${r.orden!=null?'fila-clicable':''}" data-orden="${r.orden??''}">${r.orden!=null ? etiquetaOrden(r.orden) : '—'}</td><td class="num">${fmtNum(r.cantidad,0)}</td><td class="num">${fmtNum(r.tiempoHr,2)}</td><td class="num">${fmtCOP(r.valorActividad)}</td>${acciones}</tr>`;
   }).join('') || `<tr><td colspan="${puedeEditar?7:6}" style="text-align:center;color:var(--ink-faint)">Sin registros en este rango</td></tr>`;
 
   document.querySelectorAll('#tbl-op-log tbody td[data-orden]').forEach(td => {
@@ -717,7 +717,7 @@ function poblarSelectPiezaEdicion(orden, opActual){
   sel.innerHTML = '<option value="">— Sin OPP / general —</option>' +
     piezas.map(p => `<option value="${p.op}" data-suborden="${p.suborden}"${p.op===opActual?' selected':''}>${p.suborden}. ${p.pieza || 'Pieza'}</option>`).join('');
   if(!piezas.length){ sel.disabled = true; hint.textContent = orden != null ? '(esta orden no tiene piezas en OPP)' : '(registro sin orden)'; }
-  else { sel.disabled = false; hint.textContent = `(de la orden ${orden})`; }
+  else { sel.disabled = false; hint.textContent = `(de la orden ${etiquetaOrden(orden)})`; }
 }
 
 // Todas las órdenes de OPP (no solo las "en curso" como en Registrar,
@@ -728,7 +728,7 @@ function poblarSelectOrdenEdicion(ordenActual){
   const sel = document.getElementById('ole-orden');
   const ordenadas = [...DB.opp_ordenes].sort((a,b) => b.orden - a.orden);
   sel.innerHTML = '<option value="">— Sin orden (trabajo sin orden asignada) —</option>' +
-    ordenadas.map(o => `<option value="${o.orden}"${o.orden===ordenActual?' selected':''}>${o.orden} — ${o.cliente || ''}${o.producto ? ' · ' + o.producto : ''}</option>`).join('');
+    ordenadas.map(o => `<option value="${o.orden}"${o.orden===ordenActual?' selected':''}>${etiquetaOrden(o.orden)} — ${o.cliente || ''}${o.producto ? ' · ' + o.producto : ''}</option>`).join('');
   if(ordenActual != null && !ordenadas.some(o => o.orden === ordenActual)){
     sel.insertAdjacentHTML('afterbegin', `<option value="${ordenActual}" selected>${ordenActual} — (orden no encontrada en OPP)</option>`);
   }
@@ -787,7 +787,7 @@ function abrirEdicionRegistro(id){
   actualizarWrapMotivoPausa();
   document.getElementById('ole-proceso-completo').onchange = actualizarWrapMotivoPausa;
   document.getElementById('ole-guardar').dataset.id = id;
-  document.getElementById('op-log-editar-info').textContent = `Registro del ${(row.fecha||'').slice(0,10)} — ${row.operario || '—'} — Orden ${row.orden ?? '—'}${row.suborden!=null ? ' / suborden ' + row.suborden : ''}`;
+  document.getElementById('op-log-editar-info').textContent = `Registro del ${(row.fecha||'').slice(0,10)} — ${row.operario || '—'} — Orden ${row.orden != null ? etiquetaOrden(row.orden) : '—'}${row.suborden!=null ? ' / suborden ' + row.suborden : ''}`;
 
   const card = document.getElementById('op-log-editar-card');
   card.style.display = '';
@@ -1001,7 +1001,7 @@ function refrescarDetalleOrdenSiEstaAbierta(orden){
 async function eliminarRegistroLog(id){
   const row = DB.produccion.find(r => r.id === id);
   if(!row) return;
-  const ok = confirm(`¿Eliminar este registro de ${row.operario || 'operario'} (${row.actividad || 'actividad'}, orden ${row.orden ?? '—'})? Esta acción no se puede deshacer.`);
+  const ok = confirm(`¿Eliminar este registro de ${row.operario || 'operario'} (${row.actividad || 'actividad'}, orden ${row.orden != null ? etiquetaOrden(row.orden) : '—'})? Esta acción no se puede deshacer.`);
   if(!ok) return;
   try{
     // Si este registro había descontado un material, se le devuelve al
@@ -1136,7 +1136,7 @@ function wireExportButtons(){
   if(btnRent) btnRent.addEventListener('click', () => {
     exportarExcel('LitoColor_rentabilidad_por_orden.xlsx', [{
       nombre: 'Rentabilidad',
-      filas: ultimaRentabilidad.map(r => { const base = r.ing > 0 ? r.ing : (r.ingPres || 0); return { Orden: r.orden, Cliente: r.cliente, Trabajo: r.trabajo, Ingreso: r.ing, 'Ingreso presupuestado': r.ingPres != null ? r.ingPres : '', 'Costo M.O.': r.cost, 'Otros costos (directos + prorrateado)': Math.round(r.otros), Margen: Math.round(base - r.cost - r.otros) }; })
+      filas: ultimaRentabilidad.map(r => { const base = r.ing > 0 ? r.ing : (r.ingPres || 0); return { Orden: etiquetaOrden(r.orden), Cliente: r.cliente, Trabajo: r.trabajo, Ingreso: r.ing, 'Ingreso presupuestado': r.ingPres != null ? r.ingPres : '', 'Costo M.O.': r.cost, 'Otros costos (directos + prorrateado)': Math.round(r.otros), Margen: Math.round(base - r.cost - r.otros) }; })
     }]);
   });
 
@@ -1166,7 +1166,7 @@ function wireExportButtons(){
   if(btnOpExportar) btnOpExportar.addEventListener('click', () => {
     exportarExcel('LitoColor_bitacora_operario.xlsx', [{
       nombre: 'Bitácora',
-      filas: ultimoOperarioLog.map(r => ({ Fecha: (r.fecha||'').slice(0,10), Operario: r.operario, Actividad: r.actividad, Orden: r.orden, Cantidad: r.cantidad, 'Horas': r.tiempoHr, Valor: r.valorActividad }))
+      filas: ultimoOperarioLog.map(r => ({ Fecha: (r.fecha||'').slice(0,10), Operario: r.operario, Actividad: r.actividad, Orden: etiquetaOrden(r.orden), Cantidad: r.cantidad, 'Horas': r.tiempoHr, Valor: r.valorActividad }))
     }]);
   });
 
@@ -1174,8 +1174,8 @@ function wireExportButtons(){
   if(btnRespaldo) btnRespaldo.addEventListener('click', () => {
     exportarExcel('LitoColor_respaldo_completo.xlsx', [
       { nombre: 'Pedidos', filas: DB.pedidos.map(p => ({ OPP:p.opp, Fecha:p.fecha, Orden:p.orden, Suborden:p.suborden, Cliente:p.cliente, Producto:p.producto, Trabajo:p.trabajo, Pedido:p.pedido, Valor:p.valor, Total:p.total })) },
-      { nombre: 'Producción', filas: DB.produccion.map(r => ({ Fecha:r.fecha, Operario:r.operario, HoraIni:r.horaIni, HoraFin:r.horaFin, Actividad:r.actividad, Área:r.area, Máquina:r.maquina, Cantidad:r.cantidad, Orden:r.orden, Pieza:r.op, Cliente:r.cliente, Trabajo:r.trabajo, TiempoHr:r.tiempoHr, ValorActividad:r.valorActividad })) },
-      { nombre: 'Órdenes', filas: DB.opp_ordenes.map(o => ({ Orden:o.orden, Cliente:o.cliente, Producto:o.producto, Fecha:o.fecha, Estado:o.estado })) },
+      { nombre: 'Producción', filas: DB.produccion.map(r => ({ Fecha:r.fecha, Operario:r.operario, HoraIni:r.horaIni, HoraFin:r.horaFin, Actividad:r.actividad, Área:r.area, Máquina:r.maquina, Cantidad:r.cantidad, Orden:etiquetaOrden(r.orden), Pieza:r.op, Cliente:r.cliente, Trabajo:r.trabajo, TiempoHr:r.tiempoHr, ValorActividad:r.valorActividad })) },
+      { nombre: 'Órdenes', filas: DB.opp_ordenes.map(o => ({ Orden:etiquetaOrden(o.orden), Cliente:o.cliente, Producto:o.producto, Fecha:o.fecha, Estado:o.estado })) },
       { nombre: 'Empleados', filas: DB.personal.map(p => ({ Nombre:p.nombre, Cargo:p.cargo, 'Valor/hora':p.valor_hora, Activo:p.activo })) },
       { nombre: 'Máquinas', filas: DB.maquinas.map(m => ({ Código:m.codigo, Nombre:m.nombre, Área:m.area })) },
       { nombre: 'Clientes', filas: DB.clientes.map(c => ({ Nombre:c.nombre, NIT:c.nit, Teléfono:c.telefono, Correo:c.email, Ciudad:c.ciudad })) },
@@ -1185,11 +1185,11 @@ function wireExportButtons(){
       }) },
       { nombre: 'Facturas de venta', filas: DB.facturas_venta_items.map(it => {
         const f = DB.facturas_venta.find(x => x.id === it.factura_id);
-        return { Factura:f?f.numero_factura:'—', Fecha:f?f.fecha:'—', Cliente:f?f.cliente:'—', Descripción:it.descripcion, Cantidad:it.cantidad, 'Vr. Total (con IVA)':it.valor_total, 'Valor neto (sin IVA)':it.valor_neto, Orden:it.orden };
+        return { Factura:f?f.numero_factura:'—', Fecha:f?f.fecha:'—', Cliente:f?f.cliente:'—', Descripción:it.descripcion, Cantidad:it.cantidad, 'Vr. Total (con IVA)':it.valor_total, 'Valor neto (sin IVA)':it.valor_neto, Orden:etiquetaOrden(it.orden) };
       }) },
       { nombre: 'Remisiones', filas: DB.remision_items.map(it => {
         const r = DB.remisiones.find(x => x.id === it.remision_id);
-        return { Remisión: r ? 'RM ' + r.numero : '—', Fecha:r?r.fecha:'—', Cliente:r?r.cliente:'—', Descripción:it.descripcion, Cantidad:it.cantidad, 'Valor total':it.valor_total, Orden:it.orden };
+        return { Remisión: r ? 'RM ' + r.numero : '—', Fecha:r?r.fecha:'—', Cliente:r?r.cliente:'—', Descripción:it.descripcion, Cantidad:it.cantidad, 'Valor total':it.valor_total, Orden:etiquetaOrden(it.orden) };
       }) }
     ]);
   });

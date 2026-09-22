@@ -1,5 +1,5 @@
 import { DB } from './store.js';
-import { fmtNum, rangoFechas, toast, agregarBotonExcelVentana } from './helpers.js';
+import { fmtNum, rangoFechas, toast, agregarBotonExcelVentana, etiquetaOrden } from './helpers.js';
 
 // Pedido 16sep26: saber, por rango de fechas y por operario (uno, varios o
 // todos), cuántos registros de tiempos hizo cada uno por orden — e
@@ -92,7 +92,7 @@ function consultar(){
 function filaHTML(f){
   return f.esSubtotal
     ? `<tr style="font-weight:600;background:var(--paper)"><td colspan="3">Total ${f.operario}</td><td class="num">${f.registros}</td><td class="num">${fmtNum(f.horas,1)}</td></tr>`
-    : `<tr><td>${f.operario}</td><td>${f.orden}</td><td>${f.cliente || '—'}</td><td class="num">${f.registros}</td><td class="num">${fmtNum(f.horas,1)}</td></tr>`;
+    : `<tr><td>${f.operario}</td><td>${etiquetaOrden(f.orden)}</td><td>${f.cliente || '—'}</td><td class="num">${f.registros}</td><td class="num">${fmtNum(f.horas,1)}</td></tr>`;
 }
 
 function renderResultado(data){

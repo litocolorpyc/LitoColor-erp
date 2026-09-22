@@ -15,6 +15,46 @@ export function fechaHoyLocal(fecha){
   return `${y}-${m}-${day}`;
 }
 
+// ---------- Órdenes de Servicio ("S-0001") ----------
+// Pedido 22sep26: además de las Órdenes de Producción (consecutivo 5944,
+// 5945…), ahora se montan Órdenes de SERVICIO (trabajos para clientes o
+// colegas que a veces traen sus propias planchas/papel), numeradas aparte
+// como "S-0001". En la base de datos el N° de orden es un número entero
+// que conecta la orden con producción, costos, presupuesto, remisiones,
+// ventas y reprocesos — cambiarlo a texto habría obligado a tocar todas
+// esas tablas en producción. En su lugar, S-0001 se guarda internamente
+// como 1000001 (S-0002 → 1000002…), un rango que el consecutivo de
+// producción no va a alcanzar nunca, y en pantalla se muestra siempre
+// como "S-0001" con etiquetaOrden(). Donde la usuaria escribe un número
+// de orden se lee con parseOrden(), que acepta "S-0001", "s1" o "5944".
+export const BASE_ORDEN_SERVICIO = 1000000;
+
+export function esOrdenServicio(n){
+  const v = typeof n === 'number' ? n : parseInt(n, 10);
+  return !isNaN(v) && v >= BASE_ORDEN_SERVICIO;
+}
+
+export function etiquetaOrden(n){
+  if(n == null || n === '') return '';
+  const v = typeof n === 'number' ? n : parseInt(n, 10);
+  if(isNaN(v) || String(n).trim().toUpperCase().startsWith('S')) return String(n);
+  return v >= BASE_ORDEN_SERVICIO ? 'S-' + String(v - BASE_ORDEN_SERVICIO).padStart(4, '0') : String(v);
+}
+
+export function parseOrden(txt){
+  if(txt == null) return null;
+  if(typeof txt === 'number') return isNaN(txt) ? null : Math.round(txt);
+  const s = String(txt).trim().toUpperCase().replace(/\s+/g, '');
+  if(!s) return null;
+  const m = s.match(/^S-?(\d{1,6})$/);
+  if(m){
+    const n = parseInt(m[1], 10);
+    return n > 0 ? BASE_ORDEN_SERVICIO + n : null;
+  }
+  if(/^\d+(\.0+)?$/.test(s)) return Math.round(parseFloat(s));
+  return null;
+}
+
 export function fmtCOP(n){ if(n==null||isNaN(n)) return '—'; return '$' + Math.round(n).toLocaleString('es-CO'); }
 export function fmtNum(n,d){ if(n==null||isNaN(n)) return '—'; return Number(n).toLocaleString('es-CO',{maximumFractionDigits:d==null?1:d}); }
 

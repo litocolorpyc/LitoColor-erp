@@ -1,6 +1,6 @@
 import { DB } from './store.js';
 import { estadoOrden } from './ordenes.js';
-import { fmtNum } from './helpers.js';
+import { fmtNum, etiquetaOrden } from './helpers.js';
 
 function diasDesde(fechaStr){
   if(!fechaStr) return null;
@@ -28,7 +28,7 @@ function calcularAlertas(){
       alertas.push({
         severidad: dias >= 6 ? 'alta' : 'media',
         icono: '⏳',
-        mensaje: `La orden <b>${o.orden}</b> (${o.cliente || 'sin cliente'}) lleva <b>${dias} días</b> sin movimiento.`
+        mensaje: `La orden <b>${etiquetaOrden(o.orden)}</b> (${o.cliente || 'sin cliente'}) lleva <b>${dias} días</b> sin movimiento.`
       });
     }
   });
@@ -60,7 +60,7 @@ function calcularAlertas(){
       alertas.push({
         severidad: 'alta',
         icono: '🚨',
-        mensaje: `La orden <b>${o.orden}</b> (${o.cliente || 'sin cliente'}) se creó hace <b>${dias} días</b> y todavía no tiene ningún proceso iniciado.`
+        mensaje: `La orden <b>${etiquetaOrden(o.orden)}</b> (${o.cliente || 'sin cliente'}) se creó hace <b>${dias} días</b> y todavía no tiene ningún proceso iniciado.`
       });
     }
   });
@@ -74,7 +74,7 @@ function calcularAlertas(){
     alertas.push({
       severidad: 'alta',
       icono: '📦',
-      mensaje: `La orden <b>${a.orden}</b> (${o?.cliente || 'sin cliente'}) necesita <b>${a.cantidad_faltante} ${a.unidad || ''}</b> más de <b>${mat?.nombre || a.materia_prima_codigo}</b> — falta reponer stock en Materias primas.`
+      mensaje: `La orden <b>${etiquetaOrden(a.orden)}</b> (${o?.cliente || 'sin cliente'}) necesita <b>${a.cantidad_faltante} ${a.unidad || ''}</b> más de <b>${mat?.nombre || a.materia_prima_codigo}</b> — falta reponer stock en Materias primas.`
     });
   });
 
@@ -129,7 +129,7 @@ function calcularAlertas(){
     alertas.push({
       severidad: 'media',
       icono: '❓',
-      mensaje: `El registro de <b>${r.operario || 'un operario'}</b> en la orden <b>${r.orden ?? '—'}</b> (${(r.fecha||'').slice(0,10)}) anotó <b>"${r.materiaPrima}"</b> como insumo, que no existe igual en ningún maestro — no se descontó del inventario ni se costeó. Corrígelo desde el Historial de esa orden &gt; "Ajustar".`
+      mensaje: `El registro de <b>${r.operario || 'un operario'}</b> en la orden <b>${r.orden != null ? etiquetaOrden(r.orden) : '—'}</b> (${(r.fecha||'').slice(0,10)}) anotó <b>"${r.materiaPrima}"</b> como insumo, que no existe igual en ningún maestro — no se descontó del inventario ni se costeó. Corrígelo desde el Historial de esa orden &gt; "Ajustar".`
     });
   });
 

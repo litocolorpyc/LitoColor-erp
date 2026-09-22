@@ -6,7 +6,7 @@
 // editando desde Maestros > "Materias primas" o "Materiales por área".
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
-import { fmtNum, fmtCOP, toast, fechaHoyLocal, wireTableScroll, imprimirInforme, exportarExcel } from './helpers.js';
+import { fmtNum, fmtCOP, toast, fechaHoyLocal, wireTableScroll, imprimirInforme, exportarExcel, etiquetaOrden } from './helpers.js';
 import { mostrarDetalleOrden } from './ordenes.js';
 import { recostearConsumosDeMaterial } from './registrar.js';
 import { parseCantidadConsumo, listaAreasDisponibles } from './registrar.js';
@@ -93,7 +93,7 @@ export function renderInventario(){
     const negativo = f.stock < 0;
     const bajo = negativo || (f.minimo > 0 && f.stock < f.minimo);
     const esperandoHTML = f.esperando.length
-      ? f.esperando.map(a => `<span class="row-btn fila-clicable" data-orden="${a.orden}" style="display:inline-block;margin:1px 3px 1px 0">Orden ${a.orden} (falta ${fmtNum(a.cantidad_faltante,0)} ${a.unidad||''})</span>`).join('')
+      ? f.esperando.map(a => `<span class="row-btn fila-clicable" data-orden="${a.orden}" style="display:inline-block;margin:1px 3px 1px 0">Orden ${etiquetaOrden(a.orden)} (falta ${fmtNum(a.cantidad_faltante,0)} ${a.unidad||''})</span>`).join('')
       : '—';
     const estadoHTML = negativo
       ? '<span class="estado-chip pending">🔴 Stock negativo</span>'

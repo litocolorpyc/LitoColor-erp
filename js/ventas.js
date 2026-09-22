@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
-import { toast, fmtCOP, imprimirInforme, exportarExcel } from './helpers.js';
+import { toast, fmtCOP, imprimirInforme, exportarExcel, etiquetaOrden } from './helpers.js';
 import { getCurrentUser } from './auth.js';
 import { renderGerencial } from './dashboard.js';
 import { renderOppRecent } from './ordenes.js';
@@ -382,7 +382,7 @@ function autoAsociarOrdenes(items, clienteFactura){
 
 function opcionesOrdenVenta(ordenSel, clienteFactura){
   const candidatas = ordenesDeCliente(clienteFactura);
-  const opcion = o => `<option value="${o.orden}"${o.orden===ordenSel?' selected':''}>${o.orden} — ${o.producto||'(sin producto)'}${o.fecha?' · '+o.fecha.slice(0,10):''}</option>`;
+  const opcion = o => `<option value="${o.orden}"${o.orden===ordenSel?' selected':''}>${etiquetaOrden(o.orden)} — ${o.producto||'(sin producto)'}${o.fecha?' · '+o.fecha.slice(0,10):''}</option>`;
   if(candidatas.length){
     const idsCandidatas = new Set(candidatas.map(o => o.orden));
     const resto = DB.opp_ordenes.filter(o => !idsCandidatas.has(o.orden)).slice().sort((a,b) => b.orden - a.orden).slice(0, 150);

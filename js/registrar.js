@@ -2,7 +2,7 @@
 // así que cualquier corrección aquí aplica a las dos pantallas a la vez.
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
-import { toast, fmtNum, fechaHoyLocal, normNombreMaterial } from './helpers.js';
+import { toast, fmtNum, fechaHoyLocal, normNombreMaterial, etiquetaOrden } from './helpers.js';
 import { getOrdenesSeleccionables, subprocesosDeArea } from './ordenes.js';
 
 const timerIntervals = new Map();
@@ -32,7 +32,7 @@ function renderRecentReg(){
     else if(r.procesoCompleto === false) estado = `<span class="estado-chip estado-chip-warn">⏸ Pausada${r.motivoPausa ? ' — ' + r.motivoPausa : ''}</span>`;
     else estado = '<span class="estado-chip done">✓ Completo</span>';
     const pieza = r.op ? r.op : (r.orden ? '<span style="color:var(--ink-faint)">sin pieza</span>' : '—');
-    return `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td>${r.orden??'—'}</td><td>${pieza}</td><td>${estado}</td></tr>`;
+    return `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.actividad||'—'}</td><td>${r.orden!=null ? etiquetaOrden(r.orden) : '—'}</td><td>${pieza}</td><td>${estado}</td></tr>`;
   }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--ink-faint)">Sin registros todavía</td></tr>';
 }
 
@@ -41,7 +41,7 @@ function populateOrdenSelect(){
   const valorPrevio = sel.value;
   const activas = getOrdenesSeleccionables();
   sel.innerHTML = '<option value="">Selecciona una orden…</option>' +
-    activas.map(o => `<option value="${o.orden}">${o.orden} — ${o.cliente || ''}${o.producto ? ' · ' + o.producto : ''}</option>`).join('');
+    activas.map(o => `<option value="${o.orden}">${etiquetaOrden(o.orden)} — ${o.cliente || ''}${o.producto ? ' · ' + o.producto : ''}</option>`).join('');
   if(activas.some(o => String(o.orden) === valorPrevio)) sel.value = valorPrevio;
 }
 
@@ -236,7 +236,7 @@ export function unidadNumericaDelMaterial(area, nombre){
 // la actividad/máquina puntual y le da "Empezar" para que arranque el reloj.
 function runningCardPendienteHTML(row){
   return `<div class="reg-running-card reg-running-pendiente" data-id="${row.id}" data-area="${row.area || ''}">
-    <div class="reg-running-row"><span>Orden / Pieza</span><b>${row.orden || '—'}${row.op ? ' / ' + row.op : ''}</b></div>
+    <div class="reg-running-row"><span>Orden / Pieza</span><b>${row.orden ? etiquetaOrden(row.orden) : '—'}${row.op ? ' / ' + row.op : ''}</b></div>
     <div class="reg-running-row"><span>Área asignada</span><b>${row.area || '—'}</b></div>
     ${row.asignado_por ? `<div class="reg-running-row"><span>Asignada por</span><b>${row.asignado_por}</b></div>` : ''}
     <span class="estado-chip pending">📌 asignada, sin iniciar</span>
@@ -263,7 +263,7 @@ function runningCardHTML(row){
     ? [...new Set(DB.opp_piezas.filter(p => p.orden === row.orden).map(p => p.papel).filter(Boolean))]
     : [];
   return `<div class="reg-running-card" data-id="${row.id}" data-area="${row.area || ''}">
-    <div class="reg-running-row"><span>Orden / Pieza</span><b>${row.orden || '—'}${row.op ? ' / ' + row.op : ''}</b></div>
+    <div class="reg-running-row"><span>Orden / Pieza</span><b>${row.orden ? etiquetaOrden(row.orden) : '—'}${row.op ? ' / ' + row.op : ''}</b></div>
     <div class="reg-running-row"><span>Actividad</span><b>${row.actividad || '—'}</b></div>
     <div class="reg-running-row"><span>Máquina</span><b>${row.maquina || 'Trabajo manual'}</b></div>
     <div class="reg-running-row"><span>Hora inicio</span><b>${row.hora_ini || '—'}</b></div>
@@ -440,7 +440,7 @@ async function actividadEnCursoDelOperario(nombre){
 // la cierre desde "Corregir registro", en Operario).
 function mensajeActividadEnCurso(enCurso){
   const cuando = enCurso.fecha === fechaHoyLocal() ? `hoy ${enCurso.hora_ini || ''}` : `el ${enCurso.fecha || '—'}`;
-  return `Ya tienes "${enCurso.actividad || enCurso.area || 'una actividad'}" en curso desde ${cuando}${enCurso.orden ? ' (orden ' + enCurso.orden + ')' : ''} — finalízala o pausala antes de iniciar otra. Si es una sesión vieja que quedó olvidada, pídele a tu Jefe/Gerencia/Admin que la cierre desde "Corregir registro".`;
+  return `Ya tienes "${enCurso.actividad || enCurso.area || 'una actividad'}" en curso desde ${cuando}${enCurso.orden ? ' (orden ' + etiquetaOrden(enCurso.orden) + ')' : ''} — finalízala o pausala antes de iniciar otra. Si es una sesión vieja que quedó olvidada, pídele a tu Jefe/Gerencia/Admin que la cierre desde "Corregir registro".`;
 }
 
 async function startActivity(){
@@ -959,7 +959,7 @@ async function finishActivity(id, horaIni, fecha){
         if(errOrden) throw errOrden;
         const o = DB.opp_ordenes.find(x => x.orden === data[0].orden);
         if(o){ o.estado = 'Cerrada'; o.numero_remision = numeroRemision; }
-        avisoCierre = ` · Orden ${data[0].orden} CERRADA (remisión ${numeroRemision})`;
+        avisoCierre = ` · Orden ${etiquetaOrden(data[0].orden)} CERRADA (remisión ${numeroRemision})`;
       }catch(err){
         console.error('No se pudo cerrar la orden:', err);
         avisoCierre = ' · ⚠️ No se pudo cerrar la orden — revisa la consola';

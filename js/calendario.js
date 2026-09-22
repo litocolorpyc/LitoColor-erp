@@ -1,5 +1,5 @@
 import { DB } from './store.js';
-import { areaColor } from './helpers.js';
+import { areaColor, etiquetaOrden } from './helpers.js';
 
 let fechaActual = new Date().toISOString().slice(0,10);
 const HORA_INICIO = 6;  // 6:00 a.m.
@@ -52,7 +52,7 @@ export function renderCalendario(){
           const width = Math.max(1.2, pctEnRango(fin) - left);
           const color = areaColor(r.area);
           const opp = r.opp && /^\d+-\d+$/.test(r.opp) ? r.opp : null;
-          const label = `${opp ? opp+' · ' : (r.orden ? 'Orden '+r.orden+' · ' : '')}${r.actividad || r.area || ''}`;
+          const label = `${opp ? opp+' · ' : (r.orden ? 'Orden '+etiquetaOrden(r.orden)+' · ' : '')}${r.actividad || r.area || ''}`;
           const titulo = `${r.operario || ''} · ${r.horaIni || ''}–${r.horaFin || 'en curso'} · ${label}`;
           return `<div class="cal-bar ${enCurso?'en-curso':''}" style="left:${left}%;width:${width}%;background:${color}" title="${titulo.replace(/"/g,'')}">${label}</div>`;
         }).join('');

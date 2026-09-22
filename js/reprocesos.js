@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
-import { toast, fmtCOP, fmtNum, fechaHoyLocal, exportarExcel, agregarBotonExcelVentana } from './helpers.js';
+import { toast, fmtCOP, fmtNum, fechaHoyLocal, exportarExcel, agregarBotonExcelVentana, etiquetaOrden, parseOrden } from './helpers.js';
 import { getCurrentUser } from './auth.js';
 import { areasCompletadasPorPieza, mostrarDetalleOrden } from './ordenes.js';
 import { actualizarCostoAdicionalReproceso } from './registrar.js';
@@ -58,7 +58,7 @@ export function poblarMotivoRep(){
 
 function poblarPiezasRep(ordenPreseleccionada, subordenPreseleccionada){
   const sel = document.getElementById('rep-pieza');
-  const orden = ordenPreseleccionada != null ? ordenPreseleccionada : (parseInt(document.getElementById('rep-orden').value, 10) || null);
+  const orden = ordenPreseleccionada != null ? ordenPreseleccionada : (parseOrden(document.getElementById('rep-orden').value));
   if(!orden){
     sel.innerHTML = '<option value="">— elige la orden primero —</option>';
     sel.disabled = true;
@@ -70,7 +70,7 @@ function poblarPiezasRep(ordenPreseleccionada, subordenPreseleccionada){
     sel.innerHTML = '<option value="">— esta orden no tiene piezas —</option>';
     sel.disabled = true;
     poblarAreasRep(null);
-    toast('La orden ' + orden + ' no tiene piezas cargadas en OPP');
+    toast('La orden ' + etiquetaOrden(orden) + ' no tiene piezas cargadas en OPP');
     return;
   }
   sel.disabled = false;
@@ -102,7 +102,7 @@ function poblarAreasRep(orden, suborden, areaPreseleccionada){
 }
 
 async function crearReproceso(){
-  const orden = parseInt(document.getElementById('rep-orden').value, 10) || null;
+  const orden = parseOrden(document.getElementById('rep-orden').value);
   const suborden = document.getElementById('rep-pieza').value ? parseInt(document.getElementById('rep-pieza').value, 10) : null;
   const area = document.getElementById('rep-area').value || null;
   const operario = document.getElementById('rep-operario').value || null;
@@ -135,7 +135,7 @@ async function crearReproceso(){
     const { data, error } = await sb.from('produccion').insert([row]).select();
     if(error) throw error;
     DB.produccion.unshift(normProd(data[0]));
-    toast(`Reproceso creado — ${operario} · ${area} · orden ${orden}`);
+    toast(`Reproceso creado — ${operario} · ${area} · orden ${etiquetaOrden(orden)}`);
     limpiarFormularioReproceso();
     ocultarCrearCard();
     renderListadoReprocesos();
@@ -157,7 +157,7 @@ export function abrirNuevoReprocesoDesdeOrden(orden, suborden, op, area){
   btnTab.click();
   setTimeout(() => {
     mostrarCrearCard();
-    document.getElementById('rep-orden').value = orden;
+    document.getElementById('rep-orden').value = etiquetaOrden(orden);
     poblarPiezasRep(orden, suborden);
     poblarAreasRep(orden, suborden, area);
     document.getElementById('rep-crear-card').scrollIntoView({ behavior:'smooth', block:'start' });
@@ -181,7 +181,7 @@ export function renderListadoReprocesos(){
   const tbody = document.querySelector('#tbl-rep-listado tbody');
   if(!tbody) return;
 
-  const fOrden = document.getElementById('rep-f-orden').value ? parseInt(document.getElementById('rep-f-orden').value, 10) : null;
+  const fOrden = document.getElementById('rep-f-orden').value ? parseOrden(document.getElementById('rep-f-orden').value) : null;
   const fArea = document.getElementById('rep-f-area').value.trim().toLowerCase();
   const fMotivo = document.getElementById('rep-f-motivo').value.trim().toLowerCase();
   const fPersona = document.getElementById('rep-f-persona').value.trim().toLowerCase();
@@ -199,7 +199,7 @@ export function renderListadoReprocesos(){
 
   tbody.innerHTML = filas.slice(0, 200).map(r => `<tr data-orden="${r.orden ?? ''}">
     <td>${(r.fecha||'').slice(0,10) || '—'}</td>
-    <td>${r.orden ?? '—'}${r.suborden!=null ? ' / ' + r.suborden : ''}</td>
+    <td>${r.orden != null ? etiquetaOrden(r.orden) : '—'}${r.suborden!=null ? ' / ' + r.suborden : ''}</td>
     <td>${r.area || '—'}</td>
     <td>${r.operario || '—'}</td>
     <td>${estadoReproceso(r)}</td>
@@ -251,7 +251,7 @@ function abrirEdicionReproceso(tr, id){
       <div class="field"><label>Costo adicional</label><input type="number" class="rep-ed-costo" min="0" value="${r.costoAdicionalReproceso ?? ''}"></div>
       <div class="field full"><label>Comentario</label><input type="text" class="rep-ed-comentario" value="${(r.comentario||'').replace(/"/g,'&quot;')}"></div>
     </div>
-    <div class="form-foot"><span class="card-hint">Orden ${r.orden ?? '—'} · ${r.area || ''} · ${r.operario || ''} · ${(r.fecha||'').slice(0,10)}</span>
+    <div class="form-foot"><span class="card-hint">Orden ${r.orden != null ? etiquetaOrden(r.orden) : '—'} · ${r.area || ''} · ${r.operario || ''} · ${(r.fecha||'').slice(0,10)}</span>
       <button type="button" class="btn-secondary rep-ed-cancelar">Cancelar</button>
       <button type="button" class="btn-primary rep-ed-guardar">Guardar</button></div>
   </td>`;
@@ -356,7 +356,7 @@ function imprimirInformeReprocesos(){
   const costoAdicTotal = filas.reduce((s,r)=>s+(r.costoAdicionalReproceso||0),0);
 
   const filasHTML = filas.map(r => `<tr>
-    <td>${(r.fecha||'').slice(0,10)}</td><td>${r.orden ?? '—'}${r.suborden!=null?'/'+r.suborden:''}</td>
+    <td>${(r.fecha||'').slice(0,10)}</td><td>${r.orden != null ? etiquetaOrden(r.orden) : '—'}${r.suborden!=null?'/'+r.suborden:''}</td>
     <td>${r.area||''}</td><td>${r.operario||''}</td><td>${r.motivoReproceso||''}</td><td>${r.responsableReproceso||''}</td>
     <td class="num">${fmtCOP(r.valorActividad||0)}</td><td class="num">${fmtCOP(r.costoAdicionalReproceso||0)}</td>
   </tr>`).join('');
@@ -392,7 +392,7 @@ function exportarInformeReprocesos(){
   exportarExcel(`reprocesos_${desde}_a_${hasta}.xlsx`, [{
     nombre: 'Reprocesos',
     filas: filas.map(r => ({
-      Fecha: (r.fecha||'').slice(0,10), Orden: r.orden, Suborden: r.suborden, Área: r.area,
+      Fecha: (r.fecha||'').slice(0,10), Orden: etiquetaOrden(r.orden), Suborden: r.suborden, Área: r.area,
       Operario: r.operario, Estado: estadoReproceso(r), Motivo: r.motivoReproceso, Responsable: r.responsableReproceso,
       'Costo M.O.': r.valorActividad||0, 'Costo adicional': r.costoAdicionalReproceso||0, Comentario: r.comentario
     }))
@@ -418,7 +418,7 @@ export function initReprocesos(){
   });
   document.getElementById('rep-orden').addEventListener('change', () => poblarPiezasRep(null));
   document.getElementById('rep-pieza').addEventListener('change', () => {
-    const orden = parseInt(document.getElementById('rep-orden').value, 10) || null;
+    const orden = parseOrden(document.getElementById('rep-orden').value);
     const suborden = document.getElementById('rep-pieza').value ? parseInt(document.getElementById('rep-pieza').value, 10) : null;
     poblarAreasRep(orden, suborden);
   });

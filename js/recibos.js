@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
-import { toast, fmtCOP, fechaHoyLocal } from './helpers.js';
+import { toast, fmtCOP, fechaHoyLocal, etiquetaOrden } from './helpers.js';
 import { getCurrentUser } from './auth.js';
 import { renderMovimientosRecientes, renderResumenCostosMes, renderInformeCostos } from './costos.js';
 import { renderInventario, invalidarEntradasInventario } from './inventario.js';
@@ -257,7 +257,7 @@ function parseItemsPorColumnas(paginas){
         valor_debito: 0,
         orden: detectado.orden,
         suborden: detectado.suborden,
-        observacion: detectado.suborden ? `Pieza sugerida: ${detectado.orden}-${detectado.suborden}` : '',
+        observacion: detectado.suborden ? `Pieza sugerida: ${etiquetaOrden(detectado.orden)}-${detectado.suborden}` : '',
         concepto_id: conceptoSugerido,
         tipo_costo: tipoDeConcepto(conceptoSugerido)
       });
@@ -345,7 +345,7 @@ function parseCompraTexto(texto, paginas){
       valor_debito: 0,
       orden: detectado.orden,
       suborden: detectado.suborden,
-      observacion: detectado.suborden ? `Pieza sugerida: ${detectado.orden}-${detectado.suborden}` : '',
+      observacion: detectado.suborden ? `Pieza sugerida: ${etiquetaOrden(detectado.orden)}-${detectado.suborden}` : '',
       concepto_id: conceptoSugerido,
       tipo_costo: tipoDeConcepto(conceptoSugerido)
     });
@@ -546,7 +546,7 @@ function opcionesMaterialInventario(keySel, descripcion, tipoFiltro){
 function opcionesOrden(ordenSeleccionada){
   const activas = DB.opp_ordenes.slice().sort((a,b) => b.orden - a.orden).slice(0, 200);
   return '<option value="">— Ninguna —</option>' +
-    activas.map(o => `<option value="${o.orden}"${o.orden===ordenSeleccionada?' selected':''}>${o.orden} — ${o.cliente||''}</option>`).join('');
+    activas.map(o => `<option value="${o.orden}"${o.orden===ordenSeleccionada?' selected':''}>${etiquetaOrden(o.orden)} — ${o.cliente||''}</option>`).join('');
 }
 
 function opcionesConcepto(conceptoIdSeleccionado){
@@ -1249,7 +1249,7 @@ async function mostrarDetalleCompra(reciboId, cabecera){
       <td class="num">${it.retencion_pct ?? '—'}</td>
       <td class="num">${fmtCOP(it.valor_credito||0)}</td>
       <td class="num">${fmtCOP(it.valor_neto_unitario||0)}</td>
-      <td>${it.orden ? it.orden + (it.suborden ? '-' + it.suborden : '') : '—'}</td>
+      <td>${it.orden ? etiquetaOrden(it.orden) + (it.suborden ? '-' + it.suborden : '') : '—'}</td>
       <td>${DB.costos_conceptos.find(c => c.id === it.concepto_id)?.nombre || '—'}</td>
     </tr>`).join('') || '<tr><td colspan="10" style="text-align:center;color:var(--ink-faint)">Sin líneas</td></tr>';
   }catch(err){

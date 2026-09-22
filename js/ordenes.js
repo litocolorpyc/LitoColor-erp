@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
-import { toast, fmtNum, exportarExcel, fechaHoyLocal, wireTableScroll, agregarBotonExcelVentana } from './helpers.js';
+import { toast, fmtNum, exportarExcel, fechaHoyLocal, wireTableScroll, agregarBotonExcelVentana, etiquetaOrden, parseOrden, esOrdenServicio, BASE_ORDEN_SERVICIO } from './helpers.js';
 import { getCurrentUser, puedeEditarProduccion } from './auth.js';
 import { poblarDatalistProveedores } from './costos.js';
 
@@ -415,13 +415,27 @@ function updateOppPreview(){
   document.getElementById('opp-preview').textContent = n + (n === 1 ? ' pieza agregada' : ' piezas agregadas');
 }
 
+// Siguiente Orden de PRODUCCIÓN (consecutivo normal) — las de Servicio
+// (S-0001…, guardadas desde BASE_ORDEN_SERVICIO) no cuentan acá.
 function suggestNextOrden(){
   const all = [
     ...DB.pedidos.map(p => p.orden),
     ...DB.opp_ordenes.map(o => o.orden)
-  ].filter(n => typeof n === 'number');
+  ].filter(n => typeof n === 'number' && !esOrdenServicio(n));
   const max = all.length ? Math.max(...all) : 5938;
   return max + 1;
+}
+
+// Siguiente Orden de SERVICIO, ya como texto: "S-0001", "S-0002"…
+function suggestNextServicio(){
+  const servicios = DB.opp_ordenes.map(o => o.orden).filter(esOrdenServicio);
+  const max = servicios.length ? Math.max(...servicios) : BASE_ORDEN_SERVICIO;
+  return etiquetaOrden(max + 1);
+}
+
+function actualizarHintNumeroOrden(){
+  const hint = document.getElementById('opp-orden-hint');
+  if(hint) hint.textContent = `Producción: número normal (sigue ${suggestNextOrden()}) · Servicio: S- y el número (sigue ${suggestNextServicio()})`;
 }
 
 // ---------- selectores de Cliente / Producto con creación rápida ----------
@@ -723,7 +737,7 @@ function renderOppLista(rows){
     const estado = estadoOrden(o);
     const costo = costoAcumulado(o.orden);
     return `<tr>
-      <td>${o.orden}</td><td>${o.cliente || '—'}</td>
+      <td>${etiquetaOrden(o.orden)}${esOrdenServicio(o.orden) ? ' <span class="tipo-trabajo-chip">Servicio</span>' : ''}</td><td>${o.cliente || '—'}</td>
       <td><span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></td>
       <td>${o.producto || '—'}</td>
       <td class="num">${conteo[o.orden] || 0}</td><td>${(o.fecha || '').slice(0,10)}</td>
@@ -782,7 +796,7 @@ function renderPrioridadOrdenes(){
     return `<div class="prioridad-row" data-orden="${o.orden}" draggable="${puedeArrastrar}">
       <span class="prioridad-handle">${puedeArrastrar ? '⠿' : '·'}</span>
       <span class="prioridad-num">${i + 1}</span>
-      <span class="prioridad-info fila-clicable"><b>Orden ${o.orden}</b> — ${o.cliente || '—'} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></span>
+      <span class="prioridad-info fila-clicable"><b>Orden ${etiquetaOrden(o.orden)}</b> — ${o.cliente || '—'} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></span>
       ${estadoBadgeHTML(estado)}
     </div>`;
   }).join('');
@@ -977,7 +991,7 @@ function renderPrioridadArea(){
     return `<div class="prioridad-row" data-orden="${o.orden}" data-suborden="${p.suborden}" draggable="${puede}">
       <span class="prioridad-handle">${puede ? '⠿' : '·'}</span>
       <span class="prioridad-num">${i + 1}</span>
-      <span class="prioridad-info fila-clicable"><b>Orden ${o.orden}-${p.suborden}</b> — ${o.cliente || '—'} ${p.pieza ? '· ' + p.pieza : ''} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></span>
+      <span class="prioridad-info fila-clicable"><b>Orden ${etiquetaOrden(o.orden)}-${p.suborden}</b> — ${o.cliente || '—'} ${p.pieza ? '· ' + p.pieza : ''} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></span>
       ${selectorAsignar}
     </div>`;
   }).join('');
@@ -1076,7 +1090,7 @@ export function renderOrdenesVivas(){
     });
   });
   filas.sort((a,b) => b.orden - a.orden);
-  tbody.innerHTML = filas.map(f => `<tr><td>${f.orden}</td><td>${f.cliente || '—'}</td><td>${f.producto || '—'}</td><td>${f.pieza}</td><td class="num">${f.pct}%</td></tr>`).join('')
+  tbody.innerHTML = filas.map(f => `<tr><td>${etiquetaOrden(f.orden)}</td><td>${f.cliente || '—'}</td><td>${f.producto || '—'}</td><td>${f.pieza}</td><td class="num">${f.pct}%</td></tr>`).join('')
     || '<tr><td colspan="5" style="text-align:center;color:var(--ink-faint)">No hay órdenes con procesos pendientes</td></tr>';
 }
 
@@ -1108,7 +1122,7 @@ export function renderEstadoOrdenes(){
     }).join('');
     const estado = estadoOrden(o);
     return `<div class="estado-orden fila-clicable" data-orden="${o.orden}">
-      <div class="estado-orden-head"><b>Orden ${o.orden} — ${o.cliente || ''}</b>${estadoBadgeHTML(estado)}</div>
+      <div class="estado-orden-head"><b>Orden ${etiquetaOrden(o.orden)} — ${o.cliente || ''}</b>${estadoBadgeHTML(estado)}</div>
       ${filas}
     </div>`;
   }).join('') || '<p style="color:var(--ink-faint);font-size:13px">Sin piezas asociadas todavía.</p>';
@@ -1219,7 +1233,7 @@ function wirePresupuestoOrden(orden, costoReal, ingresoReal, costoMateriales){
       document.getElementById('pres-comparativo').innerHTML = comparativoPresupuestoHTML(payload, costoReal, ingresoReal, costoMateriales);
       const hint = document.getElementById('pres-guardado-hint');
       if(hint) hint.textContent = 'Presupuesto guardado ✓';
-      toast('Presupuesto de la orden ' + orden + ' guardado');
+      toast('Presupuesto de la orden ' + etiquetaOrden(orden) + ' guardado');
     }catch(err){
       console.error(err);
       toast('No se pudo guardar el presupuesto — revisa la consola');
@@ -1368,7 +1382,7 @@ function historialOrdenHTML(registros, piezas){
 export function mostrarDetalleOrden(orden){
   const o = DB.opp_ordenes.find(x => x.orden === orden);
   if(!o){
-    toast('La orden ' + orden + ' es histórica (viene del Excel migrado) y no tiene ficha de detalle en OPP');
+    toast('La orden ' + etiquetaOrden(orden) + ' es histórica (viene del Excel migrado) y no tiene ficha de detalle en OPP');
     return;
   }
   const piezas = DB.opp_piezas.filter(p => p.orden === orden).sort((a,b)=>a.suborden-b.suborden);
@@ -1378,7 +1392,7 @@ export function mostrarDetalleOrden(orden){
   const costo = registros.reduce((s,r)=>s+(r.valorActividad||0),0);
   const costoMateriales = costoMaterialesDeOrden(orden);
 
-  document.getElementById('opp-detalle-titulo').textContent = `Orden ${orden} — ${o.cliente || ''} · ${tipoTrabajoLabel(o)}`;
+  document.getElementById('opp-detalle-titulo').textContent = `${esOrdenServicio(orden) ? 'Orden de servicio' : 'Orden'} ${etiquetaOrden(orden)} — ${o.cliente || ''} · ${tipoTrabajoLabel(o)}`;
   ordenDetalleActual = orden;
 
   // ---- horas por área de TODA la orden, para el gráfico ----
@@ -1632,7 +1646,7 @@ export function imprimirDetalleOrden(orden){
   const historialHTML = historialOrdenPrintHTML(registros, piezas);
 
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
-<title>Orden ${orden} — ${o.cliente || ''}</title>
+<title>Orden ${etiquetaOrden(orden)} — ${o.cliente || ''}</title>
 <style>
   body{ font-family: Arial, Helvetica, sans-serif; color:#111; margin:20px; }
   h1{ font-size:20px; margin:0 0 2px; }
@@ -1658,7 +1672,7 @@ export function imprimirDetalleOrden(orden){
   }
 </style>
 </head><body>
-  <h1>Orden de producción ${orden}</h1>
+  <h1>${esOrdenServicio(orden) ? 'Orden de servicio' : 'Orden de producción'} ${etiquetaOrden(orden)}</h1>
   <div class="sub">${o.cliente || '—'} ${o.producto ? '· ' + o.producto : ''} · ${tipoTrabajoLabel(o)} · ${(o.fecha||'').slice(0,10)} · Estado: ${estado.label}${estado.pct!=null ? ' (' + estado.pct + '%)' : ''}</div>
   ${o.observaciones ? `<p><b>Observaciones:</b> ${o.observaciones}</p>` : ''}
   ${piezasHTML}
@@ -1733,7 +1747,7 @@ function columnasDeBloque(grid, filaOrden){
   const cols = [];
   for(let c = 0; c < fila.length; c++){
     const v = fila[c];
-    if(v !== null && v !== '' && !isNaN(parseFloat(v))) cols.push(c);
+    if(v !== null && v !== '' && parseOrden(v) != null) cols.push(c);
   }
   return cols;
 }
@@ -1821,7 +1835,7 @@ function extraerPiezasDelGrid(grid){
       precio_venta_antes_iva: valorCelda(grid, filaPrecioVentaSinIva, c),
       precio_con_iva: valorCelda(grid, filaPrecioConIva, c)
     };
-  }).filter(b => b.orden != null && !isNaN(parseFloat(b.orden)));
+  }).filter(b => b.orden != null && parseOrden(b.orden) != null);
 
   return bloques;
 }
@@ -1833,9 +1847,9 @@ function aplicarImportacion(ordenNum, piezas){
   const yaExiste = DB.opp_ordenes.some(o => o.orden === ordenNum);
   editingOrden = yaExiste ? ordenNum : null;
   document.getElementById('opp-form-mode').textContent = yaExiste
-    ? `Importado desde Excel — la orden ${ordenNum} ya existía, esto va a ACTUALIZARLA. Revisa antes de guardar`
+    ? `Importado desde Excel — la orden ${etiquetaOrden(ordenNum)} ya existía, esto va a ACTUALIZARLA. Revisa antes de guardar`
     : 'Importado desde Excel — revisa los datos antes de guardar';
-  document.getElementById('opp-orden').value = ordenNum;
+  document.getElementById('opp-orden').value = etiquetaOrden(ordenNum);
   document.getElementById('opp-orden').disabled = false;
   document.getElementById('opp-fecha').value = fechaHoyLocal();
   setValSafe('opp-tipo-trabajo', 'Litografia');
@@ -1903,17 +1917,17 @@ async function importarOrdenExcel(file){
     throw new Error('No encontré ninguna pieza reconocible en el archivo.');
   }
 
-  const ordenesDistintas = [...new Set(bloques.map(b => Math.round(parseFloat(b.orden))))];
+  const ordenesDistintas = [...new Set(bloques.map(b => parseOrden(b.orden)))];
   let ordenElegida = ordenesDistintas[0];
 
   if(ordenesDistintas.length > 1){
     const resp = prompt(
-      'Este archivo tiene varias órdenes: ' + ordenesDistintas.join(', ') +
+      'Este archivo tiene varias órdenes: ' + ordenesDistintas.map(etiquetaOrden).join(', ') +
       '.\nEscribe cuál quieres importar (se importa una a la vez):',
-      ordenesDistintas[0]
+      etiquetaOrden(ordenesDistintas[0])
     );
     if(resp == null) return; // el usuario canceló
-    ordenElegida = parseInt(resp, 10);
+    ordenElegida = parseOrden(resp);
     if(!ordenesDistintas.includes(ordenElegida)){
       toast('Ese número de orden no está en el archivo');
       return;
@@ -1921,20 +1935,20 @@ async function importarOrdenExcel(file){
   }
 
   const piezas = bloques
-    .filter(b => Math.round(parseFloat(b.orden)) === ordenElegida)
+    .filter(b => parseOrden(b.orden) === ordenElegida)
     .sort((a, b) => (parseFloat(a.suborden) || 0) - (parseFloat(b.suborden) || 0));
 
   const existente = DB.opp_ordenes.find(o => o.orden === ordenElegida);
   if(existente){
     const piezasActuales = DB.opp_piezas.filter(p => p.orden === ordenElegida).length;
     const reemplazar = confirm(
-      `La orden ${ordenElegida} ya existe en el sistema (${existente.cliente || 'sin cliente'} — ${piezasActuales} pieza(s) guardadas actualmente).\n\n` +
+      `La orden ${etiquetaOrden(ordenElegida)} ya existe en el sistema (${existente.cliente || 'sin cliente'} — ${piezasActuales} pieza(s) guardadas actualmente).\n\n` +
       `¿Qué quieres hacer?\n\n` +
       `Aceptar = REEMPLAZAR la orden guardada con los datos de este Excel (se pierden los datos actuales de esa orden).\n` +
       `Cancelar = CONSERVAR la orden como está — no se importa nada.`
     );
     if(!reemplazar){
-      toast(`Se conservó la orden ${ordenElegida} tal como estaba — no se importó nada`);
+      toast(`Se conservó la orden ${etiquetaOrden(ordenElegida)} tal como estaba — no se importó nada`);
       return;
     }
   }
@@ -1954,7 +1968,8 @@ function resetOppForm(nextOrden){
   document.getElementById('opp-cliente-nuevo-wrap').style.display = 'none';
   document.getElementById('opp-producto-nuevo-wrap').style.display = 'none';
   document.getElementById('opp-producto-ref').style.display = 'none';
-  document.getElementById('opp-orden').value = nextOrden != null ? nextOrden : suggestNextOrden();
+  document.getElementById('opp-orden').value = nextOrden != null ? etiquetaOrden(nextOrden) : suggestNextOrden();
+  actualizarHintNumeroOrden();
   document.getElementById('opp-orden').disabled = false;
   document.getElementById('opp-fecha').value = fechaHoyLocal();
   document.getElementById('opp-observaciones').value = '';
@@ -1967,8 +1982,8 @@ function loadOrdenParaEditar(orden){
   const o = DB.opp_ordenes.find(x => x.orden === orden);
   if(!o) return;
   editingOrden = orden;
-  document.getElementById('opp-form-mode').textContent = `Editando la orden ${orden} — al guardar se sobrescribe`;
-  document.getElementById('opp-orden').value = orden;
+  document.getElementById('opp-form-mode').textContent = `Editando la orden ${etiquetaOrden(orden)} — al guardar se sobrescribe`;
+  document.getElementById('opp-orden').value = etiquetaOrden(orden);
   document.getElementById('opp-orden').disabled = true;
   document.getElementById('opp-observaciones').value = o.observaciones || '';
   ensureOptionExists(document.getElementById('opp-cliente'), o.cliente || '');
@@ -1984,7 +1999,7 @@ function loadOrdenParaEditar(orden){
   const piezas = DB.opp_piezas.filter(p => p.orden === orden).sort((a,b)=>a.suborden-b.suborden);
   piezas.forEach(p => addPiezaCard(p));
   if(!piezas.length) addPiezaCard();
-  toast('Orden ' + orden + ' cargada para editar');
+  toast('Orden ' + etiquetaOrden(orden) + ' cargada para editar');
   document.getElementById('panel-ordenes').scrollIntoView({ behavior:'smooth' });
 }
 
@@ -1992,8 +2007,8 @@ function duplicarOrden(orden){
   const o = DB.opp_ordenes.find(x => x.orden === orden);
   if(!o) return;
   editingOrden = null; // se guarda como ORDEN NUEVA
-  const nuevoNumero = suggestNextOrden();
-  document.getElementById('opp-form-mode').textContent = `Duplicando la orden ${orden} → se guardará como una orden nueva`;
+  const nuevoNumero = esOrdenServicio(orden) ? suggestNextServicio() : suggestNextOrden();
+  document.getElementById('opp-form-mode').textContent = `Duplicando la orden ${etiquetaOrden(orden)} → se guardará como una orden nueva`;
   document.getElementById('opp-orden').value = nuevoNumero;
   document.getElementById('opp-orden').disabled = false;
   ensureOptionExists(document.getElementById('opp-cliente'), o.cliente || '');
@@ -2015,12 +2030,12 @@ function duplicarOrden(orden){
 }
 
 async function cancelarOrden(orden){
-  if(!confirm(`¿Cancelar la orden ${orden}? Esto no borra su historial, solo la marca como cancelada.`)) return;
+  if(!confirm(`¿Cancelar la orden ${etiquetaOrden(orden)}? Esto no borra su historial, solo la marca como cancelada.`)) return;
   const { error } = await sb.from('opp_ordenes').update({ estado: 'Cancelada' }).eq('orden', orden);
   if(error){ console.error(error); toast('No se pudo cancelar la orden'); return; }
   const o = DB.opp_ordenes.find(x => x.orden === orden);
   if(o) o.estado = 'Cancelada';
-  toast('Orden ' + orden + ' cancelada');
+  toast('Orden ' + etiquetaOrden(orden) + ' cancelada');
   renderOppRecent();
   if(onOrdenesChangeCallback) onOrdenesChangeCallback();
 }
@@ -2084,8 +2099,10 @@ async function alertarStockPapelInsuficiente(orden, piezasPayload){
 
 async function saveOpp(){
   const btn = document.getElementById('opp-save');
-  const orden = parseInt(document.getElementById('opp-orden').value, 10);
+  const ordenTexto = document.getElementById('opp-orden').value;
+  const orden = parseOrden(ordenTexto);
   const cliente = document.getElementById('opp-cliente').value.trim();
+  if(String(ordenTexto).trim() && orden == null){ toast('N° de orden no válido — usa un número (ej. 6025) o S- y un número para servicio (ej. S-0001)'); return; }
   const cards = document.querySelectorAll('#opp-piezas-list .opp-pieza-card');
 
   if(!orden || !cliente){ toast('Falta el número de orden o el cliente'); return; }
@@ -2121,7 +2138,7 @@ async function saveOpp(){
     const piezasPayload = Array.from(cards).map((node, i) => {
       const suborden = i + 1;
       const base = {
-        orden, suborden, op: orden + '-' + suborden,
+        orden, suborden, op: etiquetaOrden(orden) + '-' + suborden,
         pieza: node.querySelector('.f-pieza').value.trim() || null,
         cantidad: parseFloat(node.querySelector('.f-cantidad').value) || null,
         procesos_requeridos: procesosOrdenados(node)
@@ -2174,7 +2191,7 @@ async function saveOpp(){
     const { error: errPiezas } = await sb.from('opp_piezas').insert(piezasPayload);
     if(errPiezas) throw errPiezas;
 
-    toast((editingOrden===orden ? 'Orden actualizada: ' : 'Orden guardada: ') + orden + ' con ' + piezasPayload.length + ' pieza(s)');
+    toast((editingOrden===orden ? 'Orden actualizada: ' : 'Orden guardada: ') + etiquetaOrden(orden) + ' con ' + piezasPayload.length + ' pieza(s)');
     await alertarStockPapelInsuficiente(orden, piezasPayload);
 
     const { data: o1 } = await sb.from('opp_ordenes').select('*').order('orden', { ascending: false });
@@ -2206,7 +2223,7 @@ async function saveOpp(){
           precio_venta_antes_iva: pres.precio_venta_antes_iva, precio_con_iva: pres.precio_con_iva,
           rentabilidad_esperada_pct: rentabilidadPct };
         if(idx >= 0) DB.presupuesto_orden[idx] = registro; else DB.presupuesto_orden.push(registro);
-        toast('Presupuesto de la orden ' + orden + ' cargado automáticamente desde el Excel');
+        toast('Presupuesto de la orden ' + etiquetaOrden(orden) + ' cargado automáticamente desde el Excel');
       }catch(err){
         console.warn('No se pudo guardar el presupuesto importado automáticamente:', err);
       }
@@ -2283,7 +2300,7 @@ function filtrarOrdenes(){
   const q = document.getElementById('opp-buscar').value.trim().toLowerCase();
   if(!q){ renderOppLista(DB.opp_ordenes.slice(0,20)); return; }
   const filtradas = DB.opp_ordenes.filter(o =>
-    String(o.orden).includes(q) ||
+    etiquetaOrden(o.orden).toLowerCase().includes(q) ||
     (o.cliente||'').toLowerCase().includes(q) ||
     (o.producto||'').toLowerCase().includes(q)
   );
@@ -2294,12 +2311,12 @@ function filtrarOrdenes(){
 // completa (cliente, producto y piezas) en modo edición automáticamente.
 function checkOrdenExistente(){
   const input = document.getElementById('opp-orden');
-  const val = parseInt(input.value, 10);
+  const val = parseOrden(input.value);
   if(!val || input.disabled) return; // disabled = ya está en modo edición, no repetir
   const existe = DB.opp_ordenes.find(o => o.orden === val);
   if(existe){
     loadOrdenParaEditar(val);
-    toast('La orden ' + val + ' ya existe — cargada para editar');
+    toast('La orden ' + etiquetaOrden(val) + ' ya existe — cargada para editar');
   }
 }
 
@@ -2368,8 +2385,8 @@ export function initOppForm(onChange){
   const consultarInput = document.getElementById('opp-consultar-orden');
   if(consultarBtn && consultarInput){
     const ejecutarConsulta = () => {
-      const val = parseInt(consultarInput.value, 10);
-      if(!val){ toast('Escribe un número de orden'); return; }
+      const val = parseOrden(consultarInput.value);
+      if(!val){ toast('Escribe un número de orden (ej. 5944 o S-0001)'); return; }
       const existe = DB.opp_ordenes.find(o => o.orden === val);
       if(!existe){ toast('No existe una orden con ese número'); return; }
       mostrarDetalleOrden(val);
@@ -2388,7 +2405,7 @@ export function initOppForm(onChange){
       filas: DB.opp_ordenes.map(o => {
         const estado = estadoOrden(o);
         return {
-          Orden: o.orden, Cliente: o.cliente, Tipo: tipoTrabajoLabel(o), Producto: o.producto, Fecha: (o.fecha||'').slice(0,10),
+          Orden: etiquetaOrden(o.orden), Cliente: o.cliente, Tipo: tipoTrabajoLabel(o), Producto: o.producto, Fecha: (o.fecha||'').slice(0,10),
           Piezas: conteo[o.orden] || 0, Estado: estado.label,
           'Avance %': estado.pct, 'Costo M.O.': costoAcumulado(o.orden)
         };
@@ -2519,7 +2536,7 @@ export function fichaOrdenParaOperarioHTML(orden){
 
   return `
     <div class="detalle-orden-obs" style="margin-bottom:12px">
-      <b>Orden ${orden} — ${o.cliente || ''}</b> · ${tipoTrabajoLabel(o)} · ${(o.fecha||'').slice(0,10)} ${estadoBadgeHTML(estado)}
+      <b>Orden ${etiquetaOrden(orden)} — ${o.cliente || ''}</b> · ${tipoTrabajoLabel(o)} · ${(o.fecha||'').slice(0,10)} ${estadoBadgeHTML(estado)}
     </div>
     ${o.observaciones ? `<div class="detalle-orden-obs"><b>Observaciones:</b> ${o.observaciones}</div>` : ''}
     <div class="detalle-piezas-grid">${piezasHTML}</div>
