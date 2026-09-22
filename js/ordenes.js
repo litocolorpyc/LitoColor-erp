@@ -1229,15 +1229,19 @@ function wirePresupuestoOrden(orden, costoReal, ingresoReal, costoMateriales){
   });
 }
 
-// "Registrar Venta" (facturas de venta importadas, ver ventas.js) es la
-// fuente que reemplaza al Excel histórico de "pedidos" hacia adelante —
-// mismo criterio que calcularGerencial en dashboard.js: solo cuentan los
-// ítems de factura que tienen ESTA orden asociada, por su valor NETO (sin
-// IVA). Pedido explícito 16sep26.
+// "Registrar Venta" (facturas de venta importadas, ver ventas.js) y
+// "Remisión" (documento de despacho, ver remisiones.js) son las fuentes que
+// reemplazan al Excel histórico de "pedidos" hacia adelante — mismo
+// criterio que calcularGerencial en dashboard.js: solo cuentan los ítems
+// (de factura o de remisión) que tienen ESTA orden asociada, por su valor
+// neto (sin IVA en facturas; el valor_total de la remisión ya sale sin IVA
+// cuando se autocompletó desde el Presupuesto). Pedido explícito 16sep26 y
+// 21sep26 (remisiones no se estaban sumando acá tampoco).
 function ingresoDeOrden(orden){
   const dePedidos = DB.pedidos.filter(p => p.orden === orden).reduce((s,p)=>s+(p.total||0),0);
   const deFacturasVenta = DB.facturas_venta_items.filter(it => it.orden === orden).reduce((s,it)=>s+(it.valor_neto||0),0);
-  return dePedidos + deFacturasVenta;
+  const deRemisiones = DB.remision_items.filter(it => it.orden === orden).reduce((s,it)=>s+(it.valor_total||0),0);
+  return dePedidos + deFacturasVenta + deRemisiones;
 }
 
 // Agrupa registros de producción por Área + Operario + Máquina. Antes se

@@ -119,6 +119,13 @@
         </div>
         <div class="field" style="max-width:140px"><label>Desde</label><input type="date" id="ger-desde"></div>
         <div class="field" style="max-width:140px"><label>Hasta</label><input type="date" id="ger-hasta"></div>
+        <div class="field" style="max-width:220px"><label>Documentos</label>
+          <select id="ger-doc-filtro">
+            <option value="todo">Todo (facturas + remisiones)</option>
+            <option value="solo_facturas">Solo facturas</option>
+            <option value="solo_remisiones">Solo remisiones</option>
+          </select>
+        </div>
         <button type="button" class="btn-secondary" id="ger-imprimir" style="margin-left:auto">🖨 Imprimir informe</button>
         <button type="button" class="btn-secondary" id="export-respaldo">⬇ Respaldo completo (.xlsx)</button>
       </div>
@@ -129,7 +136,7 @@
           <canvas id="chart-ger-mes" height="220"></canvas>
         </div>
         <div class="card">
-          <div class="card-head"><h3>Clientes principales</h3><span class="card-hint">ingreso facturado, o presupuestado si aún no hay factura</span></div>
+          <div class="card-head"><h3>Clientes principales</h3><span class="card-hint">ingreso facturado/remisionado (según filtro "Documentos"), o presupuestado si todavía no hay ninguno</span></div>
           <canvas id="chart-ger-clientes" height="220"></canvas>
         </div>
       </div>
@@ -137,7 +144,7 @@
         <div class="card-head">
           <h3>Rentabilidad por orden</h3>
           <span style="display:flex;align-items:baseline;gap:10px">
-            <span class="card-hint">el margen usa el ingreso facturado, o el presupuestado si aún no hay factura — ver notas abajo</span>
+            <span class="card-hint">el margen usa el ingreso facturado/remisionado (según filtro "Documentos"), o el presupuestado si todavía no hay ninguno — ver notas abajo</span>
             <button type="button" class="btn-secondary" id="ger-rent-ir-final" style="padding:4px 10px;margin-top:0">Ir al final ⬇</button>
           </span>
         </div>
@@ -153,7 +160,7 @@
         </div>
         <p class="card-hint" style="margin-top:10px;line-height:1.5">
           * "Otros costos" = costos fijos y variables (arriendo, nómina, servicios, impuestos, compras de materia prima, etc. — sin mano de obra). Si el costo ya se registró con esta orden asociada (ej. una compra de papel para este trabajo), se carga 100% aquí; el resto (arriendo, nómina, y demás sin orden asociada) se reparte proporcional al ingreso de cada orden. Pasa el mouse sobre el valor para ver el detalle.<br>
-          ** "Margen" = Ingreso − Costo M.O. − Otros costos. Usa el ingreso <b>facturado</b> (columna Ingreso); si esa orden todavía no tiene factura cargada (queda en 0 porque viene de un sistema histórico que no se sigue llenando), usa el ingreso <b>presupuestado</b> en su lugar, para no mostrar un margen negativo falso en órdenes que ni siquiera se han facturado todavía.
+          ** "Margen" = Ingreso − Costo M.O. − Otros costos. Usa el ingreso <b>facturado o remisionado</b> (columna Ingreso — según el filtro "Documentos" de arriba); si esa orden todavía no tiene ninguno de los dos cargado (queda en 0), usa el ingreso <b>presupuestado</b> en su lugar, para no mostrar un margen negativo falso en órdenes que ni siquiera se han facturado/remisionado todavía.
         </p>
       </div>
 
@@ -1696,7 +1703,7 @@
       </div>
 
       <div class="card" id="rem-crear-card" style="display:none">
-        <div class="card-head"><h3>Crear remisión</h3><span class="card-hint">elige el cliente, marca las órdenes que se despachan, revisa los ítems y guarda — el N° de remisión se asigna solo al guardar, según el consecutivo de Maestros &gt; Documentos</span></div>
+        <div class="card-head"><h3>Crear remisión</h3><span class="card-hint">elige el cliente, marca las órdenes que se despachan, revisa los ítems y guarda — el N° de remisión sugiere el siguiente consecutivo de Maestros &gt; Documentos, pero se puede escribir a mano el que corresponda (ej. el del talonario físico)</span></div>
         <p class="card-hint" id="rem-editando-aviso" style="display:none;background:#2E8FC022;color:#2E8FC0;padding:6px 10px;border-radius:8px;font-weight:600"></p>
 
         <div class="form-row">
@@ -1705,7 +1712,12 @@
             <input type="text" id="rem-cliente-input" autocomplete="off" placeholder="Escribe para buscar…">
             <div id="rem-cliente-dropdown" class="autocomplete-dropdown" style="display:none"></div>
           </div>
-          <div class="field"><label>N° de remisión</label><input type="text" id="rem-numero" readonly placeholder="se asigna al guardar"></div>
+          <div class="field"><label>N° de remisión</label>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-weight:700;color:var(--ink-faint)">RM</span>
+              <input type="number" id="rem-numero" min="1" step="1" placeholder="se asigna al guardar" style="flex:1">
+            </div>
+          </div>
           <div class="field"><label>Fecha</label><input type="date" id="rem-fecha"></div>
         </div>
         <div class="form-row">
@@ -1747,7 +1759,7 @@
         <div class="card-head"><h3>Remisiones registradas</h3><span class="card-hint">"Ver" muestra el detalle e imprime — "Editar" reabre la remisión completa arriba — "Eliminar" la borra por completo (no se puede deshacer)</span></div>
         <div class="form-row">
           <div class="field"><label>Cliente</label><input type="text" id="rem-f-cliente" placeholder="contiene…"></div>
-          <div class="field"><label>N° de remisión</label><input type="text" id="rem-f-numero"></div>
+          <div class="field"><label>N° de remisión</label><input type="text" id="rem-f-numero" placeholder="ej. 4478 o RM 4478"></div>
           <div class="field"><label>N° de orden</label><input type="number" id="rem-f-orden"></div>
           <div class="field" style="max-width:160px"><label>Desde</label><input type="date" id="rem-f-desde"></div>
           <div class="field" style="max-width:160px"><label>Hasta</label><input type="date" id="rem-f-hasta"></div>

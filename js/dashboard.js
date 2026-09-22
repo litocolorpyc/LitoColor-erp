@@ -87,9 +87,54 @@ function pedidosDesdeFacturasVenta(desde, hasta){
   return filas;
 }
 
+// "Remisión" (documento de despacho, ver remisiones.js) también es una
+// fuente de ingreso — pedido explícito 21sep26: antes no se sumaba a
+// Gerencial en absoluto. Mismo criterio y misma forma de fila que
+// pedidosDesdeFacturasVenta de arriba, para reusar toda la lógica de abajo
+// (KPI, gráfico mensual, clientes principales, rentabilidad por orden y
+// por producto) sin duplicarla. Solo cuentan los ÍTEMS de la remisión que
+// tienen una orden de producción asociada (los agregados a mano sin orden
+// no se suman a ningún lado, igual que en facturas). El valor_total del
+// ítem ya sale sin IVA cuando se autocompletó desde el precio de venta del
+// Presupuesto (ver toggleOrdenSeleccionada en remisiones.js).
+//
+// Ojo: si una misma orden llega a tener TANTO una remisión como una
+// factura de venta asociadas (despacho y facturación por separado), esta
+// función suma el ingreso de ambos documentos sin intentar deducir cuál
+// "reemplaza" al otro — mismo criterio que ya se usaba para sumar
+// "pedidos" (histórico) + facturas sin dedup entre sí.
+function pedidosDesdeRemisiones(desde, hasta){
+  const remisionesPorId = new Map(DB.remisiones.map(r => [r.id, r]));
+  const filas = [];
+  DB.remision_items.forEach(it => {
+    if(it.orden == null) return;
+    const remision = remisionesPorId.get(it.remision_id);
+    if(!remision || !enRango(remision.fecha, desde, hasta)) return;
+    const ordenOpp = DB.opp_ordenes.find(o => o.orden === it.orden);
+    filas.push({
+      fecha: remision.fecha, orden: it.orden,
+      cliente: remision.cliente || (ordenOpp ? ordenOpp.cliente : null),
+      producto: ordenOpp ? ordenOpp.producto : null,
+      trabajo: ordenOpp ? (ordenOpp.producto || tipoTrabajoLabel(ordenOpp)) : null,
+      total: it.valor_total || 0
+    });
+  });
+  return filas;
+}
+
+// Filtro "Documentos" del panel Gerencial (todo / solo facturas / solo
+// remisiones) — pedido explícito 21sep26, para poder sacar un listado que
+// combine ambos o que aísle solo uno. Afecta el KPI de ingresos, el
+// gráfico mensual, clientes principales y las dos tablas de rentabilidad,
+// porque todas parten de la misma lista `pedidos` armada acá.
+let filtroDocGer = 'todo';
+
 function calcularGerencial(desde, hasta){
+  const incluirFacturas = filtroDocGer !== 'solo_remisiones';
+  const incluirRemisiones = filtroDocGer !== 'solo_facturas';
   const pedidos = DB.pedidos.filter(p => enRango(p.fecha, desde, hasta))
-    .concat(pedidosDesdeFacturasVenta(desde, hasta));
+    .concat(incluirFacturas ? pedidosDesdeFacturasVenta(desde, hasta) : [])
+    .concat(incluirRemisiones ? pedidosDesdeRemisiones(desde, hasta) : []);
   const produccion = DB.produccion.filter(r => enRango(r.fecha, desde, hasta));
   const costosMov = DB.costos_movimientos.filter(m => enRango(m.fecha, desde, hasta));
   const ingresos = pedidos.reduce((s,p)=>s+(p.total||0),0);
@@ -120,8 +165,13 @@ export function renderGerencial(){
     ? { ingresos:null, ingresosPresupuestados:null, costoMO:null, otrosCostos:null, margen:null, ordenes:null }
     : calcularGerencial(ant.desde, ant.hasta);
 
+  const ingresosSub = filtroDocGer === 'solo_facturas'
+    ? 'pedidos con valor + solo facturas de venta con orden asociada (valor neto, antes de IVA)'
+    : filtroDocGer === 'solo_remisiones'
+    ? 'pedidos con valor + solo remisiones con orden asociada'
+    : 'pedidos con valor + facturas de venta y remisiones con orden asociada (ver filtro "Documentos")';
   document.getElementById('ger-kpis').innerHTML = `
-    <div class="kpi"><div class="lbl">Ingresos facturados</div><div class="val">${fmtCOP(actual.ingresos)} ${deltaBadge(actual.ingresos, anterior.ingresos)}</div><div class="sub">pedidos con valor + facturas de venta con orden asociada (valor neto, antes de IVA)</div></div>
+    <div class="kpi"><div class="lbl">Ingresos facturados</div><div class="val">${fmtCOP(actual.ingresos)} ${deltaBadge(actual.ingresos, anterior.ingresos)}</div><div class="sub">${ingresosSub}</div></div>
     <div class="kpi"><div class="lbl">Ingresos presupuestados</div><div class="val">${fmtCOP(actual.ingresosPresupuestados)} ${deltaBadge(actual.ingresosPresupuestados, anterior.ingresosPresupuestados)}</div><div class="sub">precio venta antes de IVA de órdenes con presupuesto</div></div>
     <div class="kpi"><div class="lbl">Costo mano de obra</div><div class="val">${fmtCOP(actual.costoMO)} ${deltaBadge(actual.costoMO, anterior.costoMO)}</div><div class="sub">según bitácora de producción</div></div>
     <div class="kpi"><div class="lbl">Otros costos (fijos + variables)</div><div class="val">${fmtCOP(actual.otrosCostos)} ${deltaBadge(actual.otrosCostos, anterior.otrosCostos)}</div><div class="sub">arriendo, nómina, materia prima, impuestos…</div></div>
@@ -205,11 +255,17 @@ export function renderGerencial(){
     return { orden:o, cliente:ordCliente[o], trabajo:ordTrabajo[o], ing, ingPres, cost: ordCost[o]||0, otros, otrosDirecto };
   }
 
-  const rows = Object.keys(ordIng).map(filaOrden).sort((a,b)=>b.ing-a.ing).slice(0,15);
+  // Antes esto se cortaba en las 15 con más ingreso facturado, así que
+  // cualquier orden con un ingreso más chico (ej. OP 6020, $910.000, quejada
+  // explícita 21sep26) quedaba invisible en esta tabla aunque SÍ contara en
+  // el KPI de arriba — los botones "Ir al inicio/final" de abajo ya estaban
+  // pensados para una tabla larga con scroll, así que se quita el tope: la
+  // tabla queda ordenada por ingreso (de mayor a menor) pero completa.
+  const rows = Object.keys(ordIng).map(filaOrden).sort((a,b)=>b.ing-a.ing);
 
   // Órdenes que tienen presupuesto pero todavía no tienen pedido (ingreso
   // facturado) — antes no aparecían en esta tabla en absoluto. Se agregan
-  // aparte, sin contar contra el tope de las 15 con más ingreso facturado.
+  // aparte.
   const ordenesPresupuestoSinPedido = Object.keys(ordIngPresupuestado).filter(o => !(o in ordIng));
   ordenesPresupuestoSinPedido.forEach(o => rows.push(filaOrden(o)));
 
@@ -1026,6 +1082,8 @@ export function abrirEdicionRegistroDesdeOrden(id){
 }
 
 export function initDashboardFilters(){
+  const selDocGer = document.getElementById('ger-doc-filtro');
+  if(selDocGer) selDocGer.addEventListener('change', () => { filtroDocGer = selDocGer.value; renderGerencial(); });
   wireRangePresets('ger-presets', 'ger-desde', 'ger-hasta', () => rangoGer, r => rangoGer = r, renderGerencial);
   wireRangePresets('prod-presets', 'prod-desde', 'prod-hasta', () => rangoProd, r => rangoProd = r, renderProduccion);
   wireRangePresets('op-presets', 'op-desde', 'op-hasta', () => rangoOp, r => rangoOp = r, renderOperario);
@@ -1128,6 +1186,10 @@ function wireExportButtons(){
       { nombre: 'Facturas de venta', filas: DB.facturas_venta_items.map(it => {
         const f = DB.facturas_venta.find(x => x.id === it.factura_id);
         return { Factura:f?f.numero_factura:'—', Fecha:f?f.fecha:'—', Cliente:f?f.cliente:'—', Descripción:it.descripcion, Cantidad:it.cantidad, 'Vr. Total (con IVA)':it.valor_total, 'Valor neto (sin IVA)':it.valor_neto, Orden:it.orden };
+      }) },
+      { nombre: 'Remisiones', filas: DB.remision_items.map(it => {
+        const r = DB.remisiones.find(x => x.id === it.remision_id);
+        return { Remisión: r ? 'RM ' + r.numero : '—', Fecha:r?r.fecha:'—', Cliente:r?r.cliente:'—', Descripción:it.descripcion, Cantidad:it.cantidad, 'Valor total':it.valor_total, Orden:it.orden };
       }) }
     ]);
   });

@@ -2,6 +2,8 @@ import { sb } from './supabase-client.js';
 import { DB } from './store.js';
 import { toast, fmtCOP, fmtNum, fechaHoyLocal, imprimirInforme, exportarExcel } from './helpers.js';
 import { getCurrentUser } from './auth.js';
+import { renderGerencial } from './dashboard.js';
+import { renderOppRecent } from './ordenes.js';
 
 // "Remisión" (pedido explícito 17sep26): documento de despacho real —
 // cliente elegido de un desplegable que filtra mientras se escribe,
@@ -52,10 +54,14 @@ function limpiarFormularioRemision(){
 }
 
 // Muestra en el campo "N° de remisión" cuál sería el próximo número, según
-// el maestro de Documentos — solo informativo: el número real se asigna
-// (y se reserva de forma atómica) recién al guardar, vía la función SQL
-// siguiente_consecutivo, para que dos personas guardando a la vez nunca se
-// lleven el mismo número.
+// el maestro de Documentos — es solo una SUGERENCIA editable: la usuaria
+// puede escribirle encima el número que corresponda (ej. el del talonario
+// físico de remisiones, que no siempre calza con el consecutivo del
+// sistema — pedido explícito 21sep26). Si al guardar el campo quedó igual
+// a esta sugerencia, se reserva por la función SQL siguiente_consecutivo
+// (atómico, para que dos personas guardando a la vez no se lleven el mismo
+// número); si se escribió un número distinto, se usa tal cual y el
+// consecutivo automático no avanza (ver guardarRemision).
 export function actualizarNumeroPreview(){
   const el = document.getElementById('rem-numero');
   if(!el) return; // esta pestaña no existe para este rol/página
@@ -63,6 +69,10 @@ export function actualizarNumeroPreview(){
   const doc = DB.consecutivos_documentos.find(d => d.tipo === 'remision');
   el.value = doc ? doc.siguiente_numero : '';
   el.placeholder = 'se asigna al guardar';
+}
+
+function numeroConPrefijo(numero){
+  return 'RM ' + numero;
 }
 
 // ---------- desplegable de cliente (filtra mientras se escribe) ----------
@@ -233,6 +243,23 @@ async function guardarRemision(){
   if(!itemsActuales.length){ toast('Agrega al menos una línea antes de guardar'); return; }
 
   const total = itemsActuales.reduce((s,it)=>s+(it.valor_total||0),0);
+
+  // El N° de remisión (campo "RM ___") se puede escribir a mano — pedido
+  // explícito 21sep26, porque el talonario físico de remisiones no
+  // siempre calza con el consecutivo automático del sistema. Si la
+  // usuaria dejó el valor que se sugería (el siguiente consecutivo), se
+  // sigue reservando por la función SQL atómica de siempre; si escribió
+  // otro número, se usa tal cual y el consecutivo automático NO avanza
+  // (para no "quemar" un número que nadie va a usar).
+  const numeroTexto = document.getElementById('rem-numero').value.trim();
+  const numeroManual = numeroTexto ? parseInt(numeroTexto, 10) : null;
+  if(numeroTexto && (isNaN(numeroManual) || numeroManual <= 0)){
+    toast('El N° de remisión debe ser un número entero positivo'); return;
+  }
+  const docConsecutivo = DB.consecutivos_documentos.find(d => d.tipo === 'remision');
+  const numeroSugerido = docConsecutivo ? docConsecutivo.siguiente_numero : null;
+  const esNumeroManual = remisionEditandoId == null && numeroManual != null && numeroManual !== numeroSugerido;
+
   const confirmado = confirm(
     `Total de la remisión: ${fmtCOP(total)} · ${itemsActuales.length} línea(s)\n\n` +
     `Aceptar = guardar la remisión · Cancelar = seguir modificando`
@@ -256,6 +283,7 @@ async function guardarRemision(){
     let remisionId, remisionGuardada;
     if(remisionEditandoId != null){
       remisionId = remisionEditandoId;
+      if(numeroManual != null) camposRemision.numero = numeroManual;
       const { data, error } = await sb.from('remisiones').update(camposRemision).eq('id', remisionId).select();
       if(error) throw error;
       remisionGuardada = data[0];
@@ -265,9 +293,13 @@ async function guardarRemision(){
       if(errDelOrd) throw errDelOrd;
     } else {
       const user = getCurrentUser();
-      const { data: numeroData, error: errNumero } = await sb.rpc('siguiente_consecutivo', { p_tipo: 'remision' });
-      if(errNumero) throw errNumero;
-      camposRemision.numero = numeroData;
+      if(esNumeroManual){
+        camposRemision.numero = numeroManual;
+      } else {
+        const { data: numeroData, error: errNumero } = await sb.rpc('siguiente_consecutivo', { p_tipo: 'remision' });
+        if(errNumero) throw errNumero;
+        camposRemision.numero = numeroData;
+      }
       camposRemision.creado_por = user ? user.nombre : null;
       const { data, error } = await sb.from('remisiones').insert([camposRemision]).select();
       if(error) throw error;
@@ -299,26 +331,41 @@ async function guardarRemision(){
       DB.remision_ordenes = DB.remision_ordenes.filter(o => o.remision_id !== remisionId);
     } else {
       DB.remisiones.unshift(remisionGuardada);
-      const doc = DB.consecutivos_documentos.find(d => d.tipo === 'remision');
-      if(doc) doc.siguiente_numero = camposRemision.numero + 1;
+      // El consecutivo automático solo avanza si el número vino del RPC —
+      // si se escribió a mano, ese "hueco" del consecutivo se deja intacto
+      // para que se siga sugiriendo hasta que en verdad se use.
+      if(!esNumeroManual){
+        const doc = DB.consecutivos_documentos.find(d => d.tipo === 'remision');
+        if(doc) doc.siguiente_numero = camposRemision.numero + 1;
+      }
     }
     DB.remision_items.push(...(itemsGuardados||[]));
     DB.remision_ordenes.push(...(ordenesGuardadas||[]));
 
-    toast('Remisión ' + remisionGuardada.numero + (remisionEditandoId!=null ? ' actualizada' : ' guardada'));
+    toast('Remisión ' + numeroConPrefijo(remisionGuardada.numero) + (remisionEditandoId!=null ? ' actualizada' : ' guardada'));
     const numeroFinal = remisionGuardada.numero;
     const idFinal = remisionId;
     limpiarFormularioRemision();
     ocultarCrearCard();
     renderListadoRemisiones();
     renderInformeRemisiones();
+    // El ingreso de estos ítems (si tienen orden asociada) ya afecta
+    // Gerencial y el detalle de esa orden — refresca ambos para que no
+    // haga falta recargar la página (mismo criterio que guardarFacturaVenta
+    // en ventas.js).
+    renderGerencial();
+    renderOppRecent();
 
-    if(confirm(`Remisión ${numeroFinal} guardada. ¿Deseas imprimirla ahora?`)){
+    if(confirm(`Remisión ${numeroConPrefijo(numeroFinal)} guardada. ¿Deseas imprimirla ahora?`)){
       imprimirRemision(idFinal);
     }
   }catch(err){
     console.error(err);
-    toast('Error al guardar la remisión — revisa la consola');
+    if(err && err.code === '23505'){
+      toast('Ya existe una remisión con ese número — escribe otro');
+    } else {
+      toast('Error al guardar la remisión — revisa la consola');
+    }
   }finally{
     btn.disabled = false; btn.textContent = 'Revisar y guardar';
   }
@@ -349,7 +396,7 @@ function editarRemision(id){
   document.getElementById('rem-guardar').textContent = 'Guardar cambios';
   const aviso = document.getElementById('rem-editando-aviso');
   aviso.style.display = '';
-  aviso.textContent = `Editando la remisión N° ${r.numero} (${r.cliente || ''}) — al guardar se corrige esta remisión, el número no cambia. "Cancelar" cierra sin guardar cambios.`;
+  aviso.textContent = `Editando la remisión ${numeroConPrefijo(r.numero)} (${r.cliente || ''}) — el número también se puede corregir. "Cancelar" cierra sin guardar cambios.`;
   mostrarCrearCard();
   document.getElementById('rem-crear-card').scrollIntoView({ behavior:'smooth', block:'start' });
 }
@@ -358,7 +405,7 @@ function editarRemision(id){
 async function eliminarRemision(id){
   const r = DB.remisiones.find(x => x.id === id);
   if(!r) return;
-  if(!confirm(`¿Eliminar la remisión N° ${r.numero} (${r.cliente || 'sin cliente'})?\n\nNo se puede deshacer.`)) return;
+  if(!confirm(`¿Eliminar la remisión ${numeroConPrefijo(r.numero)} (${r.cliente || 'sin cliente'})?\n\nNo se puede deshacer.`)) return;
   try{
     const { error: errIt } = await sb.from('remision_items').delete().eq('remision_id', id);
     if(errIt) throw errIt;
@@ -372,6 +419,8 @@ async function eliminarRemision(id){
     if(remisionEditandoId === id){ limpiarFormularioRemision(); ocultarCrearCard(); }
     renderListadoRemisiones();
     renderInformeRemisiones();
+    renderGerencial();
+    renderOppRecent();
     toast('Remisión eliminada');
   }catch(err){
     console.error(err);
@@ -384,7 +433,7 @@ function mostrarDetalleRemision(id){
   const r = DB.remisiones.find(x => x.id === id);
   if(!r) return;
   const items = DB.remision_items.filter(it => it.remision_id === id);
-  document.getElementById('rem-detalle-titulo').textContent = 'Remisión N° ' + r.numero;
+  document.getElementById('rem-detalle-titulo').textContent = 'Remisión ' + numeroConPrefijo(r.numero);
   document.getElementById('rem-detalle-cabecera').textContent = [
     r.fecha ? 'Fecha: ' + r.fecha.slice(0,10) : null,
     r.cliente ? 'Cliente: ' + r.cliente : null,
@@ -417,7 +466,7 @@ function imprimirRemision(id){
   + Array.from({length: Math.max(0, 4 - items.length)}).map(()=>'<tr><td>&nbsp;</td><td></td><td></td><td></td></tr>').join('');
 
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
-<title>Remisión ${r.numero} — ${r.cliente || ''}</title>
+<title>Remisión ${numeroConPrefijo(r.numero)} — ${r.cliente || ''}</title>
 <style>
   body{ font-family: Arial, Helvetica, sans-serif; color:#111; margin:20px; }
   table{ border-collapse:collapse; width:100%; }
@@ -442,7 +491,7 @@ function imprimirRemision(id){
     <tr>
       <td class="cab">NOMBRE</td>
       <td class="titulo" colspan="2">${r.cliente || ''}</td>
-      <td class="cab remnum"><div class="lbl">REMISIÓN No.</div><div class="num">${r.numero}</div></td>
+      <td class="cab remnum"><div class="lbl">REMISIÓN No.</div><div class="num">${numeroConPrefijo(r.numero)}</div></td>
     </tr>
     <tr><td class="cab">PEDIDO No.</td><td colspan="2">${ordenes.join(', ') || '—'}</td><td>${(r.fecha||'').slice(0,10)}</td></tr>
     <tr><td class="cab">TELÉFONO</td><td colspan="3">${r.telefono || ''}</td></tr>
@@ -477,7 +526,7 @@ export function renderListadoRemisiones(){
   if(!tbody) return;
 
   const fCliente = normalizarTexto(document.getElementById('rem-f-cliente')?.value || '');
-  const fNumero = (document.getElementById('rem-f-numero')?.value || '').trim();
+  const fNumero = (document.getElementById('rem-f-numero')?.value || '').trim().replace(/^rm\s*/i, '');
   const fOrden = document.getElementById('rem-f-orden')?.value ? parseInt(document.getElementById('rem-f-orden').value,10) : null;
   const fDesde = document.getElementById('rem-f-desde')?.value || '';
   const fHasta = document.getElementById('rem-f-hasta')?.value || '';
@@ -493,7 +542,7 @@ export function renderListadoRemisiones(){
   if(fHasta) filas = filas.filter(r => (r.fecha||'') <= fHasta);
 
   tbody.innerHTML = filas.slice(0, 200).map(r => `<tr data-id="${r.id}">
-    <td>${r.numero}</td>
+    <td>${numeroConPrefijo(r.numero)}</td>
     <td>${(r.fecha||'').slice(0,10) || '—'}</td>
     <td>${r.cliente || '—'}</td>
     <td class="num">${fmtCOP(r.total||0)}</td>
