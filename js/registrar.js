@@ -731,7 +731,13 @@ export function avisoConsumoNoReflejado(resultado, nombre){
 // que revisar toda la producción cada vez. Sin filtro, revisa todo
 // DB.produccion — lo usa el botón manual "Buscar consumos sin costo".
 export function buscarConsumosSinCostear(filtroNombreMaterial){
-  const yaCosteados = new Set(DB.costos_movimientos.filter(c => c.produccion_id != null).map(c => c.produccion_id));
+  // Solo cuenta como "ya costeado" el costo automático del consumo del
+  // registro — no el costo adicional de un reproceso ni los consumos/otros
+  // costos extra agregados desde Reprocesos, que también llevan
+  // produccion_id y antes hacían pasar el consumo propio por costeado.
+  const yaCosteados = new Set(DB.costos_movimientos
+    .filter(c => c.produccion_id != null && (c.comentario||'').startsWith('Consumo automático'))
+    .map(c => c.produccion_id));
   const candidatos = DB.produccion.filter(r =>
     r.materiaPrima && r.consumoMP && /^\s*[\d.,]/.test(r.consumoMP) && !yaCosteados.has(r.id)
     && (!filtroNombreMaterial || r.materiaPrima === filtroNombreMaterial)
@@ -925,6 +931,19 @@ async function finishActivity(id, horaIni, fecha){
       tiempo_hr: hrs,
       valor_actividad: hrs * rate
     };
+    // Si la OP ya tiene un reproceso con área que lo generó (y motivo), este
+    // registro hereda esos datos — toda la OP es UN reproceso (ver
+    // js/reprocesos.js, 23sep26).
+    if(esReproceso){
+      const propio = DB.produccion.find(r => r.id === id);
+      const previo = propio && propio.orden != null
+        ? DB.produccion.find(r => r.orden === propio.orden && r.id !== id && r.reproceso === 'Si' && r.areaOrigenReproceso)
+        : null;
+      if(previo){
+        updates.area_origen_reproceso = previo.areaOrigenReproceso;
+        if(!updates.motivo_reproceso) updates.motivo_reproceso = previo.motivoReproceso || null;
+      }
+    }
     const { data, error } = await sb.from('produccion').update(updates).eq('id', id).select();
     if(error) throw error;
     if(!data || !data.length) throw new Error('Supabase no devolvió el registro actualizado (revisa permisos RLS de UPDATE en produccion)');

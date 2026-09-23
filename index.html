@@ -175,6 +175,17 @@
           </table>
         </div>
       </div>
+
+      <div class="card" id="ger-reprocesos-card">
+        <div class="card-head"><h3>Reprocesos</h3><span class="card-hint">una fila por OP (cuenta como un reproceso aunque se hayan rehecho varios procesos) · el costo suma todos los procesos involucrados · haz clic en una fila para ver la orden y sus reprocesos</span></div>
+        <div class="kpi-row" id="ger-rep-kpis"></div>
+        <div class="table-wrap">
+          <table id="tbl-ger-reprocesos">
+            <thead><tr><th>Orden</th><th>Cliente</th><th>Fecha</th><th>Área que lo generó</th><th>Motivo</th><th class="num">Procesos</th><th class="num">Mano de obra</th><th class="num">Materia prima</th><th class="num">Insumos</th><th class="num">Otros</th><th class="num">Total</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <section class="tab-panel" id="panel-produccion">
@@ -726,8 +737,10 @@
         <div class="form-row">
           <div class="field"><label>Operario a asignar</label><select id="rep-operario"></select></div>
           <div class="field"><label>Motivo del reproceso</label><select id="rep-motivo"></select></div>
+          <div class="field"><label>Área que generó el reproceso</label><select id="rep-area-origen"></select></div>
           <div class="field"><label>Responsable</label><input type="text" id="rep-responsable" list="reg-responsables-datalist" placeholder="quién/qué lo causó"></div>
         </div>
+        <p class="card-hint" id="rep-op-existente-hint" style="display:none"></p>
         <div class="form-row">
           <div class="field"><label>Costo adicional estimado <span class="card-hint">(opcional — se puede ajustar al finalizar)</span></label><input type="number" id="rep-costo-adicional" min="0"></div>
           <div class="field full"><label>Comentario</label><input type="text" id="rep-comentario" placeholder="opcional"></div>
@@ -739,7 +752,7 @@
       </div>
 
       <div class="card">
-        <div class="card-head"><h3>Informe de reprocesos</h3><span class="card-hint">totales del periodo — imprime esta tarjeta o exporta a Excel</span></div>
+        <div class="card-head"><h3>Informe de reprocesos</h3><span class="card-hint">cada OP cuenta como UN reproceso (aunque se hayan rehecho varios procesos) · los costos suman todos los procesos involucrados: mano de obra, materia prima, insumos y otros</span></div>
         <div class="date-range-row">
           <div class="field" style="max-width:160px"><label>Desde</label><input type="date" id="rep-inf-desde"></div>
           <div class="field" style="max-width:160px"><label>Hasta</label><input type="date" id="rep-inf-hasta"></div>
@@ -749,28 +762,36 @@
         <div class="kpi-row" id="rep-inf-kpis"></div>
         <div class="grid-2">
           <div class="card">
-            <div class="card-head"><h3>Por área</h3><span class="card-hint">cantidad de reprocesos</span></div>
+            <div class="card-head"><h3>Por área que lo generó</h3><span class="card-hint">cantidad de reprocesos (OPs)</span></div>
             <canvas id="chart-rep-area" height="200"></canvas>
           </div>
           <div class="card">
-            <div class="card-head"><h3>Por motivo</h3><span class="card-hint">cantidad de reprocesos</span></div>
+            <div class="card-head"><h3>Por motivo</h3><span class="card-hint">cantidad de reprocesos (OPs)</span></div>
             <canvas id="chart-rep-motivo" height="200"></canvas>
           </div>
         </div>
+        <h4 style="margin:14px 0 6px">Costo por área que generó el reproceso</h4>
+        <div class="table-wrap">
+          <table id="tbl-rep-por-area-origen">
+            <thead><tr><th>Área que lo generó</th><th class="num">Reprocesos (OPs)</th><th class="num">Procesos rehechos</th><th class="num">Mano de obra</th><th class="num">Materia prima</th><th class="num">Insumos</th><th class="num">Otros</th><th class="num">Total</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <h4 style="margin:14px 0 6px">Por operario que rehízo el trabajo</h4>
         <div class="table-wrap">
           <table id="tbl-rep-por-operario">
-            <thead><tr><th>Operario</th><th>Motivos</th><th>Responsable</th><th class="num">Reprocesos</th><th class="num">Costo M.O.</th><th class="num">Costo adicional</th><th class="num">Total</th></tr></thead>
+            <thead><tr><th>Operario</th><th>Motivos</th><th class="num">Reprocesos (OPs)</th><th class="num">Procesos</th><th class="num">Mano de obra</th><th class="num">Materia prima</th><th class="num">Insumos</th><th class="num">Otros</th><th class="num">Total</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
       </div>
 
       <div class="card">
-        <div class="card-head"><h3>Reprocesos registrados</h3><span class="card-hint">"Ver orden" abre esa orden · "✎" completa o corrige motivo, responsable y costo adicional</span></div>
+        <div class="card-head"><h3>Reprocesos registrados (por OP)</h3><span class="card-hint">una fila por OP · "Detalle" muestra cada proceso con su costo, permite corregir motivo/área que lo generó, agregar consumos de materia prima, insumos u otros costos, e incluir otros procesos de la OP que también se rehicieron</span></div>
         <p class="card-hint" id="rep-sin-motivo-aviso" style="display:none;color:var(--bad)"></p>
         <div class="form-row">
           <div class="field"><label>N° de orden</label><input type="text" id="rep-f-orden" placeholder="ej. 5944 o S-0001"></div>
-          <div class="field"><label>Área</label><input type="text" id="rep-f-area" placeholder="contiene…"></div>
+          <div class="field"><label>Área (origen o rehecha)</label><input type="text" id="rep-f-area" placeholder="contiene…"></div>
           <div class="field"><label>Motivo</label><input type="text" id="rep-f-motivo" placeholder="contiene…"></div>
           <div class="field"><label>Operario / Responsable</label><input type="text" id="rep-f-persona" placeholder="contiene…"></div>
           <div class="field" style="max-width:160px"><label>Desde</label><input type="date" id="rep-f-desde"></div>
@@ -782,7 +803,7 @@
         </div>
         <div class="table-wrap">
           <table id="tbl-rep-listado">
-            <thead><tr><th>Fecha</th><th>Orden / Suborden</th><th>Área</th><th>Operario</th><th>Estado</th><th>Motivo</th><th>Responsable</th><th class="num">Costo M.O.</th><th class="num">Costo adicional</th><th></th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Orden</th><th>Área que lo generó</th><th>Motivo</th><th>Procesos rehechos</th><th>Estado</th><th class="num">Mano de obra</th><th class="num">Materia prima</th><th class="num">Insumos</th><th class="num">Otros</th><th class="num">Total</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -1338,9 +1359,11 @@
         </ol>
         <p>En ambos casos hay que asignar un <b>operario</b>, elegir el <b>motivo</b> (catálogo en Maestros → "Motivos de reproceso"), y opcionalmente anotar el <b>responsable</b> (quién o qué lo causó) y un <b>costo adicional</b> (si aplica, se carga como un costo más de esa orden).</p>
         <p>El operario asignado lo ve en <b>Registrar</b> como una actividad más ("📌 asignada, sin iniciar") — la empieza y la termina igual que cualquier otra, y el tiempo/costo de mano de obra queda registrado solo, sin nada especial que hacer. Si un operario marca "¿Reproceso?" = Sí por su cuenta al finalizar una actividad normal (sin pasar por el botón "↺"), también se le piden esos mismos 3 datos ahí mismo.</p>
-        <p><b>¿Dónde ver un reproceso?</b> En la pestaña <b>Reprocesos</b> (informe con gráfico "Por motivo" y tabla por operario con sus motivos, más el listado completo abajo), y en el <b>detalle de cada orden</b>, en el recuadro <b>"↺ Reprocesos de esta orden"</b> (sale arriba del Presupuesto, solo si la orden tiene reprocesos).</p>
-        <p><b>Reprocesos sin motivo:</b> si un operario marcó "¿Reproceso? = Sí" sin elegir motivo, en el listado aparece el botón <b>"✎ Poner motivo"</b> — ahí se completa motivo, responsable y costo adicional, y desde ese momento cuenta en el gráfico "Por motivo".</p>
-        <div class="help-tip"><b>Tip:</b> la pestaña Reprocesos también tiene su propio informe (KPIs, por área, por motivo, por operario) y el listado completo de reprocesos, ambos imprimibles y exportables a Excel.</div>
+        <p><b>Un reproceso = una OP.</b> Si en una misma orden se tuvieron que repetir varios procesos (ej. la OP 5972, con 13 registros de reproceso), para las estadísticas cuenta como <b>un solo reproceso</b>. Cada reproceso guarda el <b>área que lo generó</b> (ej. se rehízo en Terminado porque Litografía imprimió mal), que es distinta del área donde se rehízo el trabajo.</p>
+        <p><b>Costo del reproceso:</b> suma <b>todos los procesos involucrados</b>, cada uno con su <b>mano de obra</b> (horas × valor/hora), <b>materia prima</b>, <b>insumos</b> y <b>otros costos</b> (costo adicional y otros). El material que el operario anota al terminar el proceso se suma solo.</p>
+        <p><b>¿Dónde ver un reproceso?</b> En la pestaña <b>Reprocesos</b> (informe por área que lo generó, por motivo y por operario, más el listado con una fila por OP), y en el <b>detalle de cada orden</b>, en el recuadro <b>"↺ Reproceso de esta orden"</b>.</p>
+        <p><b>Botón "Detalle" / "✎ Completar"</b> (listado de Reprocesos): muestra cada proceso con su costo y permite: (1) poner o corregir <b>motivo, área que lo generó y responsable</b> — se guarda igual en todos los procesos de esa OP; (2) <b>agregar materia prima, insumos u otros costos</b> gastados en el reproceso (el material se descuenta del inventario; "Quitar" lo devuelve); (3) <b>incluir otros procesos de la OP</b> que también se rehicieron pero el operario no marcó como reproceso (por ejemplo, el corte y la guillotina de una reimpresión); y (4) quitar un registro que no era parte del reproceso.</p>
+        <div class="help-tip"><b>Tip:</b> el informe de Reprocesos se imprime con una fila por OP y se exporta a Excel con dos hojas: "Reprocesos por OP" y "Detalle por proceso" (costo de cada proceso).</div>
       </div>
 
       <div class="card" id="ayuda-admin">

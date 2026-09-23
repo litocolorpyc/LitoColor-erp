@@ -5,6 +5,7 @@ import { mostrarDetalleOrden, tipoTrabajoLabel, renderOppRecent, subprocesosDeAr
 import { puedeEditarProduccion } from './auth.js';
 import { listaAreasDisponibles, materialSelectOptionsHTML, unidadNumericaDelMaterial, parseCantidadConsumo, descontarInventarioYCargarCosto, revertirConsumoDeRegistro, avisoConsumoNoReflejado, actualizarCostoAdicionalReproceso } from './registrar.js';
 import { renderInventario } from './inventario.js';
+import { movimientosPorProduccion, agruparReprocesosPorOP, claseDeMovimiento } from './reproceso-costos.js';
 
 // Cambia a la pestaña de Órdenes y abre el detalle completo de una orden —
 // se usa desde las tablas del Gerencial donde se puede hacer click en una
@@ -367,6 +368,112 @@ export function renderGerencial(){
       }
     }
   });
+
+  renderReprocesosGerencial(desde, hasta);
+}
+
+// ---------- Reprocesos en Gerencial (pedido 23sep26) ----------
+// Una fila por OP (para estadística toda la OP es UN reproceso) con el costo
+// completo de todos sus procesos; al hacer clic se despliega la información
+// de la orden y el detalle de cada proceso rehecho y sus materiales.
+let ultimosReprocesosGer = [];
+const escG = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function renderReprocesosGerencial(desde, hasta){
+  const tbody = document.querySelector('#tbl-ger-reprocesos tbody');
+  if(!tbody) return;
+  const filas = DB.produccion.filter(r => r.reproceso === 'Si' && enRango(r.fecha, desde, hasta));
+  const mpp = movimientosPorProduccion();
+  const grupos = agruparReprocesosPorOP(filas, mpp).sort((a,b) => b.costos.total - a.costos.total);
+  ultimosReprocesosGer = grupos;
+  const t = grupos.reduce((s,g) => ({ mo:s.mo+g.costos.mo, mp:s.mp+g.costos.mp, ins:s.ins+g.costos.ins, otros:s.otros+g.costos.otros, total:s.total+g.costos.total }), { mo:0, mp:0, ins:0, otros:0, total:0 });
+  const porOrigen = {};
+  grupos.forEach(g => { const a = g.areaOrigen || 'Sin definir'; porOrigen[a] = (porOrigen[a]||0) + 1; });
+  const origenTop = Object.entries(porOrigen).filter(([a]) => a !== 'Sin definir').sort((a,b)=>b[1]-a[1])[0];
+
+  document.getElementById('ger-rep-kpis').innerHTML = `
+    <div class="kpi"><div class="lbl">Reprocesos (OPs)</div><div class="val">${grupos.length}</div><div class="sub">${filas.length} proceso(s) rehechos</div></div>
+    <div class="kpi"><div class="lbl">Costo total de reprocesos</div><div class="val">${fmtCOP(t.total)}</div><div class="sub">M.O. ${fmtCOP(t.mo)} · M.P. ${fmtCOP(t.mp)} · insumos ${fmtCOP(t.ins)} · otros ${fmtCOP(t.otros)}</div></div>
+    <div class="kpi"><div class="lbl">Área que más reprocesos genera</div><div class="val" style="font-size:16px">${origenTop ? escG(origenTop[0]) : '—'}</div><div class="sub">${origenTop ? origenTop[1] + ' reproceso(s)' : 'completa el área en la pestaña Reprocesos'}</div></div>`;
+
+  tbody.innerHTML = grupos.map((g, i) => {
+    const o = g.orden != null ? DB.opp_ordenes.find(x => x.orden === g.orden) : null;
+    const cliente = (o && o.cliente) || g.registros[0].cliente || '—';
+    return `<tr data-i="${i}" style="cursor:pointer" title="Clic para ver la orden y sus reprocesos">
+      <td>${g.orden != null ? etiquetaOrden(g.orden) : '—'}</td><td>${escG(cliente)}</td>
+      <td>${g.fechaIni.slice(0,10)}${g.fechaFin !== g.fechaIni ? ' a ' + g.fechaFin.slice(0,10) : ''}</td>
+      <td>${g.areaOrigen ? escG(g.areaOrigen) : '<span class="card-hint">sin definir</span>'}</td>
+      <td>${g.motivo ? escG(g.motivo) : '<span class="card-hint">sin motivo</span>'}</td>
+      <td class="num">${g.registros.length}</td>
+      <td class="num">${fmtCOP(g.costos.mo)}</td><td class="num">${fmtCOP(g.costos.mp)}</td><td class="num">${fmtCOP(g.costos.ins)}</td><td class="num">${fmtCOP(g.costos.otros)}</td>
+      <td class="num"><b>${fmtCOP(g.costos.total)}</b></td></tr>`;
+  }).join('') || '<tr><td colspan="11" style="text-align:center;color:var(--ink-faint)">Sin reprocesos en este rango</td></tr>';
+
+  tbody.querySelectorAll('tr[data-i]').forEach(tr => tr.addEventListener('click', () => {
+    const abierta = tbody.querySelector('tr.ger-rep-detalle');
+    const eraEsta = abierta && abierta.previousElementSibling === tr;
+    if(abierta) abierta.remove();
+    if(eraEsta) return; // segundo clic = cerrar
+    const det = document.createElement('tr');
+    det.className = 'ger-rep-detalle';
+    det.innerHTML = `<td colspan="11" style="background:var(--bg-soft, #f6f4ef)">${detalleReprocesoGerencialHTML(grupos[parseInt(tr.dataset.i,10)], mpp)}</td>`;
+    tr.after(det);
+    const btn = det.querySelector('[data-ver-orden]');
+    if(btn) btn.addEventListener('click', ev => { ev.stopPropagation(); irAOrdenYVerDetalle(parseInt(btn.dataset.verOrden, 10)); });
+  }));
+}
+
+function detalleReprocesoGerencialHTML(g, mpp){
+  const o = g.orden != null ? DB.opp_ordenes.find(x => x.orden === g.orden) : null;
+  const piezas = g.orden != null ? DB.opp_piezas.filter(p => p.orden === g.orden).sort((a,b)=>(a.suborden||0)-(b.suborden||0)) : [];
+  // Costo total de la orden = mano de obra de todos sus registros + todos
+  // los costos con esta orden asociada (mismo criterio que Rentabilidad).
+  const regOrden = g.orden != null ? DB.produccion.filter(r => r.orden === g.orden) : g.registros;
+  const moOrden = regOrden.reduce((s,r) => s + (Number(r.valorActividad)||0), 0);
+  const otrosOrden = g.orden != null ? DB.costos_movimientos.filter(m => m.orden === g.orden).reduce((s,m) => s + (Number(m.valor)||0), 0) : 0;
+  const costoOrden = moOrden + otrosOrden;
+  const pct = costoOrden > 0 ? (g.costos.total / costoOrden * 100) : null;
+  const dato = (lbl, val) => `<div style="min-width:130px"><span class="card-hint">${lbl}</span><br>${val}</div>`;
+
+  const infoOrden = `<div style="display:flex;gap:18px;flex-wrap:wrap;margin:4px 0 10px">
+      ${dato('Orden', `<b>${g.orden != null ? etiquetaOrden(g.orden) : '—'}</b>`)}
+      ${dato('Cliente', escG((o && o.cliente) || g.registros[0].cliente || '—'))}
+      ${dato('Trabajo', escG(o ? (o.producto || tipoTrabajoLabel(o)) : (g.registros[0].trabajo || '—')))}
+      ${dato('Fecha de la orden', o && o.fecha ? String(o.fecha).slice(0,10) : '—')}
+      ${dato('Estado', escG((o && o.estado) || '—'))}
+      ${dato('Costo total de la orden', fmtCOP(costoOrden))}
+      ${dato('Costo del reproceso', `<b>${fmtCOP(g.costos.total)}</b>${pct != null ? ` (${fmtNum(pct,1)}% del costo de la orden)` : ''}`)}
+    </div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin:0 0 10px">
+      ${dato('Área que lo generó', escG(g.areaOrigen || 'sin definir'))}
+      ${dato('Motivo', escG(g.motivo || 'sin motivo'))}
+      ${dato('Responsable', escG(g.responsable || '—'))}
+      ${dato('Áreas rehechas', escG(g.areasRehechas.join(', ') || '—'))}
+      ${dato('Piezas de la orden', piezas.length ? piezas.map(p => `${p.suborden}. ${escG(p.pieza || 'Pieza')}`).join(' · ') : '—')}
+      ${o && o.observaciones ? dato('Observaciones', escG(o.observaciones)) : ''}
+    </div>`;
+
+  const filasProc = g.registros.map(r => {
+    const c = g.costosPorRegistro.get(r.id);
+    return `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.suborden ?? '—'}</td><td>${escG(r.area||'—')}</td><td>${escG(r.operario||'—')}</td>
+      <td class="num">${r.tiempoHr != null ? fmtNum(r.tiempoHr,2) : '—'}</td>
+      <td class="num">${fmtCOP(c.mo)}</td><td class="num">${fmtCOP(c.mp)}</td><td class="num">${fmtCOP(c.ins)}</td><td class="num">${fmtCOP(c.otros)}</td><td class="num"><b>${fmtCOP(c.total)}</b></td>
+      <td>${escG(r.comentario || '')}</td></tr>`;
+  }).join('');
+  const filasMov = g.registros.flatMap(r => (mpp.get(r.id) || []).map(m => `<tr><td>${(m.fecha||'').slice(0,10)}</td><td>${escG(r.area||'')}</td><td>${claseDeMovimiento(m, r)}</td><td>${escG(m.comentario||'')}</td><td class="num">${fmtCOP(Number(m.valor)||0)}</td></tr>`)).join('');
+
+  return `${infoOrden}
+    <h4 style="margin:10px 0 6px">Procesos del reproceso</h4>
+    <div class="table-wrap"><table class="detalle-mini-table">
+      <thead><tr><th>Fecha</th><th>Sub.</th><th>Área rehecha</th><th>Operario</th><th class="num">Horas</th><th class="num">Mano de obra</th><th class="num">Materia prima</th><th class="num">Insumos</th><th class="num">Otros</th><th class="num">Total</th><th>Comentario</th></tr></thead>
+      <tbody>${filasProc}</tbody>
+      <tfoot><tr><th colspan="5">Total</th><th class="num">${fmtCOP(g.costos.mo)}</th><th class="num">${fmtCOP(g.costos.mp)}</th><th class="num">${fmtCOP(g.costos.ins)}</th><th class="num">${fmtCOP(g.costos.otros)}</th><th class="num">${fmtCOP(g.costos.total)}</th><th></th></tr></tfoot>
+    </table></div>
+    ${filasMov ? `<h4 style="margin:10px 0 6px">Materiales y otros costos del reproceso</h4>
+    <div class="table-wrap"><table class="detalle-mini-table">
+      <thead><tr><th>Fecha</th><th>Proceso</th><th>Tipo</th><th>Detalle</th><th class="num">Valor</th></tr></thead>
+      <tbody>${filasMov}</tbody></table></div>` : ''}
+    ${g.orden != null ? `<div class="form-foot"><button type="button" class="btn-secondary" data-ver-orden="${g.orden}">Abrir la orden completa</button></div>` : ''}`;
 }
 
 function wireRangePresets(presetContainerId, desdeId, hastaId, getRango, setRango, onApply){
@@ -1123,6 +1230,15 @@ function imprimirGerencial(){
           { key:'costoMO', label:'Costo M.O.', num:true }, { key:'otros', label:'Otros costos', num:true }, { key:'margen', label:'Margen', num:true }, { key:'margenPct', label:'Margen %', num:true }
         ],
         filas: ultimaRentabilidadProducto.map(f => ({ producto:f.producto, ordenes:f.ordenes, ingreso:fmtCOP(f.ing), costoMO:fmtCOP(f.cost), otros:fmtCOP(f.otros), margen:fmtCOP(f.margen), margenPct: fmtNum(f.margenPct,0)+'%' }))
+      },
+      {
+        titulo: `Reprocesos (${ultimosReprocesosGer.length} OP) — costo de todos los procesos involucrados`,
+        columnas: [
+          { key:'orden', label:'Orden' }, { key:'origen', label:'Área que lo generó' }, { key:'motivo', label:'Motivo' }, { key:'procesos', label:'Procesos', num:true },
+          { key:'mo', label:'Mano de obra', num:true }, { key:'mp', label:'Materia prima', num:true }, { key:'ins', label:'Insumos', num:true }, { key:'otros', label:'Otros', num:true }, { key:'total', label:'Total', num:true }
+        ],
+        filas: ultimosReprocesosGer.map(g => ({ orden: g.orden != null ? etiquetaOrden(g.orden) : '—', origen: g.areaOrigen || 'Sin definir', motivo: g.motivo || 'Sin motivo', procesos: g.registros.length,
+          mo: fmtCOP(g.costos.mo), mp: fmtCOP(g.costos.mp), ins: fmtCOP(g.costos.ins), otros: fmtCOP(g.costos.otros), total: fmtCOP(g.costos.total) }))
       }
     ]
   });

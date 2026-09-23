@@ -3,6 +3,7 @@ import { DB, normProd } from './store.js';
 import { toast, fmtNum, exportarExcel, fechaHoyLocal, wireTableScroll, agregarBotonExcelVentana, etiquetaOrden, parseOrden, esOrdenServicio, BASE_ORDEN_SERVICIO } from './helpers.js';
 import { getCurrentUser, puedeEditarProduccion } from './auth.js';
 import { poblarDatalistProveedores } from './costos.js';
+import { movimientosPorProduccion, costosDeRegistro, sumarCostos } from './reproceso-costos.js';
 
 const ROLES_REORDENAN_PRIORIDAD = ['admin', 'gerente', 'jefe_produccion'];
 
@@ -1331,24 +1332,31 @@ function estadoRegistroHTML(r){
 function reprocesosOrdenHTML(registros, piezas){
   const reps = historialOrdenRows(registros.filter(r => r.reproceso === 'Si'));
   if(!reps.length) return '';
-  const totalMO = reps.reduce((s,r)=>s+(r.valorActividad||0),0);
-  const totalAdic = reps.reduce((s,r)=>s+(r.costoAdicionalReproceso||0),0);
-  const filas = reps.map(r => `<tr>
+  // Costo completo de cada proceso rehecho (mano de obra + materia prima +
+  // insumos + otros) — ver js/reproceso-costos.js. Para estadísticas toda
+  // la OP es UN reproceso, aunque tenga varios procesos.
+  const mpp = movimientosPorProduccion();
+  const costos = new Map(reps.map(r => [r.id, costosDeRegistro(r, mpp)]));
+  const t = sumarCostos([...costos.values()]);
+  const origen = reps.map(r => r.areaOrigenReproceso).find(Boolean);
+  const filas = reps.map(r => { const c = costos.get(r.id); return `<tr>
       <td>${(r.fecha||'').slice(0,10)}</td>
       <td>${piezaLabelDeRegistro(r, piezas)}</td>
       <td>${r.area || '—'}</td>
       <td>${r.operario || '—'}</td>
       <td>${r.motivoReproceso || '<span class="card-hint">sin motivo</span>'}</td>
-      <td>${r.responsableReproceso || '—'}</td>
       <td class="num">${r.tiempoHr != null ? fmtNum(r.tiempoHr,2) : '—'}</td>
-      <td class="num">${fmtCOPlocal(r.valorActividad||0)}</td>
-      <td class="num">${fmtCOPlocal(r.costoAdicionalReproceso||0)}</td>
+      <td class="num">${fmtCOPlocal(c.mo)}</td>
+      <td class="num">${fmtCOPlocal(c.mp)}</td>
+      <td class="num">${fmtCOPlocal(c.ins)}</td>
+      <td class="num">${fmtCOPlocal(c.otros)}</td>
+      <td class="num">${fmtCOPlocal(c.total)}</td>
       <td>${r.comentario || ''}</td>
-    </tr>`).join('');
+    </tr>`; }).join('');
   return `<div class="card" style="margin:0 0 16px;border-left:4px solid #C24A1F">
-      <div class="card-head"><h3>↺ Reprocesos de esta orden (${reps.length})</h3><span class="card-hint">costo mano de obra ${fmtCOPlocal(totalMO)} · costo adicional ${fmtCOPlocal(totalAdic)} — para completar el motivo ve a la pestaña Reprocesos</span></div>
+      <div class="card-head"><h3>↺ Reproceso de esta orden (${reps.length} proceso(s))</h3><span class="card-hint">área que lo generó: ${origen || 'sin definir'} · costo total ${fmtCOPlocal(t.total)} (mano de obra ${fmtCOPlocal(t.mo)} · materia prima ${fmtCOPlocal(t.mp)} · insumos ${fmtCOPlocal(t.ins)} · otros ${fmtCOPlocal(t.otros)}) — para completar datos o agregar costos ve a la pestaña Reprocesos</span></div>
       <div class="table-wrap"><table class="detalle-mini-table">
-        <thead><tr><th>Fecha</th><th>Pieza</th><th>Área</th><th>Operario</th><th>Motivo</th><th>Responsable</th><th class="num">Horas</th><th class="num">Costo M.O.</th><th class="num">Costo adicional</th><th>Comentario</th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Pieza</th><th>Área rehecha</th><th>Operario</th><th>Motivo</th><th class="num">Horas</th><th class="num">Mano de obra</th><th class="num">Materia prima</th><th class="num">Insumos</th><th class="num">Otros</th><th class="num">Total</th><th>Comentario</th></tr></thead>
         <tbody>${filas}</tbody>
       </table></div>
     </div>`;

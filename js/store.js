@@ -56,7 +56,12 @@ export function normProd(r){
     // actualizarCostoAdicionalReproceso en js/registrar.js).
     motivoReproceso: r.motivo_reproceso,
     responsableReproceso: r.responsable_reproceso,
-    costoAdicionalReproceso: r.costo_adicional_reproceso
+    costoAdicionalReproceso: r.costo_adicional_reproceso,
+    // Área que GENERÓ el reproceso (ej. se rehízo en Terminado porque
+    // Litografía imprimió mal) — distinta de `area`, que es dónde se
+    // rehízo. Se guarda igual en todos los registros de reproceso de la
+    // misma OP (ver js/reprocesos.js, pedido 23sep26).
+    areaOrigenReproceso: r.area_origen_reproceso
   };
 }
 
