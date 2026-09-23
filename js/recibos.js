@@ -839,6 +839,49 @@ async function editarRecibo(reciboId){
   }
 }
 
+// ---------- costo promedio ponderado (pedido 23sep26) ----------
+// El mismo papel se compra a varios proveedores con precios distintos.
+// Antes, cada compra REEMPLAZABA el costo por unidad del material por el
+// precio de esa última compra — todo el papel en bodega (incluido el que se
+// compró antes a otro precio) salía en guillotina al último precio, y una
+// línea sin valor neto dejaba el costo en blanco. Ahora el costo por unidad
+// es el promedio ponderado entre lo que había en bodega y lo que entra:
+//   (stock × costo actual + cantidad comprada × costo de la compra) ÷ (stock + cantidad)
+// Si no había stock (0 o negativo, típico cuando se consumió antes de
+// registrar la compra) o el material no tenía costo, queda el de la compra.
+export function costoPromedioConCompra(stockPrevio, costoPrevio, cantidad, costoCompra){
+  const cp = Number(costoCompra);
+  if(!cp || cp <= 0) return costoPrevio ?? null; // la compra no trae costo: no se toca el que había
+  const s = Number(stockPrevio) || 0, c = Number(costoPrevio) || 0, q = Number(cantidad) || 0;
+  if(s <= 0 || c <= 0 || q <= 0) return cp;
+  return (s * c + q * cp) / (s + q);
+}
+
+// Contrario del anterior: al borrar/editar una compra, saca del promedio lo
+// que esa compra había aportado. Si no queda stock o el resultado no tiene
+// sentido (porque en el medio hubo otras compras/consumos), deja el costo
+// como está en vez de inventar uno. Devuelve null = no cambiar el costo.
+function costoPromedioSinCompra(stockActual, costoActual, cantidad, costoCompra){
+  const s = Number(stockActual) || 0, c = Number(costoActual) || 0, q = Number(cantidad) || 0, cp = Number(costoCompra) || 0;
+  const restante = s - q;
+  if(!cp || !c || restante <= 0) return null;
+  const costo = (s * c - q * cp) / restante;
+  return isFinite(costo) && costo > 0 ? costo : null;
+}
+
+// Trae el stock y costo reales del momento (no los de cuando se abrió la
+// página) antes de promediar — si no, dos personas registrando compras o
+// consumos a la vez harían el promedio con números viejos.
+async function refrescarMaterial(tabla, keyCol, keyVal, mat){
+  try{
+    const { data, error } = await sb.from(tabla).select('*').eq(keyCol, keyVal).single();
+    if(error) throw error;
+    if(data) Object.assign(mat, data);
+  }catch(err){
+    console.error('No se pudo refrescar el material antes de actualizar su costo (se usa el dato en memoria):', err);
+  }
+}
+
 // Deshace lo que UNA compra ya guardada le sumó al inventario y borra sus
 // líneas y los costos que había generado — SIN borrar el documento en sí
 // (eliminarRecibo lo borra después de llamar esto; guardarRecibo lo llama
@@ -858,8 +901,12 @@ async function revertirEfectosRecibo(reciboId){
         ? DB.materias_primas.find(m => m.codigo === it.material_key)
         : DB.insumos_area.find(m => String(m.id) === it.material_key);
       if(!mat) continue;
+      await refrescarMaterial(tabla, keyCol, keyVal, mat);
       const nuevoStock = (mat.stock_actual || 0) - it.cantidad;
-      const { data, error } = await sb.from(tabla).update({ stock_actual: nuevoStock }).eq(keyCol, keyVal).select();
+      const payload = { stock_actual: nuevoStock };
+      const costoSinEstaCompra = costoPromedioSinCompra(mat.stock_actual, mat.costo_unitario, it.cantidad, it.valor_neto_unitario);
+      if(costoSinEstaCompra != null) payload.costo_unitario = costoSinEstaCompra;
+      const { data, error } = await sb.from(tabla).update(payload).eq(keyCol, keyVal).select();
       if(error) throw error;
       Object.assign(mat, data[0]);
     }catch(err){
@@ -980,18 +1027,22 @@ async function guardarRecibo(){
         if(it.material_tabla === 'materias_primas'){
           const mat = DB.materias_primas.find(m => m.codigo === it.material_key);
           if(!mat) throw new Error('material no encontrado en memoria');
+          await refrescarMaterial('materias_primas', 'codigo', it.material_key, mat);
           const nuevoStock = (mat.stock_actual || 0) + it.cantidad;
+          const nuevoCosto = costoPromedioConCompra(mat.stock_actual, mat.costo_unitario, it.cantidad, it.valor_neto_unitario);
           const { data, error } = await sb.from('materias_primas')
-            .update({ stock_actual: nuevoStock, costo_unitario: it.valor_neto_unitario }).eq('codigo', it.material_key).select();
+            .update({ stock_actual: nuevoStock, costo_unitario: nuevoCosto }).eq('codigo', it.material_key).select();
           if(error) throw error;
           Object.assign(mat, data[0]);
           recostearConsumosDeMaterial(mat.nombre);
         } else {
           const mat = DB.insumos_area.find(m => String(m.id) === it.material_key);
           if(!mat) throw new Error('material no encontrado en memoria');
+          await refrescarMaterial('insumos_area', 'id', mat.id, mat);
           const nuevoStock = (mat.stock_actual || 0) + it.cantidad;
+          const nuevoCosto = costoPromedioConCompra(mat.stock_actual, mat.costo_unitario, it.cantidad, it.valor_neto_unitario);
           const { data, error } = await sb.from('insumos_area')
-            .update({ stock_actual: nuevoStock, costo_unitario: it.valor_neto_unitario }).eq('id', mat.id).select();
+            .update({ stock_actual: nuevoStock, costo_unitario: nuevoCosto }).eq('id', mat.id).select();
           if(error) throw error;
           Object.assign(mat, data[0]);
           recostearConsumosDeMaterial(mat.nombre);
