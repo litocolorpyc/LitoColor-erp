@@ -3,7 +3,7 @@
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
 import { toast, fmtNum, fechaHoyLocal, normNombreMaterial, etiquetaOrden } from './helpers.js';
-import { getOrdenesSeleccionables, subprocesosDeArea } from './ordenes.js';
+import { getOrdenesSeleccionables, subprocesosDeArea, estadoOrden } from './ordenes.js';
 
 const timerIntervals = new Map();
 const sessionRates = new Map();
@@ -630,30 +630,74 @@ export function buscarMaterialPorNombre(area, nombre){
   return buscar(true) || buscar(false);
 }
 
-// Cuando se repone stock de una materia prima (compra importada, Ajustar/
-// Inventario físico, o material nuevo creado en Maestros con stock),
-// revisa si alguna orden estaba esperando ese material (ver
-// alertarStockPapelInsuficiente en js/ordenes.js) y, si el nuevo stock ya
-// la cubre, la marca resuelta — deja de salir en Alertas. Antes solo se
-// llamaba al editar el stock en Maestros, que desde 24sep26 ya no se
-// permite (ver wireCatalog en maestros.js).
-export async function resolverAlertasFaltanteMateriaPrima(row){
-  if(!row || row.stock_actual == null) return;
-  const pendientes = DB.alertas_faltante_material.filter(a => a.materia_prima_codigo === row.codigo && a.cantidad_faltante <= row.stock_actual);
-  if(!pendientes.length) return;
+// ---------- "Órdenes esperando este material" ----------
+// Al crear/editar una orden, si el papel no alcanzaba queda una fila en
+// alertas_faltante_material (ver alertarStockPapelInsuficiente en
+// ordenes.js). Antes esa fila solo se "resolvía" al subir el stock desde
+// Maestros, y comparando contra el faltante guardado — así quedaban
+// colgadas órdenes que ya habían cortado su papel, o que ya tenían el stock
+// cubierto por una compra importada (caso real 25sep26: OP 6018 seguía
+// "esperando" 12.828 pliegos de Bond 75 60x90 con 13.597 en bodega).
+//
+// Ahora el estado se CALCULA en el momento, con datos vivos, y lo usan
+// igual Inventario, Alertas y la limpieza automática. Una alerta sigue
+// vigente solo si:
+//   - la orden sigue abierta (no Cancelada, Cerrada ni Completada), y
+//   - lo que le falta consumir de ese papel (lo que piden sus piezas menos
+//     lo que ya se registró como consumo de ese material en esa orden)
+//     es MÁS que el stock que hay hoy.
+// Devuelve null si ya no aplica, o { ...alerta, necesita, consumido,
+// stock, falta } con el faltante de HOY (no el de cuando se creó la orden).
+export function faltanteVigente(a){
+  const o = DB.opp_ordenes.find(x => x.orden === a.orden);
+  if(!o) return null;
+  const estado = estadoOrden(o).label;
+  if(estado === 'Cancelada' || estado === 'Cerrada' || estado === 'Completada') return null;
+  const mat = DB.materias_primas.find(m => m.codigo === a.materia_prima_codigo);
+  if(!mat) return null;
+  const nombreNorm = normNombreMaterial(mat.nombre);
+  const necesitaPiezas = DB.opp_piezas
+    .filter(p => p.orden === a.orden && p.papel && normNombreMaterial(p.papel) === nombreNorm)
+    .reduce((s, p) => s + (Number(p.pliegos) || 0), 0);
+  const consumido = DB.produccion
+    .filter(r => r.orden === a.orden && r.materiaPrima)
+    .reduce((s, r) => {
+      const enc = buscarMaterialPorNombre(r.area, r.materiaPrima);
+      if(!enc || enc.tabla !== 'materias_primas' || enc.mat.codigo !== mat.codigo) return s;
+      const c = parseFloat(parseCantidadConsumo(r.consumoMP));
+      return s + (c > 0 ? c : 0);
+    }, 0);
+  // Si la orden ya no pide ese papel en sus piezas (se editó), no hay
+  // contra qué comparar: se usa lo que había quedado guardado como faltante.
+  const necesita = necesitaPiezas || (Number(a.cantidad_faltante) || 0);
+  const restante = necesita - consumido;
+  const stock = Number(mat.stock_actual) || 0;
+  const falta = restante - stock;
+  if(restante <= 0 || falta <= 0) return null;
+  return { ...a, necesita, consumido, stock, falta };
+}
+
+// Marca como resueltas (en la base) las alertas que ya no aplican según
+// faltanteVigente. Se llama al arrancar la app, cuando entra stock (compra,
+// Ajustar, material nuevo) y cuando se registra un consumo. Desde
+// registro.html (operario sin sesión) la base no deja marcarlas — no pasa
+// nada: Inventario y Alertas igual las filtran en vivo, y la próxima vez que
+// alguien con sesión abra la app quedan resueltas.
+export async function resolverAlertasFaltanteMateriaPrima({ silencioso = false } = {}){
+  const yaNoAplican = DB.alertas_faltante_material.filter(a => !faltanteVigente(a));
+  if(!yaNoAplican.length) return;
   try{
-    const { error } = await sb.from('alertas_faltante_material')
+    const { data, error } = await sb.from('alertas_faltante_material')
       .update({ resuelta: true, resuelta_en: new Date().toISOString() })
-      .in('id', pendientes.map(a => a.id));
+      .in('id', yaNoAplican.map(a => a.id)).select('id');
     if(error) throw error;
-    const ordenes = [...new Set(pendientes.map(a => a.orden))];
-    pendientes.forEach(a => {
-      const idx = DB.alertas_faltante_material.indexOf(a);
-      if(idx >= 0) DB.alertas_faltante_material.splice(idx, 1);
-    });
-    toast(`Stock repuesto — ya no falta ${row.nombre} para la(s) orden(es) ${ordenes.join(', ')}`);
+    const resueltas = new Set((data || []).map(x => x.id));
+    if(!resueltas.size) return; // sin sesión: la base no dejó (ver arriba)
+    const ordenes = [...new Set(yaNoAplican.filter(a => resueltas.has(a.id)).map(a => etiquetaOrden(a.orden)))];
+    DB.alertas_faltante_material = DB.alertas_faltante_material.filter(a => !resueltas.has(a.id));
+    if(!silencioso) toast(`Ya no hay material faltante para la(s) orden(es) ${ordenes.join(', ')}`);
   }catch(err){
-    console.error('No se pudo resolver la alerta de faltante:', err);
+    console.error('No se pudieron marcar como resueltas las alertas de material faltante:', err);
   }
 }
 
@@ -676,7 +720,7 @@ export async function moverStockMaterial(tabla, key, delta){
   const campo = tabla === 'materias_primas' ? 'codigo' : 'id';
   const mat = lista.find(m => String(m[campo]) === String(key));
   if(mat) Object.assign(mat, data);
-  if(delta > 0 && tabla === 'materias_primas') resolverAlertasFaltanteMateriaPrima(data);
+  if(delta > 0 && tabla === 'materias_primas') resolverAlertasFaltanteMateriaPrima();
   return data;
 }
 
@@ -741,6 +785,8 @@ export async function descontarInventarioYCargarCosto({ nombre, area, cantidad, 
     console.error('No se pudo descontar del inventario:', err);
     return { descontado:false, costeado:false, motivo:'error_guardando' };
   }
+  // Si esta orden estaba "esperando" este papel y ya lo cortó, deja de estarlo.
+  resolverAlertasFaltanteMateriaPrima({ silencioso: true });
 
   if(!mat.costo_unitario) return { descontado:true, costeado:false, motivo:'sin_costo_unitario' };
   const concepto = DB.costos_conceptos.find(c => c.nombre === 'Consumo de materia prima (automático)');

@@ -1,7 +1,7 @@
 import { loadAll } from './store.js';
 import { activarExcelEnTarjetas } from './helpers.js';
 import { renderGerencial, renderProduccion, renderOperario, populateOperarioSelect, initDashboardFilters, abrirEdicionRegistroDesdeOrden } from './dashboard.js';
-import { initRegistrar, populateReg } from './registrar.js';
+import { initRegistrar, populateReg, resolverAlertasFaltanteMateriaPrima } from './registrar.js';
 import { initOppForm, renderOppRecent, populateClienteSelect, populateProductoSelect, refreshPapelPliegoSelects, setAjustarConsumoHandler, setReprocesarHandler } from './ordenes.js';
 import { initMaestros, renderMaestros } from './maestros.js';
 import { initUsuarios } from './usuarios.js';
@@ -103,6 +103,11 @@ async function arrancarApp(){
   });
   pasoSeguro('Consulta de tiempos por operario', initConsultaTiempos);
   pasoSeguro('Inventario', initInventario);
+  // Deja resueltas en la base las "órdenes esperando material" que ya no
+  // aplican (papel ya cortado, orden cerrada, stock ya cubierto).
+  pasoSeguro('Órdenes esperando material', () => {
+    resolverAlertasFaltanteMateriaPrima({ silencioso: true }).then(() => { renderInventario(); renderAlertas(); });
+  });
   pasoSeguro('Remisiones', initRemisiones);
   pasoSeguro('Reprocesos', initReprocesos);
 

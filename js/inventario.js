@@ -9,15 +9,18 @@ import { DB } from './store.js';
 import { fmtNum, fmtCOP, toast, fechaHoyLocal, wireTableScroll, imprimirInforme, exportarExcel, etiquetaOrden } from './helpers.js';
 import { mostrarDetalleOrden } from './ordenes.js';
 import { recostearConsumosDeMaterial } from './registrar.js';
-import { parseCantidadConsumo, listaAreasDisponibles, buscarMaterialPorNombre, resolverAlertasFaltanteMateriaPrima } from './registrar.js';
+import { parseCantidadConsumo, listaAreasDisponibles, buscarMaterialPorNombre, resolverAlertasFaltanteMateriaPrima, faltanteVigente } from './registrar.js';
 import { getCurrentUser } from './auth.js';
 
 // Pedido: "cuando se hace el ingreso de material, desde el inventario se
 // debe revisar qué órdenes están esperando dicho material" — se cruza
-// contra alertas_faltante_material (ver js/ordenes.js, saveOpp), que
-// queda viva hasta que se repone el stock (js/maestros.js, materiasCtl).
+// contra alertas_faltante_material (ver js/ordenes.js, saveOpp), pero solo
+// las que siguen vigentes HOY y con el faltante de hoy (ver faltanteVigente
+// en registrar.js) — no el número que quedó guardado al crear la orden.
 function ordenesEsperando(materiaPrimaCodigo){
-  return DB.alertas_faltante_material.filter(a => a.materia_prima_codigo === materiaPrimaCodigo);
+  return DB.alertas_faltante_material
+    .filter(a => a.materia_prima_codigo === materiaPrimaCodigo)
+    .map(faltanteVigente).filter(Boolean);
 }
 
 // tabla/key identifican de dónde sale cada fila y con qué se actualiza en
@@ -93,7 +96,7 @@ export function renderInventario(){
     const negativo = f.stock < 0;
     const bajo = negativo || (f.minimo > 0 && f.stock < f.minimo);
     const esperandoHTML = f.esperando.length
-      ? f.esperando.map(a => `<span class="row-btn fila-clicable" data-orden="${a.orden}" style="display:inline-block;margin:1px 3px 1px 0">Orden ${etiquetaOrden(a.orden)} (falta ${fmtNum(a.cantidad_faltante,0)} ${a.unidad||''})</span>`).join('')
+      ? f.esperando.map(a => `<span class="row-btn fila-clicable" data-orden="${a.orden}" style="display:inline-block;margin:1px 3px 1px 0">Orden ${etiquetaOrden(a.orden)} (falta ${fmtNum(a.falta,0)} ${a.unidad||''})</span>`).join('')
       : '—';
     const estadoHTML = negativo
       ? '<span class="estado-chip pending">🔴 Stock negativo</span>'
@@ -435,7 +438,7 @@ async function guardarAjusteMaterial({ tabla, key, codigo, nombre, stockAnterior
   if(mat){
     if(cantidad !== 0) mat.stock_actual = stockNuevo;
     if(cambiaCosto) mat.costo_unitario = costoNuevo;
-    if(cantidad > 0 && tabla === 'materias_primas') resolverAlertasFaltanteMateriaPrima(mat);
+    if(cantidad > 0 && tabla === 'materias_primas') resolverAlertasFaltanteMateriaPrima();
   }
   // Si este ajuste le cargó/corrigió el costo por unidad, cualquier consumo
   // de este material que ya se hubiera registrado (con su stock ya

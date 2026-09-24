@@ -427,7 +427,7 @@ export function initMaestros(onChange){
         r.costo_unitario!=null?fmtCOP(r.costo_unitario):'—',
         areas.length ? areas.join(', ') : '<span class="card-hint">ninguna configurada</span>'];
     },
-    onChange: (row) => { if(onChange) onChange(); poblarSelectMaterialAreas(); resolverAlertasFaltanteMateriaPrima(row); },
+    onChange: (row) => { if(onChange) onChange(); poblarSelectMaterialAreas(); resolverAlertasFaltanteMateriaPrima(); },
     onCreate: row => registrarSaldoInicial('materias_primas', row.codigo, row.codigo, row)
   });
 

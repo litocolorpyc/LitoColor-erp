@@ -2059,8 +2059,8 @@ async function cancelarOrden(orden){
 //
 // Además del aviso inmediato (alert()), queda GUARDADA en
 // alertas_faltante_material — así sigue visible en Alertas aunque se
-// cierre el mensaje, hasta que alguien reponga el stock de esa materia
-// prima (ver materiasCtl en js/maestros.js, que la resuelve sola). Cada
+// cierre el mensaje, mientras siga vigente (ver faltanteVigente y
+// resolverAlertasFaltanteMateriaPrima en js/registrar.js). Cada
 // guardado de la orden reemplaza sus alertas anteriores por las actuales
 // (si ya no falta, o falta menos, no debe quedar una alerta vieja colgada).
 async function alertarStockPapelInsuficiente(orden, piezasPayload){
