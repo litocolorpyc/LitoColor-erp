@@ -1316,12 +1316,20 @@
           <li>Si el material tiene un <b>costo unitario</b> cargado, genera el costo de esa orden: cantidad × costo unitario.</li>
           <li>Si el material no tiene costo unitario todavía, igual descuenta el stock, pero <b>no genera costo</b> — queda "pendiente de costear" (ver punto 5).</li>
         </ul>
-        <h4>2. De dónde sale el costo unitario</h4>
-        <p>No es un cálculo automático (no hay promedio ponderado ni nada parecido) — es simplemente <b>el último valor que se cargó</b>, desde alguno de estos tres lugares:</p>
+        <h4>Cómo se mueve el stock (desde 24sep26)</h4>
+        <p>El "Stock actual" de Inventario cambia <b>solo</b> con estos movimientos, y todos salen en el Kardex (Inventario → Movimientos):</p>
         <ul>
-          <li><b>Importar factura de compra</b> (Registrar costo → Importar compra): al importar el PDF, el sistema calcula el costo neto por unidad (descontando IVA y retención) y lo guarda como costo unitario del material.</li>
+          <li><b>Entra</b>: compra importada (Registrar costo → Importar compra), o un material nuevo creado en Maestros con stock ("Saldo inicial").</li>
+          <li><b>Sale</b>: consumo numérico al finalizar una actividad — tanto desde registro.html (operarios, sin contraseña) como desde Operario — y material agregado a un reproceso.</li>
+          <li><b>Se corrige</b>: Inventario → "Ajustar" o "Inventario físico" (con motivo y usuario). "Corregir registro" y borrar una compra/registro devuelven lo que ese movimiento había hecho.</li>
+        </ul>
+        <p>En Maestros → "Editar" un material ya <b>no</b> se puede cambiar el stock (el campo queda bloqueado) y solo se guardan los campos que cambiaste — antes, guardar un cambio de nombre o formato podía pisar el stock con un número viejo. Si un material se retiró (Retirar), sus consumos van al material activo con el mismo nombre.</p>
+        <h4>2. De dónde sale el costo unitario</h4>
+        <p>Es el <b>costo promedio ponderado</b> que dejan las compras, o el último valor corregido a mano, desde alguno de estos tres lugares:</p>
+        <ul>
+          <li><b>Importar factura de compra</b> (Registrar costo → Importar compra): al importar el PDF, el sistema calcula el costo neto por unidad (descontando IVA y retención) y lo promedia con el costo del material que ya había en bodega.</li>
           <li><b>Ajustar / Inventario físico</b> (Inventario): al corregir el stock a mano, también se puede corregir el costo por unidad ahí mismo.</li>
-          <li><b>Editar directamente en Maestros</b> (Materias primas / Materiales por área): edición manual del campo, sin dejar rastro de por qué cambió.</li>
+          <li><b>Editar directamente en Maestros</b> (Materias primas / Materiales por área): edición manual del campo, sin dejar rastro de por qué cambió (se guarda solo si cambiaste ese campo).</li>
         </ul>
         <h4>3. Directo vs. Indirecto</h4>
         <p>Los insumos por área tienen una marca "Directo" o "Indirecto" (las materias primas — papel, cartón, etc. — siempre son Directo, ver también "Insumo Directo vs. Indirecto" en Operarios): <b>Directo</b> pega el costo a esa orden/suborden puntual; <b>Indirecto</b> (ej. pegante, insumos generales) descuenta el stock igual, pero su costo queda como gasto general y se reparte en Gerencial entre todas las órdenes según cuánto facturó cada una.</p>
