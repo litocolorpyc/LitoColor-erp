@@ -4,7 +4,7 @@ import { toast, fmtCOP, fechaHoyLocal, etiquetaOrden } from './helpers.js';
 import { getCurrentUser } from './auth.js';
 import { renderMovimientosRecientes, renderResumenCostosMes, renderInformeCostos } from './costos.js';
 import { renderInventario, invalidarEntradasInventario } from './inventario.js';
-import { recostearConsumosDeMaterial } from './registrar.js';
+import { recostearConsumosDeMaterial, moverStockMaterial } from './registrar.js';
 
 if(typeof pdfjsLib !== 'undefined'){
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -902,13 +902,15 @@ async function revertirEfectosRecibo(reciboId){
         : DB.insumos_area.find(m => String(m.id) === it.material_key);
       if(!mat) continue;
       await refrescarMaterial(tabla, keyCol, keyVal, mat);
-      const nuevoStock = (mat.stock_actual || 0) - it.cantidad;
-      const payload = { stock_actual: nuevoStock };
       const costoSinEstaCompra = costoPromedioSinCompra(mat.stock_actual, mat.costo_unitario, it.cantidad, it.valor_neto_unitario);
-      if(costoSinEstaCompra != null) payload.costo_unitario = costoSinEstaCompra;
-      const { data, error } = await sb.from(tabla).update(payload).eq(keyCol, keyVal).select();
-      if(error) throw error;
-      Object.assign(mat, data[0]);
+      // El stock se resta directo en la base (ver moverStockMaterial en
+      // registrar.js) — nunca se escribe un número calculado en la página.
+      await moverStockMaterial(tabla, keyVal, -it.cantidad);
+      if(costoSinEstaCompra != null){
+        const { data, error } = await sb.from(tabla).update({ costo_unitario: costoSinEstaCompra }).eq(keyCol, keyVal).select();
+        if(error) throw error;
+        Object.assign(mat, data[0]);
+      }
     }catch(err){
       console.error('No se pudo devolver al inventario "' + it.descripcion + '":', err);
     }
@@ -1028,10 +1030,12 @@ async function guardarRecibo(){
           const mat = DB.materias_primas.find(m => m.codigo === it.material_key);
           if(!mat) throw new Error('material no encontrado en memoria');
           await refrescarMaterial('materias_primas', 'codigo', it.material_key, mat);
-          const nuevoStock = (mat.stock_actual || 0) + it.cantidad;
           const nuevoCosto = costoPromedioConCompra(mat.stock_actual, mat.costo_unitario, it.cantidad, it.valor_neto_unitario);
+          // Stock: se suma directo en la base (ver moverStockMaterial en
+          // registrar.js); el costo promedio se guarda aparte.
+          await moverStockMaterial('materias_primas', it.material_key, it.cantidad);
           const { data, error } = await sb.from('materias_primas')
-            .update({ stock_actual: nuevoStock, costo_unitario: nuevoCosto }).eq('codigo', it.material_key).select();
+            .update({ costo_unitario: nuevoCosto }).eq('codigo', it.material_key).select();
           if(error) throw error;
           Object.assign(mat, data[0]);
           recostearConsumosDeMaterial(mat.nombre);
@@ -1039,10 +1043,10 @@ async function guardarRecibo(){
           const mat = DB.insumos_area.find(m => String(m.id) === it.material_key);
           if(!mat) throw new Error('material no encontrado en memoria');
           await refrescarMaterial('insumos_area', 'id', mat.id, mat);
-          const nuevoStock = (mat.stock_actual || 0) + it.cantidad;
           const nuevoCosto = costoPromedioConCompra(mat.stock_actual, mat.costo_unitario, it.cantidad, it.valor_neto_unitario);
+          await moverStockMaterial('insumos_area', mat.id, it.cantidad);
           const { data, error } = await sb.from('insumos_area')
-            .update({ stock_actual: nuevoStock, costo_unitario: nuevoCosto }).eq('id', mat.id).select();
+            .update({ costo_unitario: nuevoCosto }).eq('id', mat.id).select();
           if(error) throw error;
           Object.assign(mat, data[0]);
           recostearConsumosDeMaterial(mat.nombre);

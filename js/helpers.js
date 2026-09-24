@@ -125,8 +125,11 @@ export function deltaBadge(actual, anterior){
 // Excel — mismo material, texto distinto, y antes de esto una comparación
 // exacta (===) los trataba como si no existiera ninguno de los dos en el
 // maestro (ver buscarMaterialPorNombre en registrar.js).
+// Los espacios se QUITAN del todo (no solo se colapsan): caso real 24sep26,
+// "Polipropileno Mate 20 mc 33cm" (registro) vs "… 33 cm" (maestro) —
+// mismo material, pero el consumo quedaba sin descontar del inventario.
 export function normNombreMaterial(s){
-  return String(s || '').trim().toLowerCase().replace(/(\d),(\d)/g, '$1.$2').replace(/\s+/g, ' ');
+  return String(s || '').trim().toLowerCase().replace(/(\d),(\d)/g, '$1.$2').replace(/\s+/g, '');
 }
 
 // Botones "Ir al principio" / "Ir al final" para tablas largas (muchos

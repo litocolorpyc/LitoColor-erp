@@ -1,7 +1,8 @@
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
-import { toast, fmtNum, wireTableScroll } from './helpers.js';
-import { listaAreasDisponibles } from './registrar.js';
+import { toast, fmtNum, wireTableScroll, fechaHoyLocal } from './helpers.js';
+import { getCurrentUser } from './auth.js';
+import { listaAreasDisponibles, resolverAlertasFaltanteMateriaPrima } from './registrar.js';
 
 function fmtCOP(n){ if(n==null||isNaN(n)) return '—'; return '$' + Math.round(n).toLocaleString('es-CO'); }
 
@@ -12,10 +13,17 @@ function fmtCOP(n){ if(n==null||isNaN(n)) return '—'; return '$' + Math.round(
 
 function wireCatalog(opts){
   let editingId = null;
+  let valoresAlEditar = {}; // cómo estaba cada campo al abrir "Editar" — para guardar solo lo que se cambió
 
   function resetForm(){
     editingId = null;
-    opts.fields.forEach(f => { const el = document.getElementById(f.id); if(el) el.value = ''; });
+    valoresAlEditar = {};
+    opts.fields.forEach(f => {
+      const el = document.getElementById(f.id);
+      if(!el) return;
+      el.value = '';
+      if(f.soloAlCrear){ el.disabled = false; el.title = ''; }
+    });
     document.getElementById(opts.saveBtnId).textContent = opts.addLabel;
     document.getElementById(opts.modeId).textContent = '';
   }
@@ -37,6 +45,10 @@ function wireCatalog(opts){
         el.appendChild(opt);
       }
       el.value = valor;
+      valoresAlEditar[f.col] = el.value;
+      // Campos que solo se cargan al crear (ej. "Stock actual" de un
+      // material): al editar quedan bloqueados — ver save() más abajo.
+      if(f.soloAlCrear){ el.disabled = true; el.title = f.soloAlCrearAviso || ''; }
     });
     document.getElementById(opts.saveBtnId).textContent = 'Guardar cambios';
     document.getElementById(opts.modeId).textContent = 'Editando — los campos de arriba se sobrescriben al guardar';
@@ -50,10 +62,20 @@ function wireCatalog(opts){
       let v = el.value.trim ? el.value.trim() : el.value;
       if(f.type === 'number') v = v === '' ? null : parseFloat(v);
       if(f.required && !v) faltaObligatorio = true;
+      // Al EDITAR solo se manda lo que la persona cambió en el formulario.
+      // Antes se reenviaban TODOS los campos con el valor que tenía la
+      // página al abrirse — y en materiales eso incluía "Stock actual" y
+      // "Costo por unidad": si en el medio entró una compra o un consumo
+      // (desde otro equipo, o hace horas con la pestaña abierta), guardar
+      // un cambio de nombre/formato los pisaba con el número viejo, sin
+      // rastro. Caso real 24sep26: Polipropileno Mate 22 mc 35 cm volvió a
+      // 0 kg después de una compra de 16 kg.
+      if(editingId != null && (f.soloAlCrear || el.value === valoresAlEditar[f.col])) return;
       payload[f.col] = v === '' ? null : v;
     });
     if(faltaObligatorio){ toast('Falta un campo obligatorio'); return; }
     if(!editingId) payload.activo = true;
+    if(editingId != null && !Object.keys(payload).length){ toast('No cambiaste ningún campo'); return; }
 
     const btn = document.getElementById(opts.saveBtnId);
     btn.disabled = true;
@@ -69,6 +91,7 @@ function wireCatalog(opts){
         if(error) throw error;
         opts.data.push(data[0]);
         toast('Agregado');
+        if(opts.onCreate) await opts.onCreate(data[0]);
       }
       resetForm();
       render();
@@ -129,6 +152,27 @@ function wireCatalog(opts){
   return { render, resetForm };
 }
 
+// Un material nuevo que se crea con stock (Maestros > Agregar) deja ese
+// saldo inicial como un ajuste en el Kardex (Inventario > Movimientos) —
+// antes aparecía con stock sin ningún movimiento que lo explicara.
+async function registrarSaldoInicial(tabla, key, codigo, row){
+  const stock = Number(row.stock_actual) || 0;
+  if(!stock) return;
+  try{
+    const user = getCurrentUser();
+    const { data, error } = await sb.from('inventario_ajustes').insert([{
+      fecha: fechaHoyLocal(), material_tabla: tabla, material_key: String(key), codigo: codigo || null, nombre: row.nombre,
+      tipo: 'ajuste', stock_anterior: 0, stock_nuevo: stock, cantidad: stock,
+      costo_unitario: row.costo_unitario ?? null, valor: row.costo_unitario != null ? stock * row.costo_unitario : null,
+      motivo: 'Saldo inicial (material creado en Maestros)', usuario: user ? user.nombre : null
+    }]).select();
+    if(error) throw error;
+    DB.inventario_ajustes.unshift(data[0]);
+  }catch(err){
+    console.error('No se pudo registrar el saldo inicial en el Kardex:', err);
+  }
+}
+
 export function renderMaestros(){
   empleadosCtl.render();
   areasCtl.render();
@@ -185,30 +229,6 @@ function poblarChecksAreasMaterial(){
     `<label><input type="checkbox" value="${a}"${actuales.has(a)?' checked':''}> ${a}</label>`
   ).join('') || '<span class="card-hint">no hay áreas cargadas todavía (Máquinas/Actividades)</span>';
   document.getElementById('m-mpa-hint').textContent = '';
-}
-
-// Cuando se repone stock de una materia prima (agregarla/editarla acá con
-// un stock_actual más alto), revisa si alguna orden estaba esperando ese
-// material (ver alertarStockPapelInsuficiente en js/ordenes.js) y, si el
-// nuevo stock ya la cubre, la marca resuelta — deja de salir en Alertas.
-async function resolverAlertasFaltanteMateriaPrima(row){
-  if(!row || row.stock_actual == null) return;
-  const pendientes = DB.alertas_faltante_material.filter(a => a.materia_prima_codigo === row.codigo && a.cantidad_faltante <= row.stock_actual);
-  if(!pendientes.length) return;
-  try{
-    const { error } = await sb.from('alertas_faltante_material')
-      .update({ resuelta: true, resuelta_en: new Date().toISOString() })
-      .in('id', pendientes.map(a => a.id));
-    if(error) throw error;
-    const ordenes = [...new Set(pendientes.map(a => a.orden))];
-    pendientes.forEach(a => {
-      const idx = DB.alertas_faltante_material.indexOf(a);
-      if(idx >= 0) DB.alertas_faltante_material.splice(idx, 1);
-    });
-    toast(`Stock repuesto — ya no falta ${row.nombre} para la(s) orden(es) ${ordenes.join(', ')}`);
-  }catch(err){
-    console.error('No se pudo resolver la alerta de faltante:', err);
-  }
 }
 
 async function guardarAreasMaterial(){
@@ -389,7 +409,7 @@ export function initMaestros(onChange){
       { id:'m-mp-alto', col:'pliego_alto', type:'number' },
       { id:'m-mp-formato', col:'formato' },
       { id:'m-mp-unidad', col:'unidad' },
-      { id:'m-mp-stock', col:'stock_actual', type:'number' },
+      { id:'m-mp-stock', col:'stock_actual', type:'number', soloAlCrear:true, soloAlCrearAviso:'El stock ya no se edita acá: usa Inventario > Ajustar (queda con motivo en el Kardex)' },
       { id:'m-mp-minimo', col:'stock_minimo', type:'number' },
       { id:'m-mp-costo', col:'costo_unitario', type:'number' }
     ],
@@ -407,7 +427,8 @@ export function initMaestros(onChange){
         r.costo_unitario!=null?fmtCOP(r.costo_unitario):'—',
         areas.length ? areas.join(', ') : '<span class="card-hint">ninguna configurada</span>'];
     },
-    onChange: (row) => { if(onChange) onChange(); poblarSelectMaterialAreas(); resolverAlertasFaltanteMateriaPrima(row); }
+    onChange: (row) => { if(onChange) onChange(); poblarSelectMaterialAreas(); resolverAlertasFaltanteMateriaPrima(row); },
+    onCreate: row => registrarSaldoInicial('materias_primas', row.codigo, row.codigo, row)
   });
 
   insumosCtl = wireCatalog({
@@ -418,7 +439,7 @@ export function initMaestros(onChange){
       { id:'m-ins-area', col:'area', required:true },
       { id:'m-ins-unidad', col:'unidad' },
       { id:'m-ins-tipo-consumo', col:'tipo_consumo', required:true },
-      { id:'m-ins-stock', col:'stock_actual', type:'number' },
+      { id:'m-ins-stock', col:'stock_actual', type:'number', soloAlCrear:true, soloAlCrearAviso:'El stock ya no se edita acá: usa Inventario > Ajustar (queda con motivo en el Kardex)' },
       { id:'m-ins-minimo', col:'stock_minimo', type:'number' },
       { id:'m-ins-costo', col:'costo_unitario', type:'number' }
     ],
@@ -430,7 +451,8 @@ export function initMaestros(onChange){
         `<span style="${bajo?'color:var(--bad);font-weight:600':''}">${fmtNum(r.stock_actual)}</span>${bajo?' ⚠':''}`,
         r.costo_unitario!=null?fmtCOP(r.costo_unitario):'—'];
     },
-    onChange
+    onChange,
+    onCreate: row => registrarSaldoInicial('insumos_area', row.id, null, row)
   });
 
   clientesCtl = wireCatalog({

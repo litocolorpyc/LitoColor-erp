@@ -222,11 +222,15 @@ export function parseCantidadConsumo(consumoMp){
 // tiene "unidad" configurada); se agrega el papel de "Materias primas"
 // como fuente nueva, siempre con unidad (pliegos por defecto), porque ahí
 // sí queremos llevar inventario sin depender de que alguien lo configure.
+// Usa el mismo buscarMaterialPorNombre que el descuento — así el campo de
+// cantidad numérica aparece exactamente cuando ese consumo SÍ va a mover
+// inventario (antes un insumo retirado con el mismo nombre podía decidir la
+// unidad, o un nombre con coma/punto distinto dejaba el campo en texto libre).
 export function unidadNumericaDelMaterial(area, nombre){
-  const insumo = DB.insumos_area.find(m => m.area === area && m.nombre === nombre);
-  if(insumo) return insumo.unidad || null;
-  const papel = DB.materias_primas.find(m => m.nombre === nombre);
-  return papel ? (papel.unidad || 'pliegos') : null;
+  const encontrado = buscarMaterialPorNombre(area, nombre);
+  if(!encontrado) return null;
+  if(encontrado.tabla === 'insumos_area') return encontrado.mat.unidad || null;
+  return encontrado.mat.unidad || 'pliegos';
 }
 
 // Tarjeta de una actividad ASIGNADA por un jefe/gerente (ver "Prioridad de
@@ -593,23 +597,87 @@ async function empezarActividadAsignada(id){
 
 // Encuentra en qué catálogo vive un material por nombre — insumos_area
 // primero (más específico, por área), materias_primas después. Se usa
-// tanto para descontar como para revertir, así los dos quedan consistentes.
-function buscarMaterialPorNombre(area, nombre){
-  const insumo = DB.insumos_area.find(m => m.area === area && m.nombre === nombre);
-  if(insumo) return { tabla: 'insumos_area', mat: insumo, key: 'id' };
-  const mp = DB.materias_primas.find(m => m.nombre === nombre);
-  if(mp) return { tabla: 'materias_primas', mat: mp, key: 'codigo' };
-  // Respaldo: mismo material pero con el separador decimal escrito distinto
-  // (catálogo en coma "1,5 mm", pieza de la orden en punto "1.5 mm" — caso
-  // real: orden 5999, "Carton Industrial"). Sin esto, el consumo quedaba
-  // "sin_catalogo" — no se descontaba del inventario NI se cargaba el
-  // costo — aunque el material sí existiera en el maestro.
+// tanto para descontar como para revertir (y para el Kardex, ver
+// inventario.js), así todos quedan consistentes.
+//
+// Se buscan PRIMERO los materiales activos: antes un insumo retirado
+// (activo=false) con el mismo nombre que una materia prima seguía
+// "ganando" y se llevaba el consumo — caso real: los papeles duplicados
+// como Insumo que se retiraron el 08sep26 (ej. "Cartulina Natural 0,45"
+// en Corte inicial) seguían recibiendo los descuentos, mientras la materia
+// prima real (la que sale en Inventario) nunca bajaba. Solo si no hay
+// ningún activo que coincida se cae a uno retirado, como último recurso.
+export function buscarMaterialPorNombre(area, nombre){
+  if(!nombre) return null;
+  // Respaldo normalizado: mismo material pero con el separador decimal o
+  // los espacios escritos distinto (catálogo en coma "1,5 mm", pieza de la
+  // orden en punto "1.5 mm" — caso real: orden 5999, "Carton Industrial").
+  // Sin esto, el consumo quedaba "sin_catalogo" — no se descontaba del
+  // inventario NI se cargaba el costo — aunque el material sí existiera.
   const norm = normNombreMaterial(nombre);
-  const insumoNorm = DB.insumos_area.find(m => m.area === area && normNombreMaterial(m.nombre) === norm);
-  if(insumoNorm) return { tabla: 'insumos_area', mat: insumoNorm, key: 'id' };
-  const mpNorm = DB.materias_primas.find(m => normNombreMaterial(m.nombre) === norm);
-  if(mpNorm) return { tabla: 'materias_primas', mat: mpNorm, key: 'codigo' };
-  return null;
+  const buscar = soloActivos => {
+    const ok = m => !soloActivos || m.activo !== false;
+    const insumo = DB.insumos_area.find(m => ok(m) && m.area === area && m.nombre === nombre);
+    if(insumo) return { tabla: 'insumos_area', mat: insumo, key: 'id' };
+    const mp = DB.materias_primas.find(m => ok(m) && m.nombre === nombre);
+    if(mp) return { tabla: 'materias_primas', mat: mp, key: 'codigo' };
+    const insumoNorm = DB.insumos_area.find(m => ok(m) && m.area === area && normNombreMaterial(m.nombre) === norm);
+    if(insumoNorm) return { tabla: 'insumos_area', mat: insumoNorm, key: 'id' };
+    const mpNorm = DB.materias_primas.find(m => ok(m) && normNombreMaterial(m.nombre) === norm);
+    if(mpNorm) return { tabla: 'materias_primas', mat: mpNorm, key: 'codigo' };
+    return null;
+  };
+  return buscar(true) || buscar(false);
+}
+
+// Cuando se repone stock de una materia prima (compra importada, Ajustar/
+// Inventario físico, o material nuevo creado en Maestros con stock),
+// revisa si alguna orden estaba esperando ese material (ver
+// alertarStockPapelInsuficiente en js/ordenes.js) y, si el nuevo stock ya
+// la cubre, la marca resuelta — deja de salir en Alertas. Antes solo se
+// llamaba al editar el stock en Maestros, que desde 24sep26 ya no se
+// permite (ver wireCatalog en maestros.js).
+export async function resolverAlertasFaltanteMateriaPrima(row){
+  if(!row || row.stock_actual == null) return;
+  const pendientes = DB.alertas_faltante_material.filter(a => a.materia_prima_codigo === row.codigo && a.cantidad_faltante <= row.stock_actual);
+  if(!pendientes.length) return;
+  try{
+    const { error } = await sb.from('alertas_faltante_material')
+      .update({ resuelta: true, resuelta_en: new Date().toISOString() })
+      .in('id', pendientes.map(a => a.id));
+    if(error) throw error;
+    const ordenes = [...new Set(pendientes.map(a => a.orden))];
+    pendientes.forEach(a => {
+      const idx = DB.alertas_faltante_material.indexOf(a);
+      if(idx >= 0) DB.alertas_faltante_material.splice(idx, 1);
+    });
+    toast(`Stock repuesto — ya no falta ${row.nombre} para la(s) orden(es) ${ordenes.join(', ')}`);
+  }catch(err){
+    console.error('No se pudo resolver la alerta de faltante:', err);
+  }
+}
+
+// Suma (delta > 0) o resta (delta < 0) stock DIRECTO en la base, en una
+// sola operación (función mover_stock_material, migración
+// 20260924120000_mover_stock_atomico.sql) y deja la copia en memoria igual
+// a lo que quedó guardado. Reemplaza el viejo "leer stock_actual en la
+// página → sumar → escribir el número final", que tenía dos problemas
+// reales (reportados 24sep26):
+//   1) desde registro.html (operario, sin sesión) el UPDATE lo bloqueaba
+//      la seguridad de la base SIN dar error — el stock nunca bajaba;
+//   2) si la copia en memoria estaba vieja, el número final pisaba las
+//      compras/consumos registrados en el medio desde otro equipo.
+// Lanza error si no se pudo — nunca "finge" que se movió.
+export async function moverStockMaterial(tabla, key, delta){
+  const { data, error } = await sb.rpc('mover_stock_material', { p_tabla: tabla, p_key: String(key), p_delta: delta });
+  if(error) throw error;
+  if(!data) throw new Error('La base no devolvió el material actualizado');
+  const lista = tabla === 'materias_primas' ? DB.materias_primas : DB.insumos_area;
+  const campo = tabla === 'materias_primas' ? 'codigo' : 'id';
+  const mat = lista.find(m => String(m[campo]) === String(key));
+  if(mat) Object.assign(mat, data);
+  if(delta > 0 && tabla === 'materias_primas') resolverAlertasFaltanteMateriaPrima(data);
+  return data;
 }
 
 // Punto 13 de AjustesERP: cuando el consumo se capturó como número (papel
@@ -668,10 +736,7 @@ export async function descontarInventarioYCargarCosto({ nombre, area, cantidad, 
   }
 
   try{
-    const nuevoStock = (mat.stock_actual || 0) - cantidad;
-    const { data, error } = await sb.from(tabla).update({ stock_actual: nuevoStock }).eq(key, mat[key]).select();
-    if(error) throw error;
-    Object.assign(mat, data[0]);
+    await moverStockMaterial(tabla, mat[key], -cantidad);
   }catch(err){
     console.error('No se pudo descontar del inventario:', err);
     return { descontado:false, costeado:false, motivo:'error_guardando' };
@@ -811,10 +876,7 @@ export async function revertirConsumoDeRegistro(nombre, area, cantidad, producci
   if(encontrado){
     try{
       const { tabla, mat, key } = encontrado;
-      const nuevoStock = (mat.stock_actual || 0) + cantidad;
-      const { data, error } = await sb.from(tabla).update({ stock_actual: nuevoStock }).eq(key, mat[key]).select();
-      if(error) throw error;
-      Object.assign(mat, data[0]);
+      await moverStockMaterial(tabla, mat[key], cantidad);
     }catch(err){
       console.error('No se pudo devolver el consumo anterior al inventario:', err);
     }

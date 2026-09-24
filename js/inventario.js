@@ -9,7 +9,7 @@ import { DB } from './store.js';
 import { fmtNum, fmtCOP, toast, fechaHoyLocal, wireTableScroll, imprimirInforme, exportarExcel, etiquetaOrden } from './helpers.js';
 import { mostrarDetalleOrden } from './ordenes.js';
 import { recostearConsumosDeMaterial } from './registrar.js';
-import { parseCantidadConsumo, listaAreasDisponibles } from './registrar.js';
+import { parseCantidadConsumo, listaAreasDisponibles, buscarMaterialPorNombre, resolverAlertasFaltanteMateriaPrima } from './registrar.js';
 import { getCurrentUser } from './auth.js';
 
 // Pedido: "cuando se hace el ingreso de material, desde el inventario se
@@ -225,17 +225,21 @@ async function cargarEntradasInventario(){
 
 // Solo cuenta como salida el consumo escrito como NÚMERO (lo único que de
 // verdad descuenta del inventario — ver unidadNumericaDelMaterial en
-// registrar.js); un consumo de texto libre nunca tocó el stock.
+// registrar.js) y que corresponde a un material real del maestro (mismo
+// buscarMaterialPorNombre que usa el descuento, así el Kardex muestra
+// exactamente lo que movió el stock); un consumo de texto libre, o con un
+// nombre que no está en ningún maestro, nunca tocó el stock.
 function salidasDeInventario(){
   const salidas = [];
   DB.produccion.forEach(r => {
     if(!r.materiaPrima) return;
     const cantidad = parseFloat(parseCantidadConsumo(r.consumoMP));
     if(!cantidad || cantidad <= 0) return;
+    const encontrado = buscarMaterialPorNombre(r.area, r.materiaPrima);
+    if(!encontrado) return;
     const valorTotal = DB.costos_movimientos
       .filter(m => m.produccion_id === r.id && (m.comentario || '').startsWith('Consumo automático'))
       .reduce((s, m) => s + (m.valor || 0), 0);
-    const matPrima = DB.materias_primas.find(m => m.nombre === r.materiaPrima);
     // "Directo" = el costo de este consumo queda ligado a la orden (sale
     // en "Materiales consumidos" del Detalle de la orden). Una materia
     // prima SIEMPRE es directa — es el papel/insumo que la orden consume.
@@ -243,14 +247,32 @@ function salidasDeInventario(){
     // área (ej. grasa de mantenimiento): ahí el costo NO se le carga a la
     // orden aunque el operario lo haya registrado mientras trabajaba en
     // una — ver descontarInventarioYCargarCosto en registrar.js.
-    const insumo = !matPrima ? DB.insumos_area.find(m => m.nombre === r.materiaPrima) : null;
-    const esIndirecto = !!insumo && insumo.tipo_consumo === 'Indirecto';
+    const esIndirecto = encontrado.tabla === 'insumos_area' && encontrado.mat.tipo_consumo === 'Indirecto';
     salidas.push({
-      tipo: 'salida', fecha: r.fecha, codigo: matPrima ? matPrima.codigo || null : null,
-      nombre: r.materiaPrima, cantidad,
+      tipo: 'salida', fecha: r.fecha, codigo: encontrado.tabla === 'materias_primas' ? encontrado.mat.codigo || null : null,
+      nombre: encontrado.mat.nombre, cantidad,
       valorUnitario: valorTotal > 0 ? valorTotal / cantidad : null,
       valorTotal: valorTotal > 0 ? valorTotal : null,
       directo: !esIndirecto, orden: r.orden, trabajo: r.trabajo, area: r.area, actividad: r.actividad
+    });
+  });
+  // Material extra consumido en un reproceso (Reprocesos > detalle >
+  // "Agregar consumo", ver agregarConsumoReproceso en reprocesos.js): ese
+  // consumo SÍ descuenta stock, pero antes no salía en el Kardex.
+  DB.costos_movimientos.forEach(c => {
+    if(!c.material_tabla || !c.material_ref || !(Number(c.cantidad) > 0)) return;
+    const lista = c.material_tabla === 'materias_primas' ? DB.materias_primas : DB.insumos_area;
+    const campo = c.material_tabla === 'materias_primas' ? 'codigo' : 'id';
+    const mat = lista.find(m => String(m[campo]) === String(c.material_ref));
+    const cantidad = Number(c.cantidad);
+    const registro = c.produccion_id != null ? DB.produccion.find(r => r.id === c.produccion_id) : null;
+    salidas.push({
+      tipo: 'salida', esReproceso: true, fecha: c.fecha,
+      codigo: c.material_tabla === 'materias_primas' ? c.material_ref : null,
+      nombre: mat ? mat.nombre : (c.comentario || '(material)'), cantidad,
+      valorUnitario: c.valor ? c.valor / cantidad : null, valorTotal: c.valor || null,
+      directo: c.orden != null, orden: c.orden, trabajo: registro ? registro.trabajo : null,
+      area: registro ? registro.area : null, actividad: 'Reproceso'
     });
   });
   return salidas;
@@ -315,7 +337,7 @@ function abrirModalMovimiento(m){
   if(!m) return;
   const titulo = m.esAjuste
     ? (m.tipoAjuste === 'fisico' ? '📋 Ajuste por inventario físico' : '🔧 Ajuste de inventario')
-    : (m.tipo === 'entrada' ? '⬇ Entrada de inventario' : '⬆ Salida de inventario');
+    : (m.tipo === 'entrada' ? '⬇ Entrada de inventario' : (m.esReproceso ? '⬆ Salida de inventario (reproceso)' : '⬆ Salida de inventario'));
   document.getElementById('inv-mov-modal-titulo').textContent = titulo;
   document.getElementById('inv-mov-modal-articulo').innerHTML = `<b>${m.codigo ? m.codigo + ' — ' : ''}${m.nombre || '—'}</b>`;
   let filas;
@@ -383,7 +405,22 @@ function wireModalMovimiento(){
 // para movimientos de stock, no de costo) — igual que editar el costo
 // desde Maestros, que tampoco deja rastro.
 async function guardarAjusteMaterial({ tabla, key, codigo, nombre, stockAnterior, stockNuevo, costoUnitario, costoNuevo, motivo, tipo, fecha, area }){
-  const cantidad = stockNuevo - stockAnterior;
+  // El "stock anterior" se vuelve a leer de la base justo ahora (no el que
+  // se veía en pantalla al abrir el modal/conteo): si en el medio entró una
+  // compra o un consumo, la diferencia que queda en el Kardex tiene que ser
+  // contra el stock real, no contra uno viejo. stockNuevo = null significa
+  // "solo cambia el costo, el stock no se toca" — así un cambio de costo
+  // nunca reescribe el stock con el número (quizás viejo) de la pantalla.
+  if(stockNuevo != null){
+    try{
+      const { data: fresco, error: errFresco } = await sb.from(tabla).select('stock_actual').eq(tabla === 'materias_primas' ? 'codigo' : 'id', key).single();
+      if(errFresco) throw errFresco;
+      if(fresco) stockAnterior = Number(fresco.stock_actual) || 0;
+    }catch(err){
+      console.error('No se pudo leer el stock actual antes de ajustar (se usa el de pantalla):', err);
+    }
+  }
+  const cantidad = stockNuevo == null ? 0 : stockNuevo - stockAnterior;
   const cambiaCosto = costoNuevo != null && costoNuevo !== costoUnitario;
   if(cantidad === 0 && !cambiaCosto) return null; // nada que ajustar
   const eqCol = tabla === 'materias_primas' ? 'codigo' : 'id';
@@ -398,6 +435,7 @@ async function guardarAjusteMaterial({ tabla, key, codigo, nombre, stockAnterior
   if(mat){
     if(cantidad !== 0) mat.stock_actual = stockNuevo;
     if(cambiaCosto) mat.costo_unitario = costoNuevo;
+    if(cantidad > 0 && tabla === 'materias_primas') resolverAlertasFaltanteMateriaPrima(mat);
   }
   // Si este ajuste le cargó/corrigió el costo por unidad, cualquier consumo
   // de este material que ya se hubiera registrado (con su stock ya
@@ -481,7 +519,7 @@ async function guardarAjusteDesdeModal(){
   try{
     await guardarAjusteMaterial({
       tabla: f.tabla, key: f.key, codigo: f.codigo, nombre: f.nombre,
-      stockAnterior: f.stock, stockNuevo: cambiaStock ? nuevoStock : f.stock,
+      stockAnterior: f.stock, stockNuevo: cambiaStock ? nuevoStock : null,
       costoUnitario: f.costo, costoNuevo: cambiaCosto ? costoNuevo : null,
       motivo, tipo: 'ajuste',
       area: (cambiaStock && esIndirecto) ? area : null
@@ -598,7 +636,7 @@ async function guardarConteoFisico(){
     try{
       await guardarAjusteMaterial({
         tabla: f.tabla, key: f.key, codigo: f.codigo, nombre: f.nombre,
-        stockAnterior: f.stock, stockNuevo: p.cambiaStock ? p.valorConteo : f.stock,
+        stockAnterior: f.stock, stockNuevo: p.cambiaStock ? p.valorConteo : null,
         costoUnitario: f.costo, costoNuevo: p.cambiaCosto ? p.costoNuevo : null,
         motivo: 'Inventario físico' + (responsable ? ' — ' + responsable : ''), tipo: 'fisico', fecha
       });

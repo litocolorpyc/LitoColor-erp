@@ -87,14 +87,14 @@ function calcularAlertas(){
     alertas.push({
       severidad: 'alta',
       icono: '🔴',
-      mensaje: `<b>${m.nombre}</b> quedó con stock <b>negativo (${fmtNum(m.stock_actual,2)} ${m.unidad || 'pliegos'})</b> — se consumió más de lo que había cargado. Carga la compra en Maestros &gt; Materias primas.`
+      mensaje: `<b>${m.nombre}</b> quedó con stock <b>negativo (${fmtNum(m.stock_actual,2)} ${m.unidad || 'pliegos'})</b> — se consumió más de lo que había cargado. Carga la compra en Costos &gt; Importar compra, o si fue un error corrígelo con Inventario &gt; Ajustar.`
     });
   });
   DB.insumos_area.filter(m => (m.stock_actual || 0) < 0).forEach(m => {
     alertas.push({
       severidad: 'alta',
       icono: '🔴',
-      mensaje: `<b>${m.nombre}</b> (${m.area || 'sin área'}) quedó con stock <b>negativo (${fmtNum(m.stock_actual,2)} ${m.unidad || 'unidad'})</b> — se consumió más de lo que había cargado. Carga la compra en Maestros &gt; Materiales por área.`
+      mensaje: `<b>${m.nombre}</b> (${m.area || 'sin área'}) quedó con stock <b>negativo (${fmtNum(m.stock_actual,2)} ${m.unidad || 'unidad'})</b> — se consumió más de lo que había cargado. Carga la compra en Costos &gt; Importar compra, o si fue un error corrígelo con Inventario &gt; Ajustar.`
     });
   });
 

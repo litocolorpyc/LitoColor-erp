@@ -3,7 +3,7 @@ import { DB, normProd } from './store.js';
 import { toast, fmtCOP, fmtNum, fechaHoyLocal, exportarExcel, agregarBotonExcelVentana, etiquetaOrden, parseOrden } from './helpers.js';
 import { getCurrentUser } from './auth.js';
 import { areasCompletadasPorPieza, mostrarDetalleOrden } from './ordenes.js';
-import { listaAreasDisponibles } from './registrar.js';
+import { listaAreasDisponibles, moverStockMaterial } from './registrar.js';
 import { movimientosPorProduccion, agruparReprocesosPorOP, claseDeMovimiento, sumarCostos } from './reproceso-costos.js';
 
 // "Reprocesos" (pedido 17-18sep26): reabrir un proceso YA completado de
@@ -598,9 +598,9 @@ async function agregarConsumoReproceso(registro, clase, tabla, ref, cantidad){
   const concepto = DB.costos_conceptos.find(c => c.nombre === 'Consumo de materia prima (automático)');
   if(!concepto){ toast('Falta el concepto "Consumo de materia prima (automático)" en Maestros'); return false; }
 
-  const { data: dStock, error: eStock } = await sb.from(tabla).update({ stock_actual: (mat.stock_actual || 0) - cantidad }).eq(key, mat[key]).select();
-  if(eStock) throw eStock;
-  Object.assign(mat, dStock[0]);
+  // Resta directo en la base (no "stock en memoria − cantidad"), ver
+  // moverStockMaterial en registrar.js.
+  await moverStockMaterial(tabla, mat[key], -cantidad);
 
   const esIndirecto = tabla === 'insumos_area' && mat.tipo_consumo === 'Indirecto';
   const row = {
@@ -613,8 +613,7 @@ async function agregarConsumoReproceso(registro, clase, tabla, ref, cantidad){
   const { data, error } = await sb.from('costos_movimientos').insert([row]).select();
   if(error){
     // No dejar el stock descontado sin su costo.
-    await sb.from(tabla).update({ stock_actual: (mat.stock_actual || 0) + cantidad }).eq(key, mat[key]);
-    mat.stock_actual = (mat.stock_actual || 0) + cantidad;
+    await moverStockMaterial(tabla, mat[key], cantidad);
     throw error;
   }
   DB.costos_movimientos.unshift(data[0]);
@@ -641,14 +640,7 @@ async function quitarCostoReproceso(m){
   const idx = DB.costos_movimientos.findIndex(x => x.id === m.id);
   if(idx >= 0) DB.costos_movimientos.splice(idx, 1);
   if(m.material_tabla && m.cantidad){
-    const key = m.material_tabla === 'materias_primas' ? 'codigo' : 'id';
-    const lista = m.material_tabla === 'materias_primas' ? DB.materias_primas : DB.insumos_area;
-    const { data: fresco, error: e1 } = await sb.from(m.material_tabla).select('*').eq(key, m.material_ref).single();
-    if(e1) throw e1;
-    const { data, error: e2 } = await sb.from(m.material_tabla).update({ stock_actual: (fresco.stock_actual || 0) + Number(m.cantidad) }).eq(key, m.material_ref).select();
-    if(e2) throw e2;
-    const mat = lista.find(x => String(x[key]) === String(m.material_ref));
-    if(mat && data && data[0]) Object.assign(mat, data[0]);
+    await moverStockMaterial(m.material_tabla, m.material_ref, Number(m.cantidad));
   }
 }
 
