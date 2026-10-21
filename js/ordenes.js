@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
-import { toast, fmtNum, exportarExcel, fechaHoyLocal, wireTableScroll, agregarBotonExcelVentana, etiquetaOrden, parseOrden, esOrdenServicio, BASE_ORDEN_SERVICIO } from './helpers.js';
+import { toast, fmtNum, exportarExcel, fechaHoyLocal, wireTableScroll, agregarBotonExcelVentana, etiquetaOrden, parseOrden, esOrdenServicio, BASE_ORDEN_SERVICIO, requerimientosMaterialPieza } from './helpers.js';
 import { getCurrentUser, puedeEditarProduccion } from './auth.js';
 import { poblarDatalistProveedores } from './costos.js';
 import { movimientosPorProduccion, costosDeRegistro, sumarCostos } from './reproceso-costos.js';
@@ -179,6 +179,72 @@ function populatePliegoSelect(node){
   sel.value = (valorPrevio && PLIEGOS_PERMITIDOS.includes(valorPrevio)) ? valorPrevio : '70x100';
 }
 
+// "Cote 150 gr 60x90 (500) + Cote 150 gr 70x100 (100)" cuando la pieza
+// pide más de un material; si es uno solo, queda el nombre del papel como antes.
+function textoPapelPieza(p){
+  const extras = Array.isArray(p.materiales_adicionales) ? p.materiales_adicionales.filter(m => m && m.material) : [];
+  if(!extras.length) return p.papel;
+  return requerimientosMaterialPieza(p).map(r => `${r.nombre} (${fmtNum(r.cantidad,0)})`).join(' + ');
+}
+
+// ---------- otros materiales de una pieza (varios papeles / insumos) ----------
+// Ej.: la pieza pide 600 pliegos pero de Cote 60x90 solo hay 500 => se agrega
+// una fila con Cote 70x100 y cantidad 100; el principal queda en 500.
+function opcionesMaterialExtraHTML(){
+  const mps = DB.materias_primas.filter(m => m.activo !== false).map(m => m.nombre);
+  const ins = [...new Set(DB.insumos_area.filter(m => m.activo !== false).map(m => m.nombre))];
+  const opt = (tabla, n) => `<option value="${tabla}|${String(n).replace(/"/g,'&quot;')}">${n}</option>`;
+  return '<option value="">Selecciona material…</option>' +
+    `<optgroup label="Materias primas / papeles">${mps.map(n => opt('materias_primas', n)).join('')}</optgroup>` +
+    `<optgroup label="Insumos">${ins.map(n => opt('insumos_area', n)).join('')}</optgroup>`;
+}
+
+function agregarFilaMaterialExtra(node, prefill){
+  const fila = document.createElement('div');
+  fila.className = 'form-row f-mat-extra-row';
+  fila.style.alignItems = 'flex-end';
+  fila.innerHTML = `<div class="field" style="flex:2"><select class="f-mat-extra-sel">${opcionesMaterialExtraHTML()}</select></div>
+    <div class="field" style="flex:1"><input type="number" class="f-mat-extra-cant" min="0" step="any" placeholder="Cantidad"></div>
+    <button type="button" class="opp-remove-pieza f-mat-extra-quitar">Quitar</button>`;
+  const sel = fila.querySelector('.f-mat-extra-sel');
+  if(prefill && prefill.material){
+    const valor = (prefill.tabla || 'materias_primas') + '|' + prefill.material;
+    if(!Array.from(sel.options).some(o => o.value === valor)){
+      const o = document.createElement('option');
+      o.value = valor; o.textContent = prefill.material + ' (no está en el maestro)';
+      sel.appendChild(o);
+    }
+    sel.value = valor;
+    fila.querySelector('.f-mat-extra-cant').value = prefill.cantidad ?? '';
+  }
+  fila.addEventListener('input', () => actualizarResumenExtras(node));
+  fila.addEventListener('change', () => actualizarResumenExtras(node));
+  fila.querySelector('.f-mat-extra-quitar').addEventListener('click', () => { fila.remove(); actualizarResumenExtras(node); });
+  node.querySelector('.f-mats-extra-list').appendChild(fila);
+  actualizarResumenExtras(node);
+}
+
+function leerMaterialesExtra(node){
+  return Array.from(node.querySelectorAll('.f-mat-extra-row')).map(fila => {
+    const [tabla, ...resto] = (fila.querySelector('.f-mat-extra-sel').value || '').split('|');
+    const material = resto.join('|');
+    const cantidad = parseFloat(fila.querySelector('.f-mat-extra-cant').value) || 0;
+    return material && cantidad > 0 ? { material, cantidad, tabla } : null;
+  }).filter(Boolean);
+}
+
+function actualizarResumenExtras(node){
+  const el = node.querySelector('.f-mats-extra-resumen');
+  if(!el) return;
+  const extras = leerMaterialesExtra(node);
+  const papel = node.querySelector('.f-papel').value;
+  const pliegos = parseFloat(node.querySelector('.f-pliegos-result').textContent.replace(/\./g,'')) || 0;
+  if(!extras.length || !papel || !pliegos){ el.textContent = ''; return; }
+  const [principal] = requerimientosMaterialPieza({ papel, pliegos, materiales_adicionales: extras });
+  el.textContent = `${papel}: ${fmtNum(principal.cantidad,0)} de ${fmtNum(pliegos,0)} pliegos` +
+    extras.map(m => ` · ${m.material}: ${fmtNum(m.cantidad,0)}`).join('');
+}
+
 function addPiezaCard(prefill){
   oppPiezaCount++;
   const tpl = document.getElementById('opp-pieza-template');
@@ -218,6 +284,7 @@ function addPiezaCard(prefill){
   // Si el papel ya viene definido (ej. una orden importada), el campo
   // arranca colapsado con un resumen — "Editar" lo despliega de nuevo.
   node.querySelector('.f-papel-editar-btn').addEventListener('click', () => expandirPapel(node));
+  node.querySelector('.f-mats-extra-add').addEventListener('click', () => agregarFilaMaterialExtra(node));
 
   sincronizarProcesosLitografia(node);
   if(prefill) fillPiezaCard(node, prefill);
@@ -237,6 +304,7 @@ function fillPiezaCard(node, p){
     const pliegoGuardado = p.pliego_ancho + 'x' + p.pliego_alto;
     node.querySelector('.f-pliego').value = PLIEGOS_PERMITIDOS.includes(pliegoGuardado) ? pliegoGuardado : '70x100';
   }
+  if(Array.isArray(p.materiales_adicionales)) p.materiales_adicionales.forEach(m => agregarFilaMaterialExtra(node, m));
   if(p.papel) colapsarPapel(node);
   node.querySelector('.f-tintas-frente').value = p.tintas_frente ?? 4;
   node.querySelector('.f-tintas-atras').value = p.tintas_atras ?? 0;
@@ -398,6 +466,7 @@ function recalcPieza(node){
   const programados = parseFloat(programadosEl.value) || 0;
   const pliegos = porPliego > 0 ? Math.ceil(programados / porPliego) : 0;
   node.querySelector('.f-pliegos-result').textContent = pliegos ? fmtNum(pliegos, 0) : '—';
+  actualizarResumenExtras(node);
 
   const procTroquelado = node.querySelector('.f-proc[value="Troquelado"]');
   const procPlastificado = node.querySelector('.f-proc[value="Plastificado"]');
@@ -1423,7 +1492,7 @@ export function mostrarDetalleOrden(orden){
     const ficha = [
       filaFicha('OP', p.op),
       filaFicha('Tamaño terminado', (p.tamano_ancho || p.tamano_alto) ? `${fmtNum(p.tamano_ancho,1)} x ${fmtNum(p.tamano_alto,1)} cm` : ''),
-      filaFicha('Papel', p.papel),
+      filaFicha('Papel', textoPapelPieza(p)),
       filaFicha('Tintas frente/atrás', p.tintas_frente != null ? `${p.tintas_frente} x ${p.tintas_atras || 0}` : ''),
       filaFicha('Detalle tintas — Tiro', p.tintas_detalle_tiro),
       filaFicha('Detalle tintas — Retiro', p.tintas_detalle_retiro),
@@ -1613,7 +1682,7 @@ export function imprimirDetalleOrden(orden){
     const ficha = [
       ['OP', p.op],
       ['Tamaño terminado', (p.tamano_ancho || p.tamano_alto) ? `${fmtNum(p.tamano_ancho,1)} x ${fmtNum(p.tamano_alto,1)} cm` : ''],
-      ['Papel', p.papel],
+      ['Papel', textoPapelPieza(p)],
       ['Tintas frente/atrás', p.tintas_frente != null ? `${p.tintas_frente} x ${p.tintas_atras || 0}` : ''],
       ['Detalle tintas — Tiro', p.tintas_detalle_tiro],
       ['Detalle tintas — Retiro', p.tintas_detalle_retiro],
@@ -1664,7 +1733,8 @@ export function imprimirDetalleOrden(orden){
   td, th{ border:1px solid #ccc; padding:4px 6px; text-align:left; }
   .ficha-print td.lbl{ color:#555; width:38%; }
   .procesos-print, .materiales-print{ font-size:12px; margin:4px 0; }
-  .pieza-print{ page-break-inside: avoid; margin-bottom:14px; }
+  .pieza-print{ page-break-inside: avoid; page-break-after: always; break-after: page; margin-bottom:14px; }
+  .pieza-print:last-of-type{ page-break-after: auto; break-after: auto; }
   .historial-print{ page-break-inside: avoid; }
   .footer-obs-print{ display:none; }
   @media print{
@@ -2066,8 +2136,10 @@ async function cancelarOrden(orden){
 async function alertarStockPapelInsuficiente(orden, piezasPayload){
   const necesidad = {};
   piezasPayload.forEach(p => {
-    if(!p.papel || !p.pliegos) return;
-    necesidad[p.papel] = (necesidad[p.papel] || 0) + p.pliegos;
+    requerimientosMaterialPieza(p).forEach(r => {
+      if(r.tabla !== 'materias_primas' || !r.cantidad) return; // los insumos no tienen alerta de faltante
+      necesidad[r.nombre] = (necesidad[r.nombre] || 0) + r.cantidad;
+    });
   });
   const faltantes = Object.entries(necesidad).map(([papel, pliegosNecesarios]) => {
     const mat = DB.materias_primas.find(m => m.nombre === papel);
@@ -2166,11 +2238,13 @@ async function saveOpp(){
       }
 
       const pliego = node.querySelector('.f-pliego').value.split('x').map(Number);
+      const extrasPieza = leerMaterialesExtra(node);
       return {
         ...base,
         tamano_ancho: parseFloat(node.querySelector('.f-tam-ancho').value) || null,
         tamano_alto: parseFloat(node.querySelector('.f-tam-alto').value) || null,
         papel: node.querySelector('.f-papel').value.trim() || null,
+        ...(extrasPieza.length ? { materiales_adicionales: extrasPieza } : {}),
         pliego_ancho: pliego[0] || null, pliego_alto: pliego[1] || null,
         tintas_frente: parseInt(node.querySelector('.f-tintas-frente').value) || 0,
         tintas_atras: parseInt(node.querySelector('.f-tintas-atras').value) || 0,
@@ -2501,7 +2575,7 @@ export function fichaOrdenParaOperarioHTML(orden){
     const ficha = [
       filaFicha('OP', p.op),
       filaFicha('Tamaño terminado', (p.tamano_ancho || p.tamano_alto) ? `${fmtNum(p.tamano_ancho,1)} x ${fmtNum(p.tamano_alto,1)} cm` : ''),
-      filaFicha('Papel', p.papel),
+      filaFicha('Papel', textoPapelPieza(p)),
       filaFicha('Tintas frente/atrás', p.tintas_frente != null ? `${p.tintas_frente} x ${p.tintas_atras || 0}` : ''),
       filaFicha('Detalle tintas — Tiro', p.tintas_detalle_tiro),
       filaFicha('Detalle tintas — Retiro', p.tintas_detalle_retiro),

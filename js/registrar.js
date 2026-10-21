@@ -2,7 +2,7 @@
 // así que cualquier corrección aquí aplica a las dos pantallas a la vez.
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
-import { toast, fmtNum, fechaHoyLocal, normNombreMaterial, etiquetaOrden } from './helpers.js';
+import { toast, fmtNum, fechaHoyLocal, normNombreMaterial, etiquetaOrden, requerimientosMaterialPieza } from './helpers.js';
 import { getOrdenesSeleccionables, subprocesosDeArea, estadoOrden } from './ordenes.js';
 
 const timerIntervals = new Map();
@@ -657,8 +657,10 @@ export function faltanteVigente(a){
   if(!mat) return null;
   const nombreNorm = normNombreMaterial(mat.nombre);
   const necesitaPiezas = DB.opp_piezas
-    .filter(p => p.orden === a.orden && p.papel && normNombreMaterial(p.papel) === nombreNorm)
-    .reduce((s, p) => s + (Number(p.pliegos) || 0), 0);
+    .filter(p => p.orden === a.orden)
+    .reduce((s, p) => s + requerimientosMaterialPieza(p)
+      .filter(r => r.tabla === 'materias_primas' && normNombreMaterial(r.nombre) === nombreNorm)
+      .reduce((t, r) => t + r.cantidad, 0), 0);
   const consumido = DB.produccion
     .filter(r => r.orden === a.orden && r.materiaPrima)
     .reduce((s, r) => {

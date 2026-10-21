@@ -132,6 +132,24 @@ export function normNombreMaterial(s){
   return String(s || '').trim().toLowerCase().replace(/(\d),(\d)/g, '$1.$2').replace(/\s+/g, '');
 }
 
+// Materiales que pide una pieza de la orden: el papel principal (`papel`)
+// más los de `materiales_adicionales` ([{material, cantidad, tabla}]).
+// Los pliegos que cubren los papeles adicionales se restan del principal:
+// 600 pliegos en total con 100 de otro papel => 500 del principal.
+// Los insumos adicionales (tabla 'insumos_area') no restan nada.
+export function requerimientosMaterialPieza(p){
+  const extras = (Array.isArray(p.materiales_adicionales) ? p.materiales_adicionales : [])
+    .filter(m => m && m.material && Number(m.cantidad) > 0);
+  const lista = [];
+  if(p.papel){
+    const enOtros = extras.filter(m => m.tabla !== 'insumos_area').reduce((s, m) => s + Number(m.cantidad), 0);
+    const total = Number(p.pliegos) || 0;
+    lista.push({ nombre: p.papel, cantidad: Math.max(0, total - enOtros), principal: true, tabla: 'materias_primas' });
+  }
+  extras.forEach(m => lista.push({ nombre: m.material, cantidad: Number(m.cantidad), principal: false, tabla: m.tabla || 'materias_primas' }));
+  return lista;
+}
+
 // Botones "Ir al principio" / "Ir al final" para tablas largas (muchos
 // materiales, movimientos, clientes, etc.) — sin esto, moverse de la
 // primera a la última fila (o volver) significa arrastrar la barra de
