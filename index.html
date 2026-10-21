@@ -57,6 +57,7 @@
         <button class="tab-btn" data-tab="registrar-venta" role="tab">Registrar Venta</button>
         <button class="tab-btn" data-tab="remisiones" role="tab">Remisión</button>
         <button class="tab-btn" data-tab="inventario" role="tab">Inventario</button>
+        <button class="tab-btn" data-tab="informes-op" role="tab">Informes de órdenes</button>
       </div>
       <div class="sidebar-group">
         <div class="sidebar-group-label">Maestros</div>
@@ -263,6 +264,39 @@
             <thead><tr><th>Operario</th><th>Orden</th><th>Cliente</th><th class="num">Registros</th><th class="num">Horas</th></tr></thead>
             <tbody></tbody>
           </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-informes-op">
+      <div class="card">
+        <h2 class="card-title">Informes de órdenes</h2>
+        <div class="form-row">
+          <div class="field"><label>Informe</label>
+            <select id="iop-tipo">
+              <option value="ops">Listar OP entre fechas</option>
+              <option value="cliente">OP por cliente entre fechas</option>
+              <option value="material">OP que consumen una materia prima / insumo</option>
+              <option value="laminadas">OP laminadas (cantidad y área)</option>
+              <option value="argolladas">OP argolladas (cantidad)</option>
+              <option value="piso">Parámetros de piso: presupuestado vs. real</option>
+            </select></div>
+          <div class="field" style="max-width:160px"><label>Desde</label><input type="date" id="iop-desde"></div>
+          <div class="field" style="max-width:160px"><label>Hasta</label><input type="date" id="iop-hasta"></div>
+          <div class="field" id="iop-f-cliente"><label>Cliente</label><select id="iop-cliente"></select></div>
+          <div class="field" id="iop-f-material"><label>Materia prima / insumo</label><select id="iop-material"></select></div>
+        </div>
+        <div class="form-foot">
+          <span class="card-hint" id="iop-hint"></span>
+          <button type="button" class="btn-secondary" id="iop-imprimir">🖶 Imprimir</button>
+          <button type="button" class="btn-primary" id="iop-consultar">Consultar</button>
+        </div>
+        <h3 id="iop-titulo" style="margin-top:14px"></h3>
+        <div class="table-wrap"><table id="tbl-iop"><thead></thead><tbody></tbody></table></div>
+        <div id="iop-estandares" style="display:none;margin-top:14px">
+          <label><b>Estándar presupuestado por área</b> <span class="card-hint">(unidades por hora; litografía, corte, guillotina, plastificado y troquelado se miden en pliegos)</span></label>
+          <div class="iop-est-grid" style="display:flex;flex-wrap:wrap;gap:8px 18px;margin:8px 0"></div>
+          <button type="button" class="btn-primary" id="iop-est-guardar">Guardar estándares</button>
         </div>
       </div>
     </section>
@@ -1216,6 +1250,7 @@
           <a href="#ayuda-costos">Cómo se costean los materiales</a>
           <a href="#ayuda-remision">Remisión</a>
           <a href="#ayuda-reprocesos">Reprocesos</a>
+          <a href="#ayuda-informes-op">Informes de órdenes</a>
           <a href="#ayuda-admin">Administradora</a>
           <a href="#ayuda-gerente">Gerente / Admin</a>
           <a href="#ayuda-glosario">Glosario</a>
@@ -1378,6 +1413,12 @@
         <p><b>¿Dónde ver un reproceso?</b> En la pestaña <b>Reprocesos</b> (informe por área que lo generó, por motivo y por operario, más el listado con una fila por OP), y en el <b>detalle de cada orden</b>, en el recuadro <b>"↺ Reproceso de esta orden"</b>.</p>
         <p><b>Botón "Detalle" / "✎ Completar"</b> (listado de Reprocesos): muestra cada proceso con su costo y permite: (1) poner o corregir <b>motivo, área que lo generó y responsable</b> — se guarda igual en todos los procesos de esa OP; (2) <b>agregar materia prima, insumos u otros costos</b> gastados en el reproceso (el material se descuenta del inventario; "Quitar" lo devuelve); (3) <b>incluir otros procesos de la OP</b> que también se rehicieron pero el operario no marcó como reproceso (por ejemplo, el corte y la guillotina de una reimpresión); y (4) quitar un registro que no era parte del reproceso.</p>
         <div class="help-tip"><b>Tip:</b> el informe de Reprocesos se imprime con una fila por OP y se exporta a Excel con dos hojas: "Reprocesos por OP" y "Detalle por proceso" (costo de cada proceso).</div>
+      </div>
+
+      <div class="card" id="ayuda-informes-op">
+        <div class="card-head"><h3>Informes de órdenes</h3></div>
+        <p>En <b>Operación → Informes de órdenes</b> eliges el informe, el rango de fechas y pulsas <b>Consultar</b>: listar OP, OP por cliente, OP que consumen un material o insumo (con cantidades), OP laminadas (cantidad y área), OP argolladas y <b>Parámetros de piso</b> (unidades por hora reales vs. el estándar de cada área, que se define en la misma pantalla). Todos se pueden imprimir.</p>
+        <p>En una orden, cada pieza puede pedir <b>más de un material</b> ("Otros materiales de esta pieza"): por ejemplo 500 pliegos del papel principal y 100 de otro. Al imprimir una orden, cada pieza sale en su propia hoja.</p>
       </div>
 
       <div class="card" id="ayuda-admin">

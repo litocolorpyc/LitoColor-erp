@@ -10,6 +10,7 @@ import { initAlertas, renderAlertas } from './alertas.js';
 import { initCostos, poblarDatalistProveedores } from './costos.js';
 import { initRecibosCaja } from './recibos.js';
 import { initVentas, repararValorNetoFacturasVenta } from './ventas.js';
+import { initInformesOP } from './informes-op.js';
 import { initConsultaTiempos, renderConsultaTiempos } from './consulta-tiempos.js';
 import { initInventario, renderInventario } from './inventario.js';
 import { initRemisiones, actualizarNumeroPreview } from './remisiones.js';
@@ -102,6 +103,7 @@ async function arrancarApp(){
       .catch(e => console.error('Error reparando valor neto de facturas de venta:', e));
   });
   pasoSeguro('Consulta de tiempos por operario', initConsultaTiempos);
+  pasoSeguro('Informes de órdenes', initInformesOP);
   pasoSeguro('Inventario', initInventario);
   // Deja resueltas en la base las "órdenes esperando material" que ya no
   // aplican (papel ya cortado, orden cerrada, stock ya cubierto).
