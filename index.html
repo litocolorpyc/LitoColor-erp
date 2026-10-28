@@ -193,6 +193,22 @@
         </div>
       </div>
 
+      <div class="card" id="ger-ind-card">
+        <div class="card-head">
+          <h3>Indicadores del manejo de daños</h3>
+          <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <label class="card-hint" for="ger-ind-meses">Últimos</label>
+            <select id="ger-ind-meses" style="width:auto"><option value="3">3 meses</option><option value="6" selected>6 meses</option><option value="12">12 meses</option></select>
+            <button type="button" class="btn-secondary" id="ger-ind-excel" style="margin:0">⬇ Excel</button>
+            <button type="button" class="btn-secondary" id="ger-ind-imprimir" style="margin:0">🖶 Imprimir</button>
+          </span>
+        </div>
+        <p class="card-hint" style="margin-top:0">Procedimiento PR-PROD-DAÑ-01 (sección 10). Un caso cuenta en el mes en que se detecta; los casos son los reprocesos (uno por OP) más los daños de maquinaria e infraestructura. <b>Verde</b>: cumple la meta · <b>violeta</b>: cerca · <b>frambuesa</b>: lejos. Las ventas son las facturas y remisiones registradas en el aplicativo.</p>
+        <div class="kpi-row" id="ger-ind-kpis"></div>
+        <canvas id="ger-ind-chart" height="95"></canvas>
+        <div class="table-wrap" id="ger-ind-tabla" style="margin-top:10px"></div>
+      </div>
+
       <div class="card" id="ger-reprocesos-card">
         <div class="card-head"><h3>Reprocesos</h3><span class="card-hint">una fila por OP (cuenta como un reproceso aunque se hayan rehecho varios procesos) · el costo suma todos los procesos involucrados · haz clic en una fila para ver la orden y sus reprocesos</span></div>
         <div class="kpi-row" id="ger-rep-kpis"></div>
@@ -945,6 +961,22 @@
       <div class="card-head" style="margin-bottom:14px">
         <h3 style="margin:0">Reprocesos</h3>
         <button type="button" class="btn-primary" id="rep-abrir-crear" style="margin:0">+ Nuevo reproceso</button>
+      </div>
+
+      <div class="card" id="rep-ind-card">
+        <div class="card-head">
+          <h3>Indicadores del manejo de daños</h3>
+          <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <label class="card-hint" for="rep-ind-meses">Últimos</label>
+            <select id="rep-ind-meses" style="width:auto"><option value="3">3 meses</option><option value="6" selected>6 meses</option><option value="12">12 meses</option></select>
+            <button type="button" class="btn-secondary" id="rep-ind-excel" style="margin:0">⬇ Excel</button>
+            <button type="button" class="btn-secondary" id="rep-ind-imprimir" style="margin:0">🖶 Imprimir</button>
+          </span>
+        </div>
+        <p class="card-hint" style="margin-top:0">Procedimiento PR-PROD-DAÑ-01 (sección 10). Un caso cuenta en el mes en que se detecta; los casos son los reprocesos (uno por OP) más los daños de maquinaria e infraestructura. <b>Verde</b>: cumple la meta · <b>violeta</b>: cerca · <b>frambuesa</b>: lejos. Las ventas son las facturas y remisiones registradas en el aplicativo.</p>
+        <div class="kpi-row" id="rep-ind-kpis"></div>
+        <canvas id="rep-ind-chart" height="95"></canvas>
+        <div class="table-wrap" id="rep-ind-tabla" style="margin-top:10px"></div>
       </div>
 
       <div class="card" id="rep-crear-card" style="display:none">

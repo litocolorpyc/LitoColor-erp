@@ -5,6 +5,8 @@ import { getCurrentUser } from './auth.js';
 import { areasCompletadasPorPieza, mostrarDetalleOrden } from './ordenes.js';
 import { listaAreasDisponibles, moverStockMaterial } from './registrar.js';
 import { movimientosPorProduccion, agruparReprocesosPorOP, claseDeMovimiento, sumarCostos } from './reproceso-costos.js';
+import { montarEvidencias, cargarEvidencias, evidenciasDe, urlFirmada } from './evidencias.js';
+import { renderIndicadoresReprocesos } from './reproceso-indicadores.js';
 
 // "Reprocesos" (pedido 17-18sep26): reabrir un proceso YA completado de
 // una suborden, con motivo/responsable/costo adicional — se guarda como
@@ -71,6 +73,19 @@ function estadoGrupo(g){
 // raíz, acción correctiva y cierre. Sin fila = caso "Abierto".
 const ESTADOS_CASO = ['Abierto', 'En análisis', 'Cerrado'];
 const SEVERIDADES = ['Menor', 'Mayor', 'Crítico'];
+// Análisis preliminar (paso 8.4): lista de chequeo y a qué se asocia el daño.
+const CHECK_ITEMS = [
+  ['maquina', 'Máquina en buen estado y con mantenimiento vigente'],
+  ['instrucciones', 'Instrucciones y parámetros del proceso vigentes'],
+  ['capacitacion', 'Trabajador capacitado y con supervisión'],
+  ['condiciones', 'Condiciones de trabajo adecuadas (iluminación, orden, EPP, carga laboral)']
+];
+const CAUSAS_TIPO = ['Proceso o falla técnica', 'Evento externo', 'Comportamiento humano'];
+const NOTA_CAUSA = {
+  'Proceso o falla técnica': 'Si la causa es del proceso o técnica, NO procede sanción ni cobro: se activa la corrección y la acción correctiva (paso 8.4 del procedimiento).',
+  'Evento externo': 'Si la causa es un evento externo (cliente, proveedor, material), NO procede sanción ni cobro: se registra y se activa la acción correctiva.',
+  'Comportamiento humano': 'Si se asocia a comportamiento humano, el debido proceso (citación, descargos, decisión) lo lleva Talento Humano fuera del aplicativo; aquí solo queda registrada la causa.'
+};
 const CLASIFICACIONES = ['Materia prima', 'Producto en proceso', 'Producto terminado', 'Maquinaria o herramienta', 'Infraestructura', 'Propiedad del cliente'];
 
 function casoDe(key){
@@ -80,13 +95,28 @@ function casoDe(key){
 export async function cargarCasosReproceso(){
   const { data, error } = await sb.from('reproceso_casos').select('*');
   if(!error) DB.reproceso_casos = data || [];
+  await cargarEvidencias();
+  await asegurarCasosFaltantes();
+}
+
+// Todo reproceso debe tener su ficha de caso con número propio (DAN-0001…). Los
+// que marca el operario en su tableta (sin sesión) no pueden crearla; se crean
+// aquí, en orden cronológico, la próxima vez que alguien con sesión abre la pestaña.
+async function asegurarCasosFaltantes(){
+  if(!getCurrentUser()) return;
+  const grupos = agruparReprocesosPorOP(reprocesosDeProduccion(), movimientosPorProduccion());
+  const faltan = grupos.filter(g => !casoDe(g.key)).sort((a, b) => a.fechaIni.localeCompare(b.fechaIni));
+  for(const g of faltan){
+    const { data, error } = await sb.from('reproceso_casos').insert([{ clave: g.key }]).select();
+    if(!error && data) DB.reproceso_casos.push(data[0]);
+  }
 }
 
 function badgeCaso(key){
   const c = casoDe(key);
   const estado = c ? c.estado : 'Abierto';
   const color = estado === 'Cerrado' ? 'var(--good)' : (estado === 'En análisis' ? MARCA.violet : 'var(--bad)');
-  return `<span style="color:${color};font-weight:600">${estado}</span>${c && c.severidad ? `<div class="card-hint" style="font-size:10.5px">${esc(c.severidad)}</div>` : ''}`;
+  return `<span style="color:${color};font-weight:600">${estado}</span>${c && c.numero ? `<div class="card-hint" style="font-size:10.5px">${esc(c.numero)}</div>` : ''}${c && c.severidad ? `<div class="card-hint" style="font-size:10.5px">${esc(c.severidad)}</div>` : ''}`;
 }
 
 function diasEntre(desde, hasta){
@@ -264,6 +294,7 @@ async function crearReproceso(){
     // Si la OP ya tenía reproceso, se deja el mismo motivo/área de origen en
     // todos sus registros — sigue siendo UN reproceso.
     await igualarDatosDeLaOP(orden, { motivo_reproceso: motivo, area_origen_reproceso: areaOrigen });
+    await asegurarCasosFaltantes();
     toast(`Reproceso creado — ${operario} · ${area} · orden ${etiquetaOrden(orden)}`);
     limpiarFormularioReproceso();
     ocultarCrearCard();
@@ -390,6 +421,7 @@ export function renderListadoReprocesos(){
 // y reabre el detalle en la misma posición.
 function refrescarTrasCambio(key){
   renderListadoReprocesos();
+  renderIndicadoresReprocesos();
   renderInformeReprocesos();
   const tr = document.querySelector(`#tbl-rep-listado tbody tr[data-key="${key}"]`);
   if(!tr) return;
@@ -464,11 +496,19 @@ function abrirDetalleOP(tr, g){
     </div>
     <p class="card-hint">Se guarda igual en todos los procesos de este reproceso — para estadísticas cuenta como uno solo.</p>
 
-    <h4 style="margin:12px 0 6px">Seguimiento y cierre del caso</h4>
+    <h4 style="margin:12px 0 6px">Seguimiento y cierre del caso${caso.numero ? ' · ' + esc(caso.numero) : ''}</h4>
     <div class="form-row">
       <div class="field"><label>Estado del caso</label><select class="rep-caso-estado">${ESTADOS_CASO.map(e => `<option${e === caso.estado ? ' selected' : ''}>${e}</option>`).join('')}</select></div>
       <div class="field"><label>Severidad</label><select class="rep-caso-severidad"><option value="">—</option>${SEVERIDADES.map(e => `<option${e === caso.severidad ? ' selected' : ''}>${e}</option>`).join('')}</select></div>
       <div class="field"><label>Qué se dañó (clasificación)</label><select class="rep-caso-clasif"><option value="">—</option>${CLASIFICACIONES.map(e => `<option${e === caso.clasificacion ? ' selected' : ''}>${e}</option>`).join('')}</select></div>
+    </div>
+    <p class="card-hint" style="margin:6px 0 4px"><b>Análisis preliminar</b> (paso 8.4): antes de buscar un responsable, revisa si la causa está en el proceso.</p>
+    <div class="form-row">
+      ${CHECK_ITEMS.map(([k, t]) => `<div class="field"><label>${t}</label><select class="rep-chk" data-k="${k}"><option value="">—</option>${['Sí', 'No', 'No aplica'].map(v => `<option${v === ((caso.checklist || {})[k]) ? ' selected' : ''}>${v}</option>`).join('')}</select></div>`).join('')}
+    </div>
+    <div class="form-row">
+      <div class="field"><label>El daño se asocia a</label><select class="rep-caso-causatipo"><option value="">—</option>${CAUSAS_TIPO.map(e => `<option${e === caso.causa_tipo ? ' selected' : ''}>${e}</option>`).join('')}</select></div>
+      <div class="field" style="flex:2"><p class="card-hint rep-causa-nota" style="margin:20px 0 0">${esc(NOTA_CAUSA[caso.causa_tipo] || '')}</p></div>
     </div>
     <div class="form-row">
       <div class="field"><label>Causa raíz <span class="card-hint">(¿por qué pasó? — hasta llegar a la causa de fondo)</span></label><textarea class="rep-caso-causa" rows="2">${esc(caso.causa_raiz || '')}</textarea></div>
@@ -480,7 +520,11 @@ function abrirDetalleOP(tr, g){
       <div class="field"><label>Verificación y lecciones aprendidas</label><input type="text" class="rep-caso-lecciones" value="${esc(caso.lecciones || '')}" placeholder="¿la corrección funcionó? ¿qué se aprendió?"></div>
     </div>
     <div class="form-foot"><span class="card-hint">${caso.estado === 'Cerrado' && caso.fecha_cierre ? `Cerrado el ${String(caso.fecha_cierre).slice(0,10)} · ${diasEntre(g.fechaIni, caso.fecha_cierre)} día(s) desde el primer proceso.` : 'Para cerrar el caso se piden severidad, causa raíz y acción correctiva, y que todos los procesos estén terminados.'}</span>
+      <button type="button" class="btn-secondary rep-caso-expediente" style="margin:0">🖶 Expediente</button>
       <button type="button" class="btn-primary rep-caso-guardar">Guardar seguimiento</button></div>
+
+    <h4 style="margin:12px 0 6px">Evidencias (fotos y documentos)</h4>
+    <div class="rep-evid"></div>
 
     <h4 style="margin:12px 0 6px">Procesos involucrados y su costo</h4>
     <div class="table-wrap"><table class="detalle-mini-table">
@@ -520,6 +564,12 @@ function abrirDetalleOP(tr, g){
   const key = g.key;
   fila.querySelector('.rep-ed-cerrar').addEventListener('click', () => fila.remove());
 
+  fila.querySelector('.rep-caso-causatipo').addEventListener('change', (e) => {
+    fila.querySelector('.rep-causa-nota').textContent = NOTA_CAUSA[e.target.value] || '';
+  });
+  fila.querySelector('.rep-caso-expediente').addEventListener('click', () => imprimirExpediente(g));
+  montarEvidencias(fila.querySelector('.rep-evid'), key, () => renderIndicadoresReprocesos());
+
   fila.querySelector('.rep-caso-guardar').addEventListener('click', async (ev) => {
     const val = sel => fila.querySelector(sel).value.trim() || null;
     const estado = fila.querySelector('.rep-caso-estado').value;
@@ -527,6 +577,8 @@ function abrirDetalleOP(tr, g){
       clave: key, estado, severidad: val('.rep-caso-severidad'), clasificacion: val('.rep-caso-clasif'),
       causa_raiz: val('.rep-caso-causa'), accion_correctiva: val('.rep-caso-accion'),
       responsable_accion: val('.rep-caso-resp'), fecha_compromiso: val('.rep-caso-fecha'), lecciones: val('.rep-caso-lecciones'),
+      causa_tipo: val('.rep-caso-causatipo'),
+      checklist: (() => { const c = {}; fila.querySelectorAll('.rep-chk').forEach(s => { if(s.value) c[s.dataset.k] = s.value; }); return Object.keys(c).length ? c : null; })(),
       actualizado_por: getCurrentUser()?.nombre || null, actualizado_en: new Date().toISOString()
     };
     if(estado === 'Cerrado'){
@@ -748,6 +800,66 @@ async function quitarCostoReproceso(m){
 }
 
 // ---------- informe ----------
+// Expediente del caso (paso 8.14): todo lo del caso en una hoja imprimible — datos,
+// análisis preliminar, costos, causa raíz, acción correctiva, evidencias y firmas.
+async function imprimirExpediente(g){
+  const caso = casoDe(g.key) || { estado: 'Abierto' };
+  const o = g.orden != null ? DB.opp_ordenes.find(x => x.orden === g.orden) : null;
+  const evs = evidenciasDe(g.key);
+  const urls = await Promise.all(evs.map(e => urlFirmada(e.ruta)));
+  const imgs = evs.map((e, i) => ({ e, u: urls[i] })).filter(x => x.u && ((x.e.tipo || '').startsWith('image/') || /\.(jpe?g|png|webp)$/i.test(x.e.nombre))).slice(0, 8);
+  const fila = (l, v) => `<tr><td class="lbl">${l}</td><td>${v == null || v === '' ? '—' : esc(v)}</td></tr>`;
+  const procesos = g.registros.map(r => { const c = g.costosPorRegistro.get(r.id); return `<tr><td>${(r.fecha||'').slice(0,10)}</td><td>${r.suborden ?? '—'}</td><td>${esc(r.area||'—')}</td><td>${esc(r.operario||'—')}</td><td>${estadoReproceso(r)}</td><td class="num">${fmtCOP(c.mo)}</td><td class="num">${fmtCOP(c.mp)}</td><td class="num">${fmtCOP(c.ins)}</td><td class="num">${fmtCOP(c.otros)}</td><td class="num"><b>${fmtCOP(c.total)}</b></td></tr>`; }).join('');
+  const chk = CHECK_ITEMS.map(([k, t]) => `<tr><td>${t}</td><td>${esc((caso.checklist || {})[k] || '—')}</td></tr>`).join('');
+  const dias = caso.estado === 'Cerrado' && caso.fecha_cierre ? diasEntre(g.fechaIni, caso.fecha_cierre) : null;
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Expediente ${esc(caso.numero || '')} — OP ${g.orden != null ? etiquetaOrden(g.orden) : 'sin orden'}</title>
+<style>
+  body{ font-family: Arial, Helvetica, sans-serif; color:#111; margin:20px; }
+  h1{ font-size:19px; margin:0 0 2px; } .sub{ color:#444; font-size:12.5px; margin-bottom:12px; }
+  h2{ font-size:14px; margin:16px 0 6px; border-bottom:1px solid #999; padding-bottom:3px; }
+  table{ border-collapse:collapse; width:100%; margin-bottom:6px; font-size:12px; }
+  td, th{ border:1px solid #ccc; padding:4px 6px; text-align:left; vertical-align:top; } td.lbl{ color:#555; width:30%; background:#F4F6FA; } .num{ text-align:right; }
+  .txt{ font-size:12.5px; border:1px solid #ccc; padding:6px 8px; min-height:34px; white-space:pre-wrap; }
+  .fotos{ display:flex; flex-wrap:wrap; gap:8px; } .fotos figure{ margin:0; width:48%; } .fotos img{ width:100%; max-height:230px; object-fit:contain; border:1px solid #ccc; } .fotos figcaption{ font-size:10.5px; color:#555; }
+  .firmas{ display:flex; gap:20px; margin-top:34px; } .firmas div{ flex:1; border-top:1px solid #333; padding-top:4px; font-size:11.5px; text-align:center; }
+  tr, figure{ page-break-inside:avoid; }
+  ${MARCA_CSS}
+</style></head><body>
+  ${encabezadoMarca()}
+  <h1>Expediente del caso ${esc(caso.numero || '')} — ${g.orden != null ? 'OP ' + etiquetaOrden(g.orden) : 'reproceso sin OP'}</h1>
+  <div class="sub">Procedimiento PR-PROD-DAÑ-01 · Manejo de daños en producción · emitido el ${fechaHoyLocal()}</div>
+  <h2>1. Datos del caso</h2>
+  <table><tbody>
+    ${fila('Cliente', o && o.cliente)}${fila('Producto', o && o.producto)}
+    ${fila('Fechas', `${g.fechaIni.slice(0,10)}${g.fechaFin !== g.fechaIni ? ' a ' + g.fechaFin.slice(0,10) : ''}`)}
+    ${fila('Motivo', g.motivo)}${fila('Área que lo generó', g.areaOrigen)}${fila('Áreas rehechas', g.areasRehechas.join(', '))}
+    ${fila('Responsable (quién o qué lo causó)', g.responsable)}${fila('Operarios', g.operarios.join(', '))}
+    ${fila('Estado del caso', caso.estado + (caso.fecha_cierre ? ' · cerrado el ' + String(caso.fecha_cierre).slice(0,10) + (dias != null ? ` (${dias} día(s))` : '') : ''))}
+    ${fila('Severidad', caso.severidad)}${fila('Qué se dañó', caso.clasificacion)}${fila('El daño se asocia a', caso.causa_tipo)}
+  </tbody></table>
+  <h2>2. Análisis preliminar (paso 8.4)</h2>
+  <table><tbody>${chk}</tbody></table>
+  <h2>3. Costo (paso 8.5)</h2>
+  <table><thead><tr><th>Fecha</th><th>Sub.</th><th>Área rehecha</th><th>Operario</th><th>Estado</th><th class="num">Mano de obra</th><th class="num">Materia prima</th><th class="num">Insumos</th><th class="num">Otros</th><th class="num">Total</th></tr></thead>
+    <tbody>${procesos}</tbody>
+    <tfoot><tr><th colspan="5">Total</th><th class="num">${fmtCOP(g.costos.mo)}</th><th class="num">${fmtCOP(g.costos.mp)}</th><th class="num">${fmtCOP(g.costos.ins)}</th><th class="num">${fmtCOP(g.costos.otros)}</th><th class="num">${fmtCOP(g.costos.total)}</th></tr></tfoot></table>
+  <h2>4. Causa raíz (paso 8.6)</h2><div class="txt">${esc(caso.causa_raiz || '')}</div>
+  <h2>5. Acción correctiva</h2><div class="txt">${esc(caso.accion_correctiva || '')}</div>
+  <table style="margin-top:6px"><tbody>${fila('Responsable de la acción', caso.responsable_accion)}${fila('Fecha compromiso', String(caso.fecha_compromiso || '').slice(0,10))}</tbody></table>
+  <h2>6. Verificación y lecciones aprendidas (paso 8.13)</h2><div class="txt">${esc(caso.lecciones || '')}</div>
+  <h2>7. Evidencias (${evs.length})</h2>
+  ${evs.length ? `<table><tbody>${evs.map(e => `<tr><td>${esc(e.nombre)}</td><td>${String(e.subido_en || '').slice(0,10)}</td><td>${esc(e.subido_por || '')}</td></tr>`).join('')}</tbody></table>` : '<p style="font-size:12px;color:#555">Sin evidencias adjuntas.</p>'}
+  ${imgs.length ? `<div class="fotos">${imgs.map(x => `<figure><img src="${x.u}" alt=""><figcaption>${esc(x.e.nombre)}</figcaption></figure>`).join('')}</div>` : ''}
+  <div class="firmas"><div>Elaboró (Jefe de Producción)</div><div>Revisó (Calidad / Talento Humano)</div><div>Aprobó (Gerencia General)</div></div>
+</body></html>`;
+  const w = window.open('', '_blank');
+  if(!w){ toast('El navegador bloqueó la ventana de impresión — permite ventanas emergentes para este sitio'); return; }
+  w.document.write(html); w.document.close();
+  agregarBotonExcelVentana(w, w.document.title);
+  w.focus();
+  setTimeout(() => w.print(), imgs.length ? 1800 : 300);
+}
+
 function datosInforme(){
   const desde = document.getElementById('rep-inf-desde').value || '2024-01-01';
   const hasta = document.getElementById('rep-inf-hasta').value || fechaHoyLocal();
@@ -933,5 +1045,5 @@ export function initReprocesos(){
   poblarPiezasRep(null);
   renderListadoReprocesos();
   renderInformeReprocesos();
-  cargarCasosReproceso().then(renderListadoReprocesos);
+  cargarCasosReproceso().then(() => { renderListadoReprocesos(); renderIndicadoresReprocesos(); });
 }
