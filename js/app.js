@@ -12,6 +12,7 @@ import { initRecibosCaja } from './recibos.js';
 import { initVentas, repararValorNetoFacturasVenta } from './ventas.js';
 import { initInformesOP } from './informes-op.js';
 import { initAdministrativo, renderAdministrativo } from './administrativo.js';
+import { initPantallaPlanta, renderPantallaPlanta } from './pantalla-planta.js';
 import { initConsultaTiempos, renderConsultaTiempos } from './consulta-tiempos.js';
 import { initInventario, renderInventario } from './inventario.js';
 import { initRemisiones, actualizarNumeroPreview } from './remisiones.js';
@@ -30,6 +31,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
 function onRegistrarChange(){
   pasoSeguro('refrescar Gerencial', renderGerencial);
+  pasoSeguro('refrescar Pantalla de planta', renderPantallaPlanta);
   pasoSeguro('refrescar Panel administrativo', renderAdministrativo);
   pasoSeguro('refrescar Producción', renderProduccion);
   pasoSeguro('refrescar Operario', renderOperario);
@@ -107,6 +109,7 @@ async function arrancarApp(){
   pasoSeguro('Consulta de tiempos por operario', initConsultaTiempos);
   pasoSeguro('Informes de órdenes', initInformesOP);
   pasoSeguro('Panel administrativo', initAdministrativo);
+  pasoSeguro('Pantalla de planta', initPantallaPlanta);
   pasoSeguro('Inventario', initInventario);
   // Deja resueltas en la base las "órdenes esperando material" que ya no
   // aplican (papel ya cortado, orden cerrada, stock ya cubierto).

@@ -249,3 +249,30 @@ select, input, textarea{ font-family:inherit; font-size:13px; padding:7px 9px; b
 #tbl-rem-ordenes-cliente tbody tr{ cursor:pointer; }
 #tbl-rem-ordenes-cliente tbody tr:hover{ background:rgba(194,74,31,.06); }
 .toast.show{ opacity:1; transform:translateY(0); }
+
+/* Pantalla de planta (televisor): letra grande, solo lectura. */
+.pp-contenedor{ background:var(--paper); border-radius:12px; padding:18px 22px; }
+.pp-contenedor:fullscreen{ padding:3vh 4vw; display:flex; flex-direction:column; }
+.pp-contenedor:fullscreen #pp-tablero{ flex:1; }
+.pp-head{ display:flex; justify-content:space-between; align-items:baseline; border-bottom:4px solid; padding-bottom:8px; margin-bottom:10px; }
+.pp-area{ font-size:clamp(28px,4.2vw,64px); font-weight:800; letter-spacing:.01em; }
+.pp-total{ font-size:clamp(16px,2vw,30px); color:var(--ink-soft); }
+.pp-row{ display:grid; grid-template-columns:1.6em 4.4em minmax(0,1fr) 4.2em 6.2em; gap:14px; align-items:center; padding:10px 6px; border-bottom:1px solid var(--line); font-size:clamp(16px,2.1vw,34px); }
+.pp-row:first-child{ background:var(--card); font-weight:600; }
+.pp-num{ color:var(--ink-faint); font-weight:700; text-align:right; }
+.pp-op{ font-weight:800; white-space:nowrap; }
+.pp-op small{ font-weight:600; color:var(--ink-soft); font-size:.7em; }
+.pp-cli{ font-weight:700; line-height:1.15; }
+.pp-prod{ font-weight:600; }
+.pp-sub{ color:var(--ink-soft); font-weight:400; font-size:.85em; }
+.pp-cant{ text-align:right; font-variant-numeric:tabular-nums; }
+.pp-estado{ text-align:right; }
+.pp-badge{ display:inline-block; font-size:.62em; font-weight:700; padding:3px 12px; border-radius:30px; }
+.pp-badge-curso{ background:var(--good); color:#fff; }
+.pp-badge-asig{ background:var(--brand-soft,#e8f0fb); color:var(--brand,#185FA5); }
+.pp-vacio{ padding:40px 10px; text-align:center; color:var(--ink-faint); font-size:clamp(18px,2.4vw,40px); }
+.pp-mas{ padding:10px 6px; color:var(--ink-soft); font-size:clamp(14px,1.6vw,26px); }
+.pp-barra{ display:flex; justify-content:space-between; align-items:center; margin-top:14px; }
+.pp-puntos{ display:flex; gap:10px; }
+.pp-punto{ width:14px; height:14px; border-radius:50%; background:var(--line); }
+.pp-pie{ color:var(--ink-faint); font-size:14px; }

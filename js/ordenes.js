@@ -975,13 +975,13 @@ async function persistirPrioridad(){
 // (y al número de suborden), igual que getPiezasPendientesPorPrioridad().
 let prioridadAreaDragRow = null;
 
-function nombresDeAreas(){
+export function nombresDeAreas(){
   return DB.areas.filter(a => a.activo !== false)
     .sort((a,b) => (a.orden ?? 999) - (b.orden ?? 999))
     .map(a => a.nombre);
 }
 
-function piezasPendientesDeArea(area){
+export function piezasPendientesDeArea(area){
   const filas = [];
   DB.opp_ordenes.filter(ordenEnCurso).forEach(o => {
     DB.opp_piezas.filter(p => p.orden === o.orden).forEach(p => {
@@ -1016,7 +1016,7 @@ function poblarSelectPrioridadArea(){
 
 // Registro de producción "asignado, sin iniciar" (horaIni null) que ya
 // exista para esta pieza+área — así se reasigna/quita en vez de duplicar.
-function asignacionPendienteDeSuborden(orden, suborden, area){
+export function asignacionPendienteDeSuborden(orden, suborden, area){
   return DB.produccion.find(r => r.orden === orden && r.suborden === suborden && r.area === area && !r.horaIni && !r.horaFin) || null;
 }
 
