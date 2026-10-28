@@ -54,6 +54,11 @@ async function quitar(ev){
   return true;
 }
 
+// Borra TODAS las evidencias de un caso o daño (cuando se borra el caso).
+export async function quitarEvidencias(clave){
+  for(const ev of evidenciasDe(clave).slice()) await quitar(ev);
+}
+
 // Dibuja el bloque de evidencias dentro de `cont` y lo mantiene al día.
 export async function montarEvidencias(cont, clave, onCambio){
   async function pintar(){

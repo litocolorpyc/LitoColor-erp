@@ -67,6 +67,7 @@
         <button class="tab-btn" data-tab="remisiones" role="tab">Remisión</button>
         <button class="tab-btn" data-tab="inventario" role="tab">Inventario</button>
         <button class="tab-btn" data-tab="producto-terminado" role="tab">Producto terminado</button>
+        <button class="tab-btn" data-tab="danos-equipos" role="tab">Daños de equipos</button>
         <button class="tab-btn" data-tab="informes-op" role="tab">Informes de órdenes</button>
         <button class="tab-btn" data-tab="pantalla-planta" role="tab">Pantalla de planta</button>
       </div>
@@ -521,6 +522,52 @@
           <div class="field" style="max-width:220px"><label>Estado</label><select id="ipt-inv-f"></select></div>
         </div>
         <div class="table-wrap" id="ipt-inv-tabla"></div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-danos-equipos">
+      <div class="card">
+        <div class="card-head">
+          <h2 class="card-title" style="margin:0">Daños de equipos</h2>
+          <button type="button" class="btn-secondary" id="dq-exportar" style="margin:0">⬇ Excel</button>
+        </div>
+        <p class="card-hint" style="margin:6px 0 0">Daños de maquinaria, herramientas e infraestructura. El costo de la reparación entra solo a <b>Registrar costo</b> como mantenimiento correctivo (o reparación de infraestructura), y cuenta en los indicadores del manejo de daños.</p>
+      </div>
+      <div class="kpi-row" id="dq-kpis"></div>
+
+      <div class="card" id="dq-form">
+        <div class="card-head"><h3 id="dq-modo">Registrar un daño</h3><span class="card-hint">cada daño recibe su número (MAN-0001…)</span></div>
+        <div class="form-row">
+          <div class="field" style="max-width:170px"><label>Fecha</label><input type="date" id="dq-fecha"></div>
+          <div class="field" style="max-width:200px"><label>Tipo</label><select id="dq-tipo"></select></div>
+          <div class="field" id="dq-maquina-wrap"><label>Máquina o herramienta</label><select id="dq-maquina"></select></div>
+          <div class="field"><label>Área</label><select id="dq-area"></select></div>
+        </div>
+        <div class="field full"><label>Qué se dañó y cómo pasó</label><textarea id="dq-desc" rows="2" placeholder="ej. Se rompió la banda de la guillotina durante el corte de la OP 6021"></textarea></div>
+        <div class="form-row">
+          <div class="field" style="max-width:170px"><label>Horas de paro</label><input type="number" id="dq-paro" min="0" step="any"></div>
+          <div class="field" style="max-width:200px"><label>Costo de la reparación</label><input type="number" id="dq-costo" min="0" step="any" placeholder="repuestos y servicio"></div>
+          <div class="field"><label>Proveedor / técnico</label><input type="text" id="dq-prov" list="rc-proveedor-list" placeholder="quién lo reparó"></div>
+          <div class="field" style="max-width:170px"><label>Orden afectada <span class="card-hint">(opcional)</span></label><input type="text" id="dq-orden" placeholder="ej. 6021"></div>
+          <div class="field" style="max-width:150px"><label>Severidad</label><select id="dq-sev"></select></div>
+        </div>
+        <div class="form-foot"><span></span>
+          <button type="button" class="btn-secondary" id="dq-cancelar" style="display:none">Cancelar edición</button>
+          <button type="button" class="btn-primary" id="dq-guardar">Guardar</button></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card"><div class="card-head"><h3>Costo de reparaciones por máquina</h3><span class="card-hint">las 8 que más cuestan</span></div><canvas id="dq-chart" height="190"></canvas></div>
+        <div class="card"><div class="card-head"><h3>Por área</h3><span class="card-hint">cuando existan los departamentos, también por departamento</span></div><div class="table-wrap" id="dq-areas"></div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Daños registrados</h3><span class="card-hint">"Seguimiento" abre la causa raíz, la acción correctiva, el cierre y las evidencias</span></div>
+        <div class="form-row">
+          <div class="field"><label>Buscar</label><input type="text" id="dq-q" placeholder="número, máquina, área, descripción…"></div>
+          <div class="field" style="max-width:220px"><label>Tipo</label><select id="dq-ft"></select></div>
+        </div>
+        <div class="table-wrap" id="dq-tabla"></div>
       </div>
     </section>
 
