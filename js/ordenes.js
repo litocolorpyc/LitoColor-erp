@@ -1,5 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
+import { AREAS_COMERCIALES, areaPorDefecto } from './areas-comerciales.js';
 import { toast, fmtNum, exportarExcel, fechaHoyLocal, wireTableScroll, agregarBotonExcelVentana, etiquetaOrden, parseOrden, esOrdenServicio, BASE_ORDEN_SERVICIO, requerimientosMaterialPieza, MARCA, MARCA_CSS, encabezadoMarca } from './helpers.js';
 import { getCurrentUser, puedeEditarProduccion } from './auth.js';
 import { poblarDatalistProveedores } from './costos.js';
@@ -158,6 +159,22 @@ function aplicarTipoTrabajo(){
   const hint = document.getElementById('opp-tipo-trabajo-hint');
   if(hint) hint.textContent = HINT_TIPO_TRABAJO[tipo] || '';
   refreshProveedoresDatalist();
+  sincronizarAreaComercial();
+}
+
+// El área comercial sale por defecto del tipo de trabajo (o de ser orden de servicio),
+// mientras la persona no la haya elegido a mano.
+function sincronizarAreaComercial(){
+  const sel = document.getElementById('opp-area-comercial');
+  if(!sel || sel.dataset.manual === '1') return;
+  const tipo = document.getElementById('opp-tipo-trabajo')?.value || 'Litografia';
+  sel.value = areaPorDefecto(tipo, parseOrden(document.getElementById('opp-orden')?.value));
+}
+function fijarAreaComercial(o){
+  const sel = document.getElementById('opp-area-comercial');
+  if(!sel) return;
+  sel.value = (o && o.area_comercial) || areaPorDefecto(o && o.tipo_trabajo, o && o.orden);
+  sel.dataset.manual = '1'; // ya viene definida: no se vuelve a pisar sola
 }
 
 export function refreshPapelPliegoSelects(){
@@ -2092,7 +2109,7 @@ function resetOppForm(nextOrden){
   document.getElementById('opp-orden').disabled = false;
   document.getElementById('opp-fecha').value = fechaHoyLocal();
   document.getElementById('opp-observaciones').value = '';
-  { const a = document.getElementById('opp-cant-pedido'), u = document.getElementById('opp-unidad-pedido'); if(a) a.value = ''; if(u) u.value = 'unid.'; }
+  { const a = document.getElementById('opp-cant-pedido'), u = document.getElementById('opp-unidad-pedido'); if(a) a.value = ''; if(u) u.value = 'unid.'; const s = document.getElementById('opp-area-comercial'); if(s){ s.dataset.manual = ''; s.value = 'Litografía'; } }
   setValSafe('opp-tipo-trabajo', 'Litografia');
   aplicarTipoTrabajo();
   addPiezaCard();
@@ -2106,7 +2123,7 @@ function loadOrdenParaEditar(orden){
   document.getElementById('opp-orden').value = etiquetaOrden(orden);
   document.getElementById('opp-orden').disabled = true;
   document.getElementById('opp-observaciones').value = o.observaciones || '';
-  { const a = document.getElementById('opp-cant-pedido'), u = document.getElementById('opp-unidad-pedido'); if(a) a.value = o.cantidad_pedido ?? ''; if(u) u.value = o.unidad_pedido || 'unid.'; }
+  { const a = document.getElementById('opp-cant-pedido'), u = document.getElementById('opp-unidad-pedido'); if(a) a.value = o.cantidad_pedido ?? ''; if(u) u.value = o.unidad_pedido || 'unid.'; fijarAreaComercial(o); }
   ensureOptionExists(document.getElementById('opp-cliente'), o.cliente || '');
   ensureOptionExists(document.getElementById('opp-cliente-prod'), o.cliente_produccion || '');
   ensureOptionExists(document.getElementById('opp-producto'), o.producto || '');
@@ -2138,7 +2155,7 @@ function duplicarOrden(orden){
   ensureOptionExists(document.getElementById('opp-producto'), o.producto || '');
   document.getElementById('opp-fecha').value = fechaHoyLocal();
   document.getElementById('opp-observaciones').value = ''; // observación es de la orden original, no aplica igual a la copia
-  { const a = document.getElementById('opp-cant-pedido'), u = document.getElementById('opp-unidad-pedido'); if(a) a.value = o.cantidad_pedido ?? ''; if(u) u.value = o.unidad_pedido || 'unid.'; }
+  { const a = document.getElementById('opp-cant-pedido'), u = document.getElementById('opp-unidad-pedido'); if(a) a.value = o.cantidad_pedido ?? ''; if(u) u.value = o.unidad_pedido || 'unid.'; fijarAreaComercial(o); }
   setValSafe('opp-tipo-trabajo', o.tipo_trabajo || 'Litografia');
   aplicarTipoTrabajo();
   renderProductoRef();
@@ -2244,6 +2261,7 @@ async function saveOpp(){
     const esExterno = esTipoExterno(tipoTrabajo);
     const cabecera = {
       orden, cliente,
+      area_comercial: document.getElementById('opp-area-comercial')?.value || null,
       cantidad_pedido: parseFloat(document.getElementById('opp-cant-pedido')?.value) || null,
       unidad_pedido: document.getElementById('opp-cant-pedido')?.value ? (document.getElementById('opp-unidad-pedido')?.value.trim() || 'unid.') : null,
       cliente_produccion: (() => { const v = document.getElementById('opp-cliente-prod')?.value.trim(); return (v && v !== '__nuevo__') ? v : null; })(),
@@ -2487,6 +2505,8 @@ export function initOppForm(onChange){
   wireNuevoInline('opp-producto', 'opp-producto-nuevo-wrap', 'opp-producto-nuevo-nombre', 'opp-producto-nuevo-add', 'productos', p => DB.productos.push(p));
   on('opp-producto', 'change', () => { renderProductoRef(); refreshPiezasDatalist(); });
   on('opp-tipo-trabajo', 'change', aplicarTipoTrabajo);
+  on('opp-area-comercial', 'change', () => { document.getElementById('opp-area-comercial').dataset.manual = '1'; });
+  on('opp-orden', 'input', sincronizarAreaComercial);
   poblarSelectPrioridadArea();
   on('opp-prioridad-area-select', 'change', renderPrioridadArea);
   resetOppForm();

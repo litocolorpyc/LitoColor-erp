@@ -19,7 +19,7 @@ const PAGINA_INICIO = { administradora: 'administrativo', gerente: 'dashboard-ge
 // por lo demás ve todo). La información del Excel de Julián (resumen
 // gerencial) es solo suya; la base de datos además lo exige (ver la migración
 // 20261028151000_datos_financieros_solo_gerente.sql).
-const SOLO_GERENTE = ['dashboard-gerente'];
+const SOLO_GERENTE = ['dashboard-gerente', 'resultado-areas'];
 
 let currentUser = null; // { email, nombre, rol, cargo }
 

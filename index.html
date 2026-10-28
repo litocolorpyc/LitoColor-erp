@@ -43,6 +43,7 @@
       <div class="sidebar-group">
         <div class="sidebar-group-label">Principal</div>
         <button class="tab-btn" data-tab="dashboard-gerente" role="tab">Resumen gerencial</button>
+        <button class="tab-btn" data-tab="resultado-areas" role="tab">Resultado por Área Comercial</button>
         <button class="tab-btn active" data-tab="gerencial" role="tab">Gerencial</button>
         <button class="tab-btn" data-tab="produccion" role="tab">Producción</button>
         <button class="tab-btn" data-tab="operario" role="tab">Operario</button>
@@ -558,7 +559,7 @@
 
       <div class="grid-2">
         <div class="card"><div class="card-head"><h3>Costo de reparaciones por máquina</h3><span class="card-hint">las 8 que más cuestan</span></div><canvas id="dq-chart" height="190"></canvas></div>
-        <div class="card"><div class="card-head"><h3>Por área</h3><span class="card-hint">cuando existan los departamentos, también por departamento</span></div><div class="table-wrap" id="dq-areas"></div></div>
+        <div class="card"><div class="card-head"><h3>Por área</h3><span class="card-hint">por área de producción</span></div><div class="table-wrap" id="dq-areas"></div></div>
       </div>
 
       <div class="card">
@@ -568,6 +569,65 @@
           <div class="field" style="max-width:220px"><label>Tipo</label><select id="dq-ft"></select></div>
         </div>
         <div class="table-wrap" id="dq-tabla"></div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-resultado-areas">
+      <div class="card">
+        <div class="card-head">
+          <h2 class="card-title" style="margin:0">Resultado por Área Comercial</h2>
+          <span style="display:flex;gap:8px">
+            <button type="button" class="btn-secondary" id="ra-exportar" style="margin:0">⬇ Excel</button>
+            <button type="button" class="btn-secondary" id="ra-actualizar" style="margin:0">↻ Actualizar</button>
+          </span>
+        </div>
+        <p class="card-hint" style="margin:6px 0 10px">Ventas, margen de contribución, costos fijos, utilidad neta y punto de equilibrio por Áreas Comerciales (Litografía, Servicio, Digital, Gran formato y Tercero), con el modelo del Excel de Julián. Los datos históricos son del Excel hasta octubre de 2026; después salen de las facturas y remisiones del aplicativo. <b>Solo el Gerente lo ve.</b></p>
+        <div class="form-row">
+          <div class="field" style="max-width:120px"><label>Año</label><select id="ra-anio"></select></div>
+          <div class="field" style="max-width:120px"><label>Desde</label><select id="ra-desde"></select></div>
+          <div class="field" style="max-width:120px"><label>Hasta</label><select id="ra-hasta"></select></div>
+          <div class="field" style="max-width:320px"><label>Repartir costos fijos entre áreas <span class="card-hint">(opcional)</span></label>
+            <select id="ra-reparto"><option value="ninguno">No repartir (como en el Excel)</option><option value="contribucion">Por margen de contribución</option><option value="ventas">Por ventas</option><option value="horas">Por horas registradas en órdenes</option></select></div>
+        </div>
+      </div>
+      <div class="kpi-row" id="ra-kpis"></div>
+
+      <div class="grid-2">
+        <div class="card"><div class="card-head"><h3>Por Área Comercial</h3><span class="card-hint">ventas y margen de contribución</span></div><div class="table-wrap" id="ra-areas"></div></div>
+        <div class="card"><div class="card-head"><h3>Comparación</h3><span class="card-hint">barras una al lado de la otra</span></div><canvas id="ra-chart" height="210"></canvas></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Margen real contra margen asumido</h3><span class="card-hint">con los datos del aplicativo</span></div>
+        <div class="table-wrap" id="ra-real"></div>
+      </div>
+
+      <div class="card" id="ra-sinarea-card" style="display:none">
+        <div class="card-head"><h3>Ventas sin Área Comercial</h3><span class="card-hint">líneas de factura o remisión sin orden: asígnales su área</span></div>
+        <div class="table-wrap" id="ra-sinarea"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Utilización de la mano de obra</h3><span class="card-hint">horas registradas en órdenes contra horas pagadas, en el último mes elegido</span></div>
+        <div class="table-wrap" id="ra-util"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Costos fijos del año</h3><span class="card-hint">desmarca "Cuenta" si un costo no es de la empresa · el % empresa es lo que le toca a la empresa · asigna un área si el costo es de una sola</span></div>
+        <p class="card-hint" id="ra-plan-aviso" style="margin:0 0 8px"></p>
+        <div class="table-wrap" id="ra-plan"></div>
+        <div class="form-row" style="margin-top:10px;align-items:flex-end">
+          <div class="field" style="max-width:200px"><label>Grupo</label><select id="ra-n-grupo"></select></div>
+          <div class="field"><label>Nuevo concepto</label><input type="text" id="ra-n-concepto" placeholder="ej. Mantenimiento preventivo"></div>
+          <div class="field" style="max-width:180px"><label>Valor mensual</label><input type="number" id="ra-n-valor" min="0" step="any"></div>
+          <div class="field" style="flex:0 0 auto"><button type="button" class="btn-primary" id="ra-n-agregar" style="margin:0">Agregar</button></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Márgenes de contribución y metas</h3><span class="card-hint">supuestos del Excel de Julián, editables por año</span></div>
+        <div class="form-row" id="ra-margenes"></div>
+        <p class="card-hint" style="margin:6px 0 0">Litografía usa el promedio de los márgenes por orden del año; Servicio 100% (no se registran costos de material); Digital 50%; Gran formato y Tercero entre 20% y 30%. La meta de margen de utilidad (35%) es la que mencionó Liliana.</p>
       </div>
     </section>
 
@@ -778,7 +838,9 @@
         <div class="form-row">
           <div class="field" style="max-width:250px"><label>Cantidad del pedido <span class="card-hint">(producto terminado; opcional)</span></label><input type="number" id="opp-cant-pedido" min="0" step="any" placeholder="ej. 1000"></div>
           <div class="field" style="max-width:150px"><label>Unidad</label><input type="text" id="opp-unidad-pedido" value="unid."></div>
-          <div class="field" style="justify-content:flex-end"><span class="card-hint" style="padding-bottom:8px">Sirve para comparar lo pedido con lo despachado y avisar si una orden terminada se entregó incompleta.</span></div>
+          <div class="field" style="max-width:220px"><label>Área comercial <span class="card-hint">(para el resultado por área)</span></label>
+            <select id="opp-area-comercial"><option>Litografía</option><option>Servicio</option><option>Digital</option><option>Gran formato</option><option>Tercero</option></select></div>
+          <div class="field" style="justify-content:flex-end"><span class="card-hint" style="padding-bottom:8px">La cantidad del pedido sirve para comparar lo pedido con lo despachado. El área comercial sale del tipo de trabajo, pero la puedes cambiar: <b>Tercero</b> = trabajo que se manda a hacer por fuera; <b>Servicio</b> = el cliente trae el material.</span></div>
         </div>
         <div id="opp-producto-ref" style="display:none;margin-bottom:14px"></div>
 
@@ -1743,6 +1805,13 @@
         <div class="card-head"><h3>Pantalla de planta</h3></div>
         <p>En <b>Operación → Pantalla de planta</b> hay una vista grande y de solo lectura pensada para un televisor. Va pasando por las áreas (Corte inicial, Litografía, Terminado…) mostrando el trabajo pendiente de cada una <b>en el orden de "Prioridad por área"</b> de Órdenes: número de orden y pieza, cliente (y para quién se produce), producto, cantidad, y si ya está <b>en curso</b> o <b>asignada a un operario</b>. Si un área tiene más trabajo del que cabe, lo muestra en varias páginas.</p>
         <p>Para el televisor: abre el sistema con <b>?pantalla=planta</b> al final de la dirección, inicia sesión una vez (por ejemplo con el usuario del Jefe de Producción) y pulsa <b>⛶ Pantalla completa</b>. Puedes dejar una sola área fija o rotar entre todas, y elegir cada cuántos segundos cambia. Los datos se actualizan solos cada 2 minutos; lo que Juan prioriza en Órdenes aparece sin tocar la pantalla.</p>
+      </div>
+
+      <div class="card" id="ayuda-resultado-areas">
+        <div class="card-head"><h3>Resultado por Área Comercial (solo Gerente)</h3></div>
+        <p>Las <b>Áreas Comerciales</b> son cinco: <b>Litografía</b>, <b>Servicio</b> (el cliente trae el material), <b>Digital</b>, <b>Gran formato</b> y <b>Tercero</b> (trabajos que el cliente encarga y se mandan a hacer por fuera: "Servicio de Impresión Externo" y "Trabajo Externo"). Cada orden tiene su <b>Área comercial</b> (campo junto a "Cantidad del pedido"): sale sola del tipo de trabajo, pero la puedes cambiar. Las líneas de factura y remisión toman el área de su orden; las que no tienen orden se asignan en el cuadro "Ventas sin Área Comercial".</p>
+        <p>En <b>Principal → Resultado por Área Comercial</b> el Gerente ve, por período: ventas por área, <b>margen de contribución</b> (ventas × el % de margen de cada área), <b>costos fijos</b>, <b>utilidad neta</b> (contribución − costos fijos), <b>margen de utilidad</b> contra la meta (35%) y el <b>punto de equilibrio</b> (costos fijos ÷ margen promedio). Como en el Excel, los costos fijos no se reparten por área; se pueden repartir como vista opcional (por margen, por ventas o por horas). Además compara el <b>margen real</b> (con los costos registrados con cada orden) contra el asumido, y muestra la <b>utilización de la mano de obra</b> (horas en órdenes contra horas pagadas).</p>
+        <p>Los <b>costos fijos del año</b> son editables: cada línea tiene una casilla <b>Cuenta</b> (si no es un costo de la empresa, se desmarca y deja de sumar), un <b>% empresa</b> (por ejemplo la bodega, que se divide en dos con Litocolor Publicidad) y un <b>área comercial</b> opcional (el arriendo de máquina está asignado a Gran formato; se puede cambiar). Para un año nuevo se crea el plan copiando el anterior. Los márgenes, los imprevistos y la meta se cambian en el último cuadro.</p>
       </div>
 
       <div class="card" id="ayuda-resumen-gerencial">

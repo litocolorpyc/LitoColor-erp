@@ -10,8 +10,7 @@ import { renderIndicadoresReprocesos } from './reproceso-indicadores.js';
 // paro, el costo de la reparación y su seguimiento (causa raíz, acción correctiva, cierre).
 // El costo entra solo a "Registrar costo" como costo de MANTENIMIENTO CORRECTIVO
 // (maquinaria y herramientas) o REPARACIÓN DE INFRAESTRUCTURA, así que aparece en los
-// informes de egresos. Se agrupa por máquina y por área (cuando existan los
-// departamentos de la Fase 7, se agrupará también por departamento).
+// informes de egresos. Se agrupa por máquina y por área de producción.
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
