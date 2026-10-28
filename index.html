@@ -154,6 +154,8 @@
           </span>
         </div>
         <div class="form-foot" style="margin-top:0;margin-bottom:10px;gap:10px;flex-wrap:wrap"><span style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <label style="display:flex;gap:6px;align-items:center">Vista
+            <select id="ger-rent-vista"><option value="rango">Movimiento del rango de fechas</option><option value="consolidado">Consolidado de cada orden (toda su historia)</option></select></label>
           <label style="display:flex;gap:6px;align-items:center">Ordenar por
             <select id="ger-rent-orden"><option value="ingreso">Ingreso (mayor a menor)</option><option value="op">N.º de OP (menor a mayor)</option><option value="op-desc">N.º de OP (mayor a menor)</option><option value="cliente">Cliente (A–Z)</option><option value="margen-pct">Margen % (mayor a menor)</option></select></label>
           <input type="search" id="ger-rent-buscar" placeholder="Buscar OP o cliente…" style="min-width:200px">
@@ -395,6 +397,24 @@
         </div>
       </div>
 
+      <div class="card" id="op-consolidado-card" data-no-excel>
+        <div class="card-head">
+          <h3>Consolidado por operario</h3>
+          <span class="card-hint" id="op-cons-hint">todos los operarios, en el rango elegido arriba</span>
+        </div>
+        <div class="form-foot" style="margin-top:0;margin-bottom:10px">
+          <span class="card-hint">El Excel trae dos hojas: el resumen por operario y el detalle completo de registros (sin límite).</span>
+          <button type="button" class="btn-secondary" id="op-cons-imprimir" style="margin:0">🖶 Imprimir</button>
+          <button type="button" class="btn-secondary" id="op-cons-exportar" style="margin:0">⬇ Excel</button>
+        </div>
+        <div class="table-wrap">
+          <table id="tbl-op-consolidado">
+            <thead><tr><th>Operario</th><th class="num">Registros</th><th class="num">Horas</th><th class="num">Valor mano de obra</th><th class="num">Órdenes</th><th>Área con más horas</th><th class="num">Hrs en esa área</th></tr></thead>
+            <tbody></tbody>
+            <tfoot></tfoot>
+          </table>
+        </div>
+      </div>
       <div class="card" id="op-log-editar-card" style="display:none">
         <div class="card-head"><h3>Corregir registro</h3><span class="card-hint">solo Jefe de Producción / Gerencia / Admin</span></div>
         <div class="detalle-orden-obs" id="op-log-editar-info" style="margin-bottom:12px"></div>
@@ -1471,6 +1491,12 @@
         <p><b>¿Dónde ver un reproceso?</b> En la pestaña <b>Reprocesos</b> (informe por área que lo generó, por motivo y por operario, más el listado con una fila por OP), y en el <b>detalle de cada orden</b>, en el recuadro <b>"↺ Reproceso de esta orden"</b>.</p>
         <p><b>Botón "Detalle" / "✎ Completar"</b> (listado de Reprocesos): muestra cada proceso con su costo y permite: (1) poner o corregir <b>motivo, área que lo generó y responsable</b> — se guarda igual en todos los procesos de esa OP; (2) <b>agregar materia prima, insumos u otros costos</b> gastados en el reproceso (el material se descuenta del inventario; "Quitar" lo devuelve); (3) <b>incluir otros procesos de la OP</b> que también se rehicieron pero el operario no marcó como reproceso (por ejemplo, el corte y la guillotina de una reimpresión); y (4) quitar un registro que no era parte del reproceso.</p>
         <div class="help-tip"><b>Tip:</b> el informe de Reprocesos se imprime con una fila por OP y se exporta a Excel con dos hojas: "Reprocesos por OP" y "Detalle por proceso" (costo de cada proceso).</div>
+      </div>
+
+      <div class="card" id="ayuda-consolidados">
+        <div class="card-head"><h3>Rentabilidad por orden: dos vistas, y consolidado por operario</h3></div>
+        <p>En <b>Gerencial → Rentabilidad por orden</b> el selector <b>Vista</b> cambia lo que suma cada fila. <b>Movimiento del rango de fechas</b> muestra solo lo que ocurrió entre "Desde" y "Hasta" (por eso una orden facturada en septiembre sale en $0 al mirar octubre). <b>Consolidado de cada orden</b> muestra, para las órdenes que tuvieron actividad en el rango, el total de TODA su historia: ingresos, mano de obra y costos directos. Usa la primera para ver el mes y la segunda para saber cómo le fue a una orden. Los cuadros de arriba (ingresos, costos, margen) siguen siendo del rango.</p>
+        <p>En <b>Principal → Operario</b>, la tarjeta <b>Consolidado por operario</b> resume a todos los operarios en el rango elegido: registros, horas, valor de mano de obra, órdenes distintas y el área donde más trabajó. El botón <b>Excel</b> baja dos hojas: el resumen y el detalle completo de registros (sin límite de filas).</p>
       </div>
 
       <div class="card" id="ayuda-administrativo">

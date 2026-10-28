@@ -284,7 +284,10 @@ export function renderGerencial(){
     rows.push(filaOrden(o));
   });
 
-  rentabilidadBase = rows;
+  rentabilidadRango = rows;
+  const ordenesConActividad = Array.from(new Set([...rows.map(r => String(r.orden)), ...Object.keys(ordCost)]));
+  rentabilidadConsolidado = construirConsolidadoOrdenes(ordenesConActividad);
+  rentabilidadBase = rentVista === 'consolidado' ? rentabilidadConsolidado : rentabilidadRango;
   renderTablaRentabilidad();
 
   // ---- rentabilidad por tipo de producto ----
@@ -657,6 +660,7 @@ export function renderOperario(){
     <div class="kpi"><div class="lbl">Promedio por registro</div><div class="val">${fmtNum(recs.length?horas/recs.length:0,2)} h</div><div class="sub">duración típica de actividad</div></div>`;
 
   ultimoOperarioLog = recs;
+  renderConsolidadoOperarios(desde, hasta);
   ultimoOperarioKpis = { desde, hasta, quien: sel==='__ALL__' ? 'Toda la planta' : sel, horas, valor, registros: recs.length };
 
   const areaMap = {};
@@ -691,6 +695,72 @@ export function renderOperario(){
     document.querySelectorAll('#tbl-op-log [data-editar-reg]').forEach(b => b.addEventListener('click', () => abrirEdicionRegistro(parseInt(b.dataset.editarReg, 10))));
     document.querySelectorAll('#tbl-op-log [data-eliminar-reg]').forEach(b => b.addEventListener('click', () => eliminarRegistroLog(parseInt(b.dataset.eliminarReg, 10))));
   }
+}
+
+// Consolidado de TODOS los operarios en el rango (Julián, 27oct26): una fila
+// por operario con registros, horas, valor de mano de obra, órdenes
+// distintas y el área donde más horas trabajó. Aparte, el detalle completo
+// para el Excel (sin el tope de filas que tiene la bitácora en pantalla).
+let ultimoConsolidadoOp = { filas: [], detalle: [], desde: '', hasta: '' };
+
+function renderConsolidadoOperarios(desde, hasta){
+  const tbl = document.getElementById('tbl-op-consolidado');
+  if(!tbl) return;
+  const recs = DB.produccion.filter(r => enRango(r.fecha, desde, hasta));
+  const mapa = new Map();
+  recs.forEach(r => {
+    const nombre = (r.operario || 'Sin operario').trim();
+    const a = mapa.get(nombre) || { operario: nombre, registros: 0, horas: 0, valor: 0, ordenes: new Set(), areas: {} };
+    a.registros++; a.horas += r.tiempoHr || 0; a.valor += r.valorActividad || 0;
+    if(r.orden != null) a.ordenes.add(r.orden);
+    const ar = r.area || 'General'; a.areas[ar] = (a.areas[ar] || 0) + (r.tiempoHr || 0);
+    mapa.set(nombre, a);
+  });
+  const filas = Array.from(mapa.values()).map(a => {
+    const [areaTop, horasTop] = Object.entries(a.areas).sort((x, y) => y[1] - x[1])[0] || ['—', 0];
+    return { operario: a.operario, registros: a.registros, horas: a.horas, valor: a.valor, ordenes: a.ordenes.size, areaTop, horasTop };
+  }).sort((a, b) => b.horas - a.horas);
+  const tot = filas.reduce((s, f) => ({ registros: s.registros + f.registros, horas: s.horas + f.horas, valor: s.valor + f.valor }), { registros: 0, horas: 0, valor: 0 });
+  const ordenesTot = new Set(recs.filter(r => r.orden != null).map(r => r.orden)).size;
+
+  tbl.querySelector('tbody').innerHTML = filas.map(f =>
+    `<tr><td>${f.operario}</td><td class="num">${fmtNum(f.registros, 0)}</td><td class="num">${fmtNum(f.horas, 1)}</td><td class="num">${fmtCOP(f.valor)}</td><td class="num">${f.ordenes}</td><td>${f.areaTop}</td><td class="num">${fmtNum(f.horasTop, 1)}</td></tr>`
+  ).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint)">Sin registros en este rango</td></tr>';
+  tbl.querySelector('tfoot').innerHTML = filas.length
+    ? `<tr><td><b>Total</b></td><td class="num"><b>${fmtNum(tot.registros, 0)}</b></td><td class="num"><b>${fmtNum(tot.horas, 1)}</b></td><td class="num"><b>${fmtCOP(tot.valor)}</b></td><td class="num"><b>${ordenesTot}</b></td><td></td><td></td></tr>` : '';
+  const hint = document.getElementById('op-cons-hint');
+  if(hint) hint.textContent = `${filas.length} operario(s) · ${fmtNum(recs.length, 0)} registros del ${desde} al ${hasta}`;
+
+  ultimoConsolidadoOp = { filas, tot, ordenesTot, desde, hasta,
+    detalle: recs.slice().sort((a, b) => (a.operario || '').localeCompare(b.operario || '') || (a.fecha || '').localeCompare(b.fecha || '') || (a.horaIni || '').localeCompare(b.horaIni || ''))
+      .map(r => ({ Operario: r.operario, Fecha: (r.fecha || '').slice(0, 10), 'Hora inicio': r.horaIni || '', 'Hora fin': r.horaFin || '', Área: r.area || '', Actividad: r.actividad || '',
+        Máquina: r.maquina || '', Orden: r.orden != null ? etiquetaOrden(r.orden) : '', Cantidad: r.cantidad ?? '', Horas: r.tiempoHr ?? '', Valor: r.valorActividad ?? '' })) };
+}
+
+function exportarConsolidadoOperarios(){
+  const c = ultimoConsolidadoOp;
+  if(!c.filas.length){ toast('No hay registros en este rango'); return; }
+  exportarExcel(`LitoColor_consolidado_operarios_${c.desde}_a_${c.hasta}.xlsx`, [
+    { nombre: 'Consolidado', filas: [
+      ...c.filas.map(f => ({ Operario: f.operario, Registros: f.registros, Horas: Math.round(f.horas * 100) / 100, 'Valor mano de obra': Math.round(f.valor), Órdenes: f.ordenes, 'Área con más horas': f.areaTop, 'Horas en esa área': Math.round(f.horasTop * 100) / 100 })),
+      { Operario: 'TOTAL', Registros: c.tot.registros, Horas: Math.round(c.tot.horas * 100) / 100, 'Valor mano de obra': Math.round(c.tot.valor), Órdenes: c.ordenesTot }
+    ] },
+    { nombre: 'Detalle', filas: c.detalle }
+  ]);
+}
+
+function imprimirConsolidadoOperarios(){
+  const c = ultimoConsolidadoOp;
+  if(!c.filas.length){ toast('No hay registros en este rango'); return; }
+  imprimirInforme({
+    titulo: 'Consolidado por operario',
+    subtitulo: `Del ${c.desde} al ${c.hasta} · ${fmtNum(c.tot.registros, 0)} registros · ${fmtNum(c.tot.horas, 1)} h · ${fmtCOP(c.tot.valor)}`,
+    secciones: [{
+      titulo: 'Horas y valor por operario',
+      columnas: [{ key:'operario', label:'Operario' }, { key:'registros', label:'Registros', num:true }, { key:'horas', label:'Horas', num:true }, { key:'valor', label:'Valor mano de obra', num:true }, { key:'ordenes', label:'Órdenes', num:true }, { key:'areaTop', label:'Área con más horas' }],
+      filas: c.filas.map(f => ({ operario: f.operario, registros: fmtNum(f.registros, 0), horas: fmtNum(f.horas, 1), valor: fmtCOP(f.valor), ordenes: f.ordenes, areaTop: f.areaTop }))
+    }]
+  });
 }
 
 function imprimirOperario(){
@@ -1190,6 +1260,12 @@ export function initDashboardFilters(){
   wireEdicionRegistro();
   wireScrollBitacora();
   wireTableScroll('tbl-ger-ordenes', 'ger-rent-ir-inicio', 'ger-rent-ir-final');
+  const selRentVista = document.getElementById('ger-rent-vista');
+  if(selRentVista) selRentVista.addEventListener('change', () => {
+    rentVista = selRentVista.value;
+    rentabilidadBase = rentVista === 'consolidado' ? rentabilidadConsolidado : rentabilidadRango;
+    renderTablaRentabilidad();
+  });
   const selRentOrden = document.getElementById('ger-rent-orden');
   if(selRentOrden) selRentOrden.addEventListener('change', () => { rentOrdenarPor = selRentOrden.value; renderTablaRentabilidad(); });
   const inpRentBuscar = document.getElementById('ger-rent-buscar');
@@ -1204,7 +1280,47 @@ export function initDashboardFilters(){
 // Liliana 27oct26: antes solo salía de mayor a menor ingreso y para ver una
 // OP había que buscar fila por fila).
 let rentabilidadBase = [];
+let rentabilidadRango = [];
+let rentabilidadConsolidado = [];
+let rentVista = 'rango'; // 'rango' | 'consolidado'
 let rentOrdenarPor = 'ingreso';
+
+// Vista "consolidado" (Liliana, 27oct26): una orden facturada en septiembre
+// aparecía en $0 al mirar octubre aunque en octubre se hubiera seguido
+// trabajando (o ya estuviera entregada). Acá, para las órdenes con actividad
+// en el rango, se suman TODOS sus movimientos de toda la historia (ingresos,
+// mano de obra y costos directos). Los costos generales sin orden se reparten
+// con la tasa de toda la historia (costos sin orden / ingresos totales).
+function construirConsolidadoOrdenes(ordenes){
+  const todo = calcularGerencial('0000-01-01', '9999-12-31');
+  const ing = {}, cost = {}, directo = {}, cliente = {}, trabajo = {};
+  let sinOrden = 0;
+  todo.pedidos.forEach(p => {
+    if(p.orden == null) return;
+    ing[p.orden] = (ing[p.orden] || 0) + (p.total || 0);
+    if(p.cliente) cliente[p.orden] = p.cliente;
+    if(p.trabajo && !trabajo[p.orden]) trabajo[p.orden] = p.trabajo;
+  });
+  todo.produccion.forEach(r => { if(r.orden != null) cost[r.orden] = (cost[r.orden] || 0) + (r.valorActividad || 0); });
+  todo.costosMov.forEach(m => {
+    if(m.orden != null) directo[m.orden] = (directo[m.orden] || 0) + (m.valor || 0);
+    else sinOrden += (m.valor || 0);
+  });
+  const tasa = todo.ingresos > 0 ? sinOrden / todo.ingresos : 0;
+  return ordenes.map(o => {
+    const opp = DB.opp_ordenes.find(x => String(x.orden) === String(o));
+    const pres = DB.presupuesto_orden.find(x => String(x.orden) === String(o));
+    const ingPres = pres && pres.precio_venta_antes_iva != null ? pres.precio_venta_antes_iva : null;
+    const i = ing[o] || 0;
+    const base = i > 0 ? i : (ingPres || 0);
+    const otrosDirecto = directo[o] || 0;
+    const cli = (opp && opp.cliente) || cliente[o];
+    return { orden: o, cliente: cli,
+      producePara: opp && opp.cliente_produccion && opp.cliente_produccion !== cli ? opp.cliente_produccion : null,
+      trabajo: (opp && (opp.producto || tipoTrabajoLabel(opp))) || trabajo[o],
+      ing: i, ingPres, cost: cost[o] || 0, otros: otrosDirecto + base * tasa, otrosDirecto };
+  });
+}
 let rentBuscar = '';
 
 function margenOrden(r){
@@ -1248,7 +1364,7 @@ function imprimirGerencial(){
     subtitulo: `${k.desde} a ${k.hasta} · Ingresos facturados ${fmtCOP(k.ingresos)} · Ingresos presupuestados ${fmtCOP(k.ingresosPresupuestados)} · Costo M.O. ${fmtCOP(k.costoMO)} · Otros costos ${fmtCOP(k.otrosCostos)} · Margen estimado ${fmtCOP(k.margen)} · ${k.ordenes} orden(es) con valor`,
     secciones: [
       {
-        titulo: 'Rentabilidad por orden',
+        titulo: 'Rentabilidad por orden' + (rentVista === 'consolidado' ? ' — consolidado de cada orden (toda su historia)' : ''),
         columnas: [
           { key:'orden', label:'Orden' }, { key:'cliente', label:'Cliente (factura)' }, { key:'producePara', label:'Produce para' }, { key:'trabajo', label:'Trabajo' },
           { key:'ingreso', label:'Ingreso', num:true }, { key:'ingresoPres', label:'Ingreso presupuestado', num:true },
@@ -1313,6 +1429,11 @@ function wireExportButtons(){
 
   const btnOpImprimir = document.getElementById('op-imprimir');
   if(btnOpImprimir) btnOpImprimir.addEventListener('click', imprimirOperario);
+
+  const btnConsExp = document.getElementById('op-cons-exportar');
+  if(btnConsExp) btnConsExp.addEventListener('click', exportarConsolidadoOperarios);
+  const btnConsImp = document.getElementById('op-cons-imprimir');
+  if(btnConsImp) btnConsImp.addEventListener('click', imprimirConsolidadoOperarios);
 
   const btnOpExportar = document.getElementById('op-exportar');
   if(btnOpExportar) btnOpExportar.addEventListener('click', () => {
