@@ -1,5 +1,5 @@
 import { DB } from './store.js';
-import { fmtNum, rangoFechas, toast, agregarBotonExcelVentana, etiquetaOrden } from './helpers.js';
+import { fmtNum, rangoFechas, toast, agregarBotonExcelVentana, etiquetaOrden, MARCA_CSS, encabezadoMarca } from './helpers.js';
 
 // Pedido 16sep26: saber, por rango de fechas y por operario (uno, varios o
 // todos), cuántos registros de tiempos hizo cada uno por orden — e
@@ -127,8 +127,10 @@ function imprimirResultado(){
   td, th{ border:1px solid #ccc; padding:4px 6px; text-align:left; }
   th{ background:#f2f2f2; }
   .num{ text-align:right; }
+  ${MARCA_CSS}
 </style>
 </head><body>
+  ${encabezadoMarca()}
   <h1>Registros de tiempos por operario y orden</h1>
   <div class="sub">Del ${desde} al ${hasta} · Operario(s): ${operariosTxt} · Total: ${totalGeneral} registro(s)</div>
   <table>

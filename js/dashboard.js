@@ -188,8 +188,8 @@ export function renderGerencial(){
   const meses = Object.keys(mesesMap).sort();
   makeChart('chart-ger-mes', { type:'bar', data:{ labels: meses,
     datasets:[
-      {label:'Ingresos', data: meses.map(m=>mesesMap[m].ing), backgroundColor:'#2E8FC0'},
-      {label:'Costos totales (M.O. + otros)', data: meses.map(m=>mesesMap[m].cost), backgroundColor:'#D8854A'}
+      {label:'Ingresos', data: meses.map(m=>mesesMap[m].ing), backgroundColor:'#499FD4'},
+      {label:'Costos totales (M.O. + otros)', data: meses.map(m=>mesesMap[m].cost), backgroundColor:'#B81A84'}
     ]}, options: baseBarOpts(true) });
 
   const ordIng = {}, ordCliente = {}, ordTrabajo = {};
@@ -238,7 +238,7 @@ export function renderGerencial(){
   });
   const topCl = Object.entries(clMap).sort((a,b)=>b[1]-a[1]).slice(0,8);
   makeChart('chart-ger-clientes', { type:'bar', data:{ labels: topCl.map(c=>c[0]),
-    datasets:[{label:'Ingreso', data: topCl.map(c=>c[1]), backgroundColor:'#C24A1F'}]},
+    datasets:[{label:'Ingreso', data: topCl.map(c=>c[1]), backgroundColor:'#2B638B'}]},
     options: baseBarOpts(false, true) });
 
   // El ingreso "facturado" (tabla pedidos, solo viene del Excel histórico
@@ -337,9 +337,9 @@ export function renderGerencial(){
     data: {
       labels: topProd.map(f => `${f.producto}  (${fmtNum(f.margenPct,0)}%)`),
       datasets: [
-        { label: 'Margen', data: topProd.map(f=>f.margen), backgroundColor: '#2E8FC0', stack: 's' },
-        { label: 'Costo de mano de obra', data: topProd.map(f=>f.cost), backgroundColor: '#D8854A', stack: 's' },
-        { label: 'Otros costos', data: topProd.map(f=>f.otros), backgroundColor: '#AC2478', stack: 's' }
+        { label: 'Margen', data: topProd.map(f=>f.margen), backgroundColor: '#499FD4', stack: 's' },
+        { label: 'Costo de mano de obra', data: topProd.map(f=>f.cost), backgroundColor: '#B81A84', stack: 's' },
+        { label: 'Otros costos', data: topProd.map(f=>f.otros), backgroundColor: '#90579A', stack: 's' }
       ]
     },
     options: {
@@ -411,7 +411,7 @@ function renderReprocesosGerencial(desde, hasta){
     if(eraEsta) return; // segundo clic = cerrar
     const det = document.createElement('tr');
     det.className = 'ger-rep-detalle';
-    det.innerHTML = `<td colspan="11" style="background:var(--bg-soft, #f6f4ef)">${detalleReprocesoGerencialHTML(grupos[parseInt(tr.dataset.i,10)], mpp)}</td>`;
+    det.innerHTML = `<td colspan="11" style="background:var(--bg-soft, #EEF3F9)">${detalleReprocesoGerencialHTML(grupos[parseInt(tr.dataset.i,10)], mpp)}</td>`;
     tr.after(det);
     const btn = det.querySelector('[data-ver-orden]');
     if(btn) btn.addEventListener('click', ev => { ev.stopPropagation(); irAOrdenYVerDetalle(parseInt(btn.dataset.verOrden, 10)); });
@@ -572,7 +572,7 @@ export function renderProduccion(){
   produccion.forEach(r=>{ const c=codeMap[codeFromLabel(r.actividad)]; const cat = c?c.categoria:'Sin clasificar'; catMap[cat]=(catMap[cat]||0)+(r.tiempoHr||0); });
   const cats = Object.keys(catMap);
   makeChart('chart-prod-categoria', { type:'doughnut', data:{ labels:cats, datasets:[{ data: cats.map(c=>catMap[c]),
-    backgroundColor:['#185FA5','#BA7517','#A32D2D','#5F5E5A','#0F6E56'] }]},
+    backgroundColor:['#2B638B','#90579A','#C82169','#8795B0','#499FD4'] }]},
     options:{ plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, font:{size:11} } } } } });
 
   document.querySelector('#tbl-prod-area tbody').innerHTML = areas.map(a=>{

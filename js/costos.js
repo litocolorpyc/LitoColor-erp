@@ -12,7 +12,7 @@ function renderConceptos(){
   const ordenados = [...DB.costos_conceptos].sort((a,b) => a.tipo.localeCompare(b.tipo) || a.nombre.localeCompare(b.nombre));
   tbody.innerHTML = ordenados.map(c => `<tr style="${c.activo===false?'opacity:.5':''}">
     <td>${c.nombre}</td>
-    <td><span class="badge" style="background:${c.tipo==='Fijo'?'#2E8FC022':'#D8854A22'};color:${c.tipo==='Fijo'?'#2E8FC0':'#D8854A'}">${c.tipo}</span></td>
+    <td><span class="badge" style="background:${c.tipo==='Fijo'?'#2B638B22':'#B81A8422'};color:${c.tipo==='Fijo'?'#2B638B':'#B81A84'}">${c.tipo}</span></td>
     <td>${c.categoria || '—'}</td>
     <td><div class="row-actions">
       <button type="button" class="row-btn" data-edit="${c.id}">Editar</button>
@@ -123,7 +123,7 @@ export function renderMovimientosRecientes(){
     const editable = m.recibo_id == null && m.produccion_id == null;
     return `<tr>
     <td>${(m.fecha||'').slice(0,10)}</td>
-    <td><span class="badge" style="background:${m.tipo==='Fijo'?'#2E8FC022':'#D8854A22'};color:${m.tipo==='Fijo'?'#2E8FC0':'#D8854A'}">${m.tipo}</span></td>
+    <td><span class="badge" style="background:${m.tipo==='Fijo'?'#2B638B22':'#B81A8422'};color:${m.tipo==='Fijo'?'#2B638B':'#B81A84'}">${m.tipo}</span></td>
     <td>${conceptoNombre(m.concepto_id)}</td>
     <td>${m.proveedor || '—'}</td>
     <td>${m.orden != null ? etiquetaOrden(m.orden) + (m.suborden != null ? '-' + m.suborden : '') : '—'}</td>

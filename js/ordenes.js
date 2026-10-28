@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
-import { toast, fmtNum, exportarExcel, fechaHoyLocal, wireTableScroll, agregarBotonExcelVentana, etiquetaOrden, parseOrden, esOrdenServicio, BASE_ORDEN_SERVICIO, requerimientosMaterialPieza } from './helpers.js';
+import { toast, fmtNum, exportarExcel, fechaHoyLocal, wireTableScroll, agregarBotonExcelVentana, etiquetaOrden, parseOrden, esOrdenServicio, BASE_ORDEN_SERVICIO, requerimientosMaterialPieza, MARCA, MARCA_CSS, encabezadoMarca } from './helpers.js';
 import { getCurrentUser, puedeEditarProduccion } from './auth.js';
 import { poblarDatalistProveedores } from './costos.js';
 import { movimientosPorProduccion, costosDeRegistro, sumarCostos } from './reproceso-costos.js';
@@ -1459,7 +1459,7 @@ function reprocesosOrdenHTML(registros, piezas){
       <td class="num">${fmtCOPlocal(c.total)}</td>
       <td>${r.comentario || ''}</td>
     </tr>`; }).join('');
-  return `<div class="card" style="margin:0 0 16px;border-left:4px solid #C24A1F">
+  return `<div class="card" style="margin:0 0 16px;border-left:4px solid #2B638B">
       <div class="card-head"><h3>↺ Reproceso de esta orden (${reps.length} proceso(s))</h3><span class="card-hint">área que lo generó: ${origen || 'sin definir'} · costo total ${fmtCOPlocal(t.total)} (mano de obra ${fmtCOPlocal(t.mo)} · materia prima ${fmtCOPlocal(t.mp)} · insumos ${fmtCOPlocal(t.ins)} · otros ${fmtCOPlocal(t.otros)}) — para completar datos o agregar costos ve a la pestaña Reprocesos</span></div>
       <div class="table-wrap"><table class="detalle-mini-table">
         <thead><tr><th>Fecha</th><th>Pieza</th><th>Área rehecha</th><th>Operario</th><th>Motivo</th><th class="num">Horas</th><th class="num">Mano de obra</th><th class="num">Materia prima</th><th class="num">Insumos</th><th class="num">Otros</th><th class="num">Total</th><th>Comentario</th></tr></thead>
@@ -1653,7 +1653,7 @@ export function mostrarDetalleOrden(orden){
     const el = document.getElementById('chart-detalle-area');
     if(chartDetalle) chartDetalle.destroy();
     chartDetalle = new Chart(el, { type:'bar', data:{ labels: areas,
-      datasets:[{ label:'Horas en esta orden', data: areas.map(a=>areaMap[a]), backgroundColor:'#185FA5' }]},
+      datasets:[{ label:'Horas en esta orden', data: areas.map(a=>areaMap[a]), backgroundColor:MARCA.blue }]},
       options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}}, scales:{x:{grid:{display:false}},y:{grid:{display:false}}} } });
   }
 
@@ -1785,8 +1785,10 @@ export function imprimirDetalleOrden(orden){
       padding-top:4px; background:#fff;
     }
   }
+  ${MARCA_CSS}
 </style>
 </head><body>
+  ${encabezadoMarca()}
   <h1>${esOrdenServicio(orden) ? 'Orden de servicio' : 'Orden de producción'} ${etiquetaOrden(orden)}</h1>
   <div class="sub">${o.cliente || '—'}${o.cliente_produccion && o.cliente_produccion !== o.cliente ? ' (produce para ' + o.cliente_produccion + ')' : ''} ${o.producto ? '· ' + o.producto : ''} · ${tipoTrabajoLabel(o)} · ${(o.fecha||'').slice(0,10)} · Estado: ${estado.label}${estado.pct!=null ? ' (' + estado.pct + '%)' : ''}</div>
   ${o.observaciones ? `<p><b>Observaciones:</b> ${o.observaciones}</p>` : ''}

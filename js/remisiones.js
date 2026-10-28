@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB } from './store.js';
-import { toast, fmtCOP, fmtNum, fechaHoyLocal, imprimirInforme, exportarExcel, agregarBotonExcelVentana, etiquetaOrden, parseOrden } from './helpers.js';
+import { toast, fmtCOP, fmtNum, fechaHoyLocal, imprimirInforme, exportarExcel, agregarBotonExcelVentana, etiquetaOrden, parseOrden, MARCA_CSS, encabezadoMarca } from './helpers.js';
 import { getCurrentUser } from './auth.js';
 import { renderGerencial } from './dashboard.js';
 import { renderOppRecent } from './ordenes.js';
@@ -494,22 +494,26 @@ function imprimirRemision(id){
   body{ font-family: Arial, Helvetica, sans-serif; color:#111; margin:20px; }
   table{ border-collapse:collapse; width:100%; }
   td, th{ border:1px solid #333; padding:6px 8px; text-align:left; font-size:13px; }
-  .cab td{ font-weight:700; background:#3B4252; color:#fff; width:22%; }
+  .cab td{ font-weight:700; background:#213763; color:#fff; width:22%; }
   .titulo{ text-align:center; font-size:22px; font-weight:700; }
   .remnum{ text-align:right; }
   .remnum .lbl{ font-size:11px; color:#fff; }
-  .remnum .num{ color:#B3261E; font-size:20px; font-weight:700; }
-  .items th{ background:#3B4252; color:#fff; }
+  .remnum .num{ color:#fff; font-size:20px; font-weight:700; }
+  .items th{ background:#213763; color:#fff; }
   .items td.num, .items th.num{ text-align:right; }
-  .firma th{ background:#3B4252; color:#fff; text-align:center; }
+  .firma th{ background:#213763; color:#fff; text-align:center; }
   .firma td{ height:40px; vertical-align:bottom; }
   .footer-obs-print{ display:none; }
   @media print{
     body{ margin:10mm; margin-bottom:20mm; }
     .footer-obs-print{ display:block; position:fixed; left:0; right:0; bottom:0; font-size:11px; color:#333; border-top:1px solid #999; padding-top:4px; background:#fff; }
   }
+  .marca-logo{ height:66px; display:block; }
+  .marca-barra{ height:4px; margin:8px 0 12px; background:linear-gradient(90deg,#499FD4 0%,#2B638B 28%,#90579A 56%,#B81A84 80%,#E69049 100%); }
+  .marca-barra, .cab td, .items th, .firma th{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 </style>
 </head><body>
+  ${encabezadoMarca()}
   <table>
     <tr>
       <td class="cab">NOMBRE</td>

@@ -1,6 +1,6 @@
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
-import { toast, fmtCOP, fmtNum, fechaHoyLocal, exportarExcel, agregarBotonExcelVentana, etiquetaOrden, parseOrden } from './helpers.js';
+import { toast, fmtCOP, fmtNum, fechaHoyLocal, exportarExcel, agregarBotonExcelVentana, etiquetaOrden, parseOrden, MARCA, MARCA_CSS, encabezadoMarca } from './helpers.js';
 import { getCurrentUser } from './auth.js';
 import { areasCompletadasPorPieza, mostrarDetalleOrden } from './ordenes.js';
 import { listaAreasDisponibles, moverStockMaterial } from './registrar.js';
@@ -85,7 +85,7 @@ export async function cargarCasosReproceso(){
 function badgeCaso(key){
   const c = casoDe(key);
   const estado = c ? c.estado : 'Abierto';
-  const color = estado === 'Cerrado' ? 'var(--good)' : (estado === 'En análisis' ? '#B7791F' : 'var(--bad)');
+  const color = estado === 'Cerrado' ? 'var(--good)' : (estado === 'En análisis' ? MARCA.violet : 'var(--bad)');
   return `<span style="color:${color};font-weight:600">${estado}</span>${c && c.severidad ? `<div class="card-hint" style="font-size:10.5px">${esc(c.severidad)}</div>` : ''}`;
 }
 
@@ -454,7 +454,7 @@ function abrirDetalleOP(tr, g){
   const caso = casoDe(g.key) || { estado: 'Abierto' };
   const fila = document.createElement('tr');
   fila.className = 'rep-edit-row';
-  fila.innerHTML = `<td colspan="13" style="background:var(--bg-soft, #f6f4ef)">
+  fila.innerHTML = `<td colspan="13" style="background:var(--bg-soft, #EEF3F9)">
     <h4 style="margin:4px 0 8px">Reproceso de la orden ${g.orden != null ? etiquetaOrden(g.orden) : '—'} — ${g.registros.length} proceso(s) · costo total ${fmtCOP(g.costos.total)}</h4>
     <div class="form-row" style="align-items:flex-end">
       <div class="field"><label>Motivo del reproceso</label><select class="rep-ed-motivo"><option value="">— elige un motivo —</option>${motivos.map(m=>`<option value="${esc(m.nombre)}"${m.nombre===g.motivo?' selected':''}>${esc(m.nombre)}</option>`).join('')}</select></div>
@@ -798,12 +798,12 @@ export function renderInformeReprocesos(){
 
   const origenesOrdenados = Object.entries(porOrigen).sort((a,b)=>b[1].n-a[1].n).slice(0,10);
   makeChart('chart-rep-area', { type:'bar', data:{ labels: origenesOrdenados.map(a=>a[0]),
-    datasets:[{ label:'Reprocesos (OPs)', data: origenesOrdenados.map(a=>a[1].n), backgroundColor:'#C24A1F' }]},
+    datasets:[{ label:'Reprocesos (OPs)', data: origenesOrdenados.map(a=>a[1].n), backgroundColor:MARCA.magenta }]},
     options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}}, scales:{x:{grid:{display:false}, ticks:{precision:0}},y:{grid:{display:false}}} } });
 
   const motivosOrdenados = Object.entries(porMotivo).sort((a,b)=>b[1]-a[1]).slice(0,10);
   makeChart('chart-rep-motivo', { type:'bar', data:{ labels: motivosOrdenados.map(a=>a[0]),
-    datasets:[{ label:'Reprocesos (OPs)', data: motivosOrdenados.map(a=>a[1]), backgroundColor:'#2E8FC0' }]},
+    datasets:[{ label:'Reprocesos (OPs)', data: motivosOrdenados.map(a=>a[1]), backgroundColor:MARCA.sky }]},
     options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}}, scales:{x:{grid:{display:false}, ticks:{precision:0}},y:{grid:{display:false}}} } });
 
   const tbOrigen = document.querySelector('#tbl-rep-por-area-origen tbody');
@@ -844,7 +844,9 @@ function imprimirInformeReprocesos(){
   table{ border-collapse:collapse; width:100%; margin-bottom:14px; font-size:12px; }
   td, th{ border:1px solid #ccc; padding:5px 7px; text-align:left; } th{ background:#f2f2f2; }
   .num{ text-align:right; }
+  ${MARCA_CSS}
 </style></head><body>
+  ${encabezadoMarca()}
   <h1>Informe de reprocesos</h1>
   <div class="sub">${desde} a ${hasta} · ${grupos.length} reproceso(s) (OPs) · ${filas.length} proceso(s) rehechos ·
     Mano de obra ${fmtCOP(total.mo)} · Materia prima ${fmtCOP(total.mp)} · Insumos ${fmtCOP(total.ins)} · Otros ${fmtCOP(total.otros)} · <b>Total ${fmtCOP(total.total)}</b></div>

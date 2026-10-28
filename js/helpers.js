@@ -73,12 +73,33 @@ export function setNote(msg, isError){
   el.style.color = isError ? 'var(--bad)' : '';
 }
 
-export const AREA_COLORS = {
-  'Litografia': '#185FA5', 'Diseño':'#3C3489', 'Impresión Digital':'#3C3489',
-  'Guillotina':'#854F0B', 'Troquelado':'#BA7517', 'Plastificado':'#0F6E56',
-  'Engomadora':'#993556', 'Terminado':'#D85A30', 'General':'#5F5E5A'
+// Paleta de la marca (medida del primer logo del PDF "Logos litocolor"):
+// azul cielo, azul medio, azul marino, violeta, magenta, frambuesa, coral y
+// el naranja de la punta del degradado — ver --navy, --blue, etc. en styles.css.
+export const MARCA = {
+  navy:'#213763', blue:'#2B638B', sky:'#499FD4', violet:'#90579A', magenta:'#B81A84',
+  raspberry:'#C82169', coral:'#DC5242', orange:'#E69049', slate:'#8795B0'
 };
-export function areaColor(a){ return AREA_COLORS[a] || '#5F5E5A'; }
+export const AREA_COLORS = {
+  'Litografia': MARCA.blue, 'Diseño': MARCA.violet, 'Impresión Digital': MARCA.sky,
+  'Guillotina': MARCA.navy, 'Troquelado': MARCA.magenta, 'Plastificado': '#5F5D92',
+  'Engomadora': MARCA.coral, 'Terminado': MARCA.orange, 'General': MARCA.slate
+};
+export function areaColor(a){ return AREA_COLORS[a] || MARCA.slate; }
+
+// ---------- marca en documentos impresos ----------
+// Las ventanas de impresión se abren en blanco (window.open), así que el logo
+// va con URL ABSOLUTA; con una ruta relativa no cargaría.
+export const LOGO_URL = () => new URL('assets/logo.png?v=2', document.baseURI).href;
+export const MARCA_CSS = `
+  .marca-logo{ height:66px; display:block; }
+  .marca-barra{ height:4px; margin:8px 0 14px; background:linear-gradient(90deg,#499FD4 0%,#2B638B 28%,#90579A 56%,#B81A84 80%,#E69049 100%); }
+  .marca-barra, th, .cab td, .items th, .firma th{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  h1{ color:#213763; } h2, h3{ color:#213763; border-bottom-color:#2B638B !important; }
+  th{ background:#E6ECF5; color:#213763; }`;
+export function encabezadoMarca(){
+  return `<img class="marca-logo" src="${LOGO_URL()}" alt="LitoColor"><div class="marca-barra"></div>`;
+}
 
 // Rangos de fecha rápidos, usados en Gerencial/Producción.
 export function rangoFechas(preset){
@@ -198,7 +219,9 @@ export function imprimirInforme({ titulo, subtitulo, secciones }){
   td, th{ border:1px solid #ccc; padding:5px 7px; text-align:left; } th{ background:#f2f2f2; }
   .num{ text-align:right; }
   @media print{ body{ margin:10mm; } }
+  ${MARCA_CSS}
 </style></head><body>
+  ${encabezadoMarca()}
   <h1>${titulo}</h1>
   <div class="sub">${subtitulo||''}</div>
   ${seccionesHTML}
