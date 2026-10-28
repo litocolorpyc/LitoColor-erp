@@ -26,6 +26,9 @@ function makeChart(id, config){
   if(charts[id]) charts[id].destroy();
   charts[id] = new Chart(el, config);
 }
+// Criterio de Julián (28oct26): las barras van UNA AL LADO DE LA OTRA, cada una con su
+// altura completa, no apiladas (apiladas se aplastan entre sí). `stacked` queda
+// solo por compatibilidad; ningún gráfico debería pasarlo en true.
 function baseBarOpts(stacked, horizontal){
   return { responsive:true, indexAxis: horizontal?'y':'x',
     plugins:{ legend:{ display: !horizontal, labels:{ boxWidth:10, font:{size:11} } } },
@@ -190,7 +193,7 @@ export function renderGerencial(){
     datasets:[
       {label:'Ingresos', data: meses.map(m=>mesesMap[m].ing), backgroundColor:'#499FD4'},
       {label:'Costos totales (M.O. + otros)', data: meses.map(m=>mesesMap[m].cost), backgroundColor:'#B81A84'}
-    ]}, options: baseBarOpts(true) });
+    ]}, options: baseBarOpts(false) });
 
   const ordIng = {}, ordCliente = {}, ordTrabajo = {};
   actual.pedidos.forEach(p=>{ ordIng[p.orden]=(ordIng[p.orden]||0)+(p.total||0); ordCliente[p.orden]=p.cliente; ordTrabajo[p.orden]=ordTrabajo[p.orden]||p.trabajo; });
@@ -337,16 +340,16 @@ export function renderGerencial(){
     data: {
       labels: topProd.map(f => `${f.producto}  (${fmtNum(f.margenPct,0)}%)`),
       datasets: [
-        { label: 'Margen', data: topProd.map(f=>f.margen), backgroundColor: '#499FD4', stack: 's' },
-        { label: 'Costo de mano de obra', data: topProd.map(f=>f.cost), backgroundColor: '#B81A84', stack: 's' },
-        { label: 'Otros costos', data: topProd.map(f=>f.otros), backgroundColor: '#90579A', stack: 's' }
+        { label: 'Margen', data: topProd.map(f=>f.margen), backgroundColor: '#499FD4' },
+        { label: 'Costo de mano de obra', data: topProd.map(f=>f.cost), backgroundColor: '#B81A84' },
+        { label: 'Otros costos', data: topProd.map(f=>f.otros), backgroundColor: '#90579A' }
       ]
     },
     options: {
       indexAxis: 'y',
       responsive: true,
       plugins: {
-        legend: { display: false },
+        legend: { display: true, labels: { boxWidth: 10, font: { size: 11 } } },
         tooltip: { callbacks: {
           label: (ctx) => {
             const f = topProd[ctx.dataIndex];
@@ -358,8 +361,8 @@ export function renderGerencial(){
         } }
       },
       scales: {
-        x: { stacked: true, grid:{ color:'rgba(150,150,150,.15)' }, ticks:{ font:{size:10} } },
-        y: { stacked: true, grid:{ display:false }, ticks:{ font:{size:10} } }
+        x: { grid:{ color:'rgba(150,150,150,.15)' }, ticks:{ font:{size:10} } },
+        y: { grid:{ display:false }, ticks:{ font:{size:10} } }
       }
     }
   });
