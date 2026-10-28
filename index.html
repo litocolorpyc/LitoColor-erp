@@ -1618,6 +1618,16 @@
           </table>
         </div>
       </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Qué opciones ve cada rol</h3>
+          <span style="display:flex;gap:8px">
+            <button type="button" class="btn-secondary" id="mp-restaurar" style="margin:0">Restaurar lista original</button>
+            <button type="button" class="btn-primary" id="mp-guardar" style="margin:0">Guardar permisos</button>
+          </span></div>
+        <p class="card-hint" style="margin:6px 0 10px">Marca las opciones del menú que puede ver cada rol. <b>Admin</b> y <b>Gerente</b> ven todo; "Resumen gerencial" y "Resultado por Área Comercial" son solo del Gerente. Los cambios se ven cuando la persona vuelve a entrar. Esto controla el menú; los datos financieros siguen protegidos por la base de datos.</p>
+        <div class="table-wrap" id="matriz-permisos"></div>
+      </div>
     </section>
 
     <section class="tab-panel" id="panel-ayuda" data-no-excel>
@@ -1812,6 +1822,11 @@
         <p>Las <b>Áreas Comerciales</b> son cinco: <b>Litografía</b>, <b>Servicio</b> (el cliente trae el material), <b>Digital</b>, <b>Gran formato</b> y <b>Tercero</b> (trabajos que el cliente encarga y se mandan a hacer por fuera: "Servicio de Impresión Externo" y "Trabajo Externo"). Cada orden tiene su <b>Área comercial</b> (campo junto a "Cantidad del pedido"): sale sola del tipo de trabajo, pero la puedes cambiar. Las líneas de factura y remisión toman el área de su orden; las que no tienen orden se asignan en el cuadro "Ventas sin Área Comercial".</p>
         <p>En <b>Principal → Resultado por Área Comercial</b> el Gerente ve, por período: ventas por área, <b>margen de contribución</b> (ventas × el % de margen de cada área), <b>costos fijos</b>, <b>utilidad neta</b> (contribución − costos fijos), <b>margen de utilidad</b> contra la meta (35%) y el <b>punto de equilibrio</b> (costos fijos ÷ margen promedio). Como en el Excel, los costos fijos no se reparten por área; se pueden repartir como vista opcional (por margen, por ventas o por horas). Además compara el <b>margen real</b> (con los costos registrados con cada orden) contra el asumido, y muestra la <b>utilización de la mano de obra</b> (horas en órdenes contra horas pagadas).</p>
         <p>Los <b>costos fijos del año</b> son editables: cada línea tiene una casilla <b>Cuenta</b> (si no es un costo de la empresa, se desmarca y deja de sumar), un <b>% empresa</b> (por ejemplo la bodega, que se divide en dos con Litocolor Publicidad) y un <b>área comercial</b> opcional (el arriendo de máquina está asignado a Gran formato; se puede cambiar). Para un año nuevo se crea el plan copiando el anterior. Los márgenes, los imprevistos y la meta se cambian en el último cuadro.</p>
+      </div>
+
+      <div class="card" id="ayuda-matriz-permisos">
+        <div class="card-head"><h3>Qué opciones ve cada rol (Gerente / Admin)</h3></div>
+        <p>En <b>Usuarios</b>, la tarjeta <b>"Qué opciones ve cada rol"</b> es una matriz: cada fila es una opción del menú y cada columna un rol (Administradora, Jefe de Producción, Diseñador). Marca o desmarca y pulsa <b>Guardar permisos</b>; la persona lo ve la próxima vez que entre. <b>Restaurar lista original</b> vuelve a lo que cada rol traía de fábrica. Admin y Gerente siempre ven todo, y "Resumen gerencial" y "Resultado por Área Comercial" son solo del Gerente. La matriz controla el menú; la protección de los datos financieros la hace además la base de datos.</p>
       </div>
 
       <div class="card" id="ayuda-resumen-gerencial">

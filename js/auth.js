@@ -21,6 +21,36 @@ const PAGINA_INICIO = { administradora: 'administrativo', gerente: 'dashboard-ge
 // 20261028151000_datos_financieros_solo_gerente.sql).
 const SOLO_GERENTE = ['dashboard-gerente', 'resultado-areas'];
 
+// Roles cuya lista de opciones se edita en la matriz de Usuarios (admin y gerente ven todo).
+export const ROLES_CONFIGURABLES = ['administradora', 'jefe_produccion', 'disenador'];
+export const permisosPorDefecto = rol => (PERMISOS[rol] || []).slice();
+
+// Permisos guardados en la base (tabla permisos_rol), por rol. Si un rol no tiene filas
+// (o no se pudo leer la tabla) se usan los de arriba.
+let permisosDB = {};
+export async function cargarPermisosRol(){
+  const { data, error } = await sb.from('permisos_rol').select('rol,tab');
+  if(error || !data){ permisosDB = {}; return; }
+  const m = {};
+  data.forEach(r => { (m[r.rol] = m[r.rol] || []).push(r.tab); });
+  permisosDB = m;
+}
+export function permisosDeRol(rol){
+  if(PERMISOS[rol] === null) return null;                 // admin y gerente: todo
+  return permisosDB[rol] || PERMISOS[rol];
+}
+// Reemplaza la lista de opciones de un rol (solo Gerente/Admin; lo exige también la base).
+export async function guardarPermisosRol(rol, tabs){
+  const del = await sb.from('permisos_rol').delete().eq('rol', rol);
+  if(del.error) return { error: del.error };
+  if(tabs.length){
+    const ins = await sb.from('permisos_rol').insert(tabs.map(tab => ({ rol, tab })));
+    if(ins.error) return { error: ins.error };
+  }
+  permisosDB[rol] = tabs.slice();
+  return {};
+}
+
 let currentUser = null; // { email, nombre, rol, cargo }
 
 export function getCurrentUser(){ return currentUser; }
@@ -68,6 +98,7 @@ export async function iniciarSesion(email, password){
     rol: persona ? (persona.rol || 'operario') : 'gerente',
     cargo: persona ? persona.cargo : ''
   };
+  await cargarPermisosRol();
   return { user: currentUser };
 }
 
@@ -92,6 +123,7 @@ export async function restaurarSesion(){
     rol: persona ? (persona.rol || 'operario') : 'gerente',
     cargo: persona ? persona.cargo : ''
   };
+  await cargarPermisosRol();
   return currentUser;
 }
 
@@ -122,7 +154,7 @@ function aplicarPermisosInterno(){
     if(b) b.style.display = currentUser.rol === 'gerente' ? '' : 'none';
   });
 
-  const permitidas = PERMISOS[currentUser.rol];
+  const permitidas = permisosDeRol(currentUser.rol);
   if(permitidas === null || permitidas === undefined){   // ve todo
     const inicioGen = PAGINA_INICIO[currentUser.rol];
     if(inicioGen && document.querySelector('.tab-btn.active')?.dataset.tab === 'gerencial') irAPestana(inicioGen);
