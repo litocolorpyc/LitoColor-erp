@@ -537,6 +537,23 @@ export function populateClienteSelect(){
     DB.clientes.filter(c=>c.activo!==false).map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('') +
     '<option value="__nuevo__">+ Nuevo cliente…</option>';
   if(valorPrevio) ensureOptionExists(sel, valorPrevio === '__nuevo__' ? '' : valorPrevio);
+
+  // Segundo cliente de la orden: para quién se produce (opcional).
+  const selProd = document.getElementById('opp-cliente-prod');
+  if(selProd){
+    const previoProd = selProd.value;
+    selProd.innerHTML = '<option value="">— el mismo a quien se factura —</option>' +
+      DB.clientes.filter(c=>c.activo!==false).map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('') +
+      '<option value="__nuevo__">+ Nuevo cliente…</option>';
+    if(previoProd && previoProd !== '__nuevo__') ensureOptionExists(selProd, previoProd);
+  }
+}
+
+// Texto "Cliente (produce para X)" para listas y encabezados; si no hay
+// cliente de producción distinto, solo el cliente.
+function clienteTexto(o){
+  const base = o.cliente || '—';
+  return (o.cliente_produccion && o.cliente_produccion !== o.cliente) ? `${base} <span class="card-hint">(produce para ${o.cliente_produccion})</span>` : base;
 }
 
 export function populateProductoSelect(){
@@ -817,7 +834,7 @@ function renderOppLista(rows){
     const estado = estadoOrden(o);
     const costo = costoAcumulado(o.orden);
     return `<tr>
-      <td>${etiquetaOrden(o.orden)}${esOrdenServicio(o.orden) ? ' <span class="tipo-trabajo-chip">Servicio</span>' : ''}</td><td>${o.cliente || '—'}</td>
+      <td>${etiquetaOrden(o.orden)}${esOrdenServicio(o.orden) ? ' <span class="tipo-trabajo-chip">Servicio</span>' : ''}</td><td>${clienteTexto(o)}</td>
       <td><span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></td>
       <td>${o.producto || '—'}</td>
       <td class="num">${conteo[o.orden] || 0}</td><td>${(o.fecha || '').slice(0,10)}</td>
@@ -886,7 +903,7 @@ function renderPrioridadOrdenes(){
     return `<div class="prioridad-row" data-orden="${o.orden}" draggable="${puedeArrastrar}">
       <span class="prioridad-handle">${puedeArrastrar ? '⠿' : '·'}</span>
       <span class="prioridad-num">${i + 1}</span>
-      <span class="prioridad-info fila-clicable"><b>Orden ${etiquetaOrden(o.orden)}</b> — ${o.cliente || '—'}${apellidoOrden(o) ? ' · <b>' + apellidoOrden(o) + '</b>' : ''} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></span>
+      <span class="prioridad-info fila-clicable"><b>Orden ${etiquetaOrden(o.orden)}</b> — ${clienteTexto(o)}${apellidoOrden(o) ? ' · <b>' + apellidoOrden(o) + '</b>' : ''} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></span>
       ${estadoBadgeHTML(estado)}
     </div>`;
   }).join('');
@@ -1081,7 +1098,7 @@ function renderPrioridadArea(){
     return `<div class="prioridad-row" data-orden="${o.orden}" data-suborden="${p.suborden}" draggable="${puede}">
       <span class="prioridad-handle">${puede ? '⠿' : '·'}</span>
       <span class="prioridad-num">${i + 1}</span>
-      <span class="prioridad-info fila-clicable"><b>Orden ${etiquetaOrden(o.orden)}-${p.suborden}</b> — ${o.cliente || '—'} ${p.pieza ? '· ' + p.pieza : ''} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></span>
+      <span class="prioridad-info fila-clicable"><b>Orden ${etiquetaOrden(o.orden)}-${p.suborden}</b> — ${clienteTexto(o)} ${p.pieza ? '· ' + p.pieza : ''} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></span>
       ${selectorAsignar}
     </div>`;
   }).join('');
@@ -1489,7 +1506,7 @@ export function mostrarDetalleOrden(orden){
   const costo = registros.reduce((s,r)=>s+(r.valorActividad||0),0);
   const costoMateriales = costoMaterialesDeOrden(orden);
 
-  document.getElementById('opp-detalle-titulo').textContent = `${esOrdenServicio(orden) ? 'Orden de servicio' : 'Orden'} ${etiquetaOrden(orden)} — ${o.cliente || ''} · ${tipoTrabajoLabel(o)}`;
+  document.getElementById('opp-detalle-titulo').textContent = `${esOrdenServicio(orden) ? 'Orden de servicio' : 'Orden'} ${etiquetaOrden(orden)} — ${o.cliente || ''}${o.cliente_produccion && o.cliente_produccion !== o.cliente ? ' (produce para ' + o.cliente_produccion + ')' : ''} · ${tipoTrabajoLabel(o)}`;
   ordenDetalleActual = orden;
 
   // ---- horas por área de TODA la orden, para el gráfico ----
@@ -1578,7 +1595,7 @@ export function mostrarDetalleOrden(orden){
 
   document.getElementById('opp-detalle-body').innerHTML = `
     <div class="kpi-row" style="margin-bottom:16px">
-      <div class="kpi"><div class="lbl">Estado</div><div class="val" style="font-size:16px">${o.cliente||'—'}</div><div class="sub">${o.producto||''} · ${(o.fecha||'').slice(0,10)}</div></div>
+      <div class="kpi"><div class="lbl">Estado</div><div class="val" style="font-size:16px">${o.cliente||'—'}</div><div class="sub">${o.cliente_produccion && o.cliente_produccion !== o.cliente ? 'Produce para: ' + o.cliente_produccion + ' · ' : ''}${o.producto||''} · ${(o.fecha||'').slice(0,10)}</div></div>
       <div class="kpi"><div class="lbl">Ingreso facturado</div><div class="val">${fmtCOPlocal(ingreso)}</div><div class="sub">${ingreso>0 ? 'pedidos + facturas de venta (neto, sin IVA)' : (ingresoPresupuestado ? 'en $0 — el margen usa el presupuestado' : 'pedidos + facturas de venta (neto, sin IVA)')}</div></div>
       <div class="kpi"><div class="lbl">Ingreso presupuestado</div><div class="val">${ingresoPresupuestado!=null ? fmtCOPlocal(ingresoPresupuestado) : '—'}</div><div class="sub">precio venta antes de IVA</div></div>
       <div class="kpi"><div class="lbl">Costo mano de obra</div><div class="val">${fmtCOPlocal(costo)}</div><div class="sub">${registros.length} registros de producción</div></div>
@@ -1771,7 +1788,7 @@ export function imprimirDetalleOrden(orden){
 </style>
 </head><body>
   <h1>${esOrdenServicio(orden) ? 'Orden de servicio' : 'Orden de producción'} ${etiquetaOrden(orden)}</h1>
-  <div class="sub">${o.cliente || '—'} ${o.producto ? '· ' + o.producto : ''} · ${tipoTrabajoLabel(o)} · ${(o.fecha||'').slice(0,10)} · Estado: ${estado.label}${estado.pct!=null ? ' (' + estado.pct + '%)' : ''}</div>
+  <div class="sub">${o.cliente || '—'}${o.cliente_produccion && o.cliente_produccion !== o.cliente ? ' (produce para ' + o.cliente_produccion + ')' : ''} ${o.producto ? '· ' + o.producto : ''} · ${tipoTrabajoLabel(o)} · ${(o.fecha||'').slice(0,10)} · Estado: ${estado.label}${estado.pct!=null ? ' (' + estado.pct + '%)' : ''}</div>
   ${o.observaciones ? `<p><b>Observaciones:</b> ${o.observaciones}</p>` : ''}
   ${piezasHTML}
   ${historialHTML}
@@ -2061,9 +2078,11 @@ function resetOppForm(nextOrden){
   document.getElementById('opp-piezas-list').innerHTML = '';
   oppPiezaCount = 0;
   document.getElementById('opp-cliente').value = '';
+  { const cp = document.getElementById('opp-cliente-prod'); if(cp) cp.value = ''; }
   document.getElementById('opp-producto').value = '';
   refreshPiezasDatalist();
   document.getElementById('opp-cliente-nuevo-wrap').style.display = 'none';
+  { const w = document.getElementById('opp-cliente-prod-nuevo-wrap'); if(w) w.style.display = 'none'; }
   document.getElementById('opp-producto-nuevo-wrap').style.display = 'none';
   document.getElementById('opp-producto-ref').style.display = 'none';
   document.getElementById('opp-orden').value = nextOrden != null ? etiquetaOrden(nextOrden) : suggestNextOrden();
@@ -2085,6 +2104,7 @@ function loadOrdenParaEditar(orden){
   document.getElementById('opp-orden').disabled = true;
   document.getElementById('opp-observaciones').value = o.observaciones || '';
   ensureOptionExists(document.getElementById('opp-cliente'), o.cliente || '');
+  ensureOptionExists(document.getElementById('opp-cliente-prod'), o.cliente_produccion || '');
   ensureOptionExists(document.getElementById('opp-producto'), o.producto || '');
   document.getElementById('opp-fecha').value = (o.fecha || '').slice(0,10) || fechaHoyLocal();
   setValSafe('opp-tipo-trabajo', o.tipo_trabajo || 'Litografia');
@@ -2110,6 +2130,7 @@ function duplicarOrden(orden){
   document.getElementById('opp-orden').value = nuevoNumero;
   document.getElementById('opp-orden').disabled = false;
   ensureOptionExists(document.getElementById('opp-cliente'), o.cliente || '');
+  ensureOptionExists(document.getElementById('opp-cliente-prod'), o.cliente_produccion || '');
   ensureOptionExists(document.getElementById('opp-producto'), o.producto || '');
   document.getElementById('opp-fecha').value = fechaHoyLocal();
   document.getElementById('opp-observaciones').value = ''; // observación es de la orden original, no aplica igual a la copia
@@ -2207,6 +2228,7 @@ async function saveOpp(){
 
   if(!orden || !cliente){ toast('Falta el número de orden o el cliente'); return; }
   if(cliente === '__nuevo__'){ toast('Completa la creación del cliente nuevo (botón "Agregar")'); return; }
+  if(document.getElementById('opp-cliente-prod')?.value === '__nuevo__'){ toast('Completa la creación del cliente nuevo para quien se produce (botón "Agregar")'); return; }
   if(document.getElementById('opp-producto').value === '__nuevo__'){ toast('Completa la creación del producto nuevo (botón "Agregar")'); return; }
   if(cards.length === 0){ toast('Agrega al menos una pieza'); return; }
 
@@ -2217,6 +2239,7 @@ async function saveOpp(){
     const esExterno = esTipoExterno(tipoTrabajo);
     const cabecera = {
       orden, cliente,
+      cliente_produccion: (() => { const v = document.getElementById('opp-cliente-prod')?.value.trim(); return (v && v !== '__nuevo__') ? v : null; })(),
       producto: document.getElementById('opp-producto').value.trim() || null,
       fecha: document.getElementById('opp-fecha').value,
       tipo_trabajo: tipoTrabajo,
@@ -2410,6 +2433,7 @@ function filtrarOrdenes(){
   const filtradas = DB.opp_ordenes.filter(o =>
     etiquetaOrden(o.orden).toLowerCase().includes(q) ||
     (o.cliente||'').toLowerCase().includes(q) ||
+    (o.cliente_produccion||'').toLowerCase().includes(q) ||
     (o.producto||'').toLowerCase().includes(q)
   );
   renderOppLista(filtradas.slice(0,50));
@@ -2451,7 +2475,8 @@ export function initOppForm(onChange){
   populateClienteSelect();
   populateProductoSelect();
   poblarDatalistProveedores();
-  wireNuevoInline('opp-cliente', 'opp-cliente-nuevo-wrap', 'opp-cliente-nuevo-nombre', 'opp-cliente-nuevo-add', 'clientes', c => DB.clientes.push(c));
+  wireNuevoInline('opp-cliente', 'opp-cliente-nuevo-wrap', 'opp-cliente-nuevo-nombre', 'opp-cliente-nuevo-add', 'clientes', c => { DB.clientes.push(c); populateClienteSelect(); });
+  wireNuevoInline('opp-cliente-prod', 'opp-cliente-prod-nuevo-wrap', 'opp-cliente-prod-nuevo-nombre', 'opp-cliente-prod-nuevo-add', 'clientes', c => { DB.clientes.push(c); populateClienteSelect(); });
   wireNuevoInline('opp-producto', 'opp-producto-nuevo-wrap', 'opp-producto-nuevo-nombre', 'opp-producto-nuevo-add', 'productos', p => DB.productos.push(p));
   on('opp-producto', 'change', () => { renderProductoRef(); refreshPiezasDatalist(); });
   on('opp-tipo-trabajo', 'change', aplicarTipoTrabajo);
@@ -2513,7 +2538,7 @@ export function initOppForm(onChange){
       filas: DB.opp_ordenes.map(o => {
         const estado = estadoOrden(o);
         return {
-          Orden: etiquetaOrden(o.orden), Cliente: o.cliente, Tipo: tipoTrabajoLabel(o), Producto: o.producto, Fecha: (o.fecha||'').slice(0,10),
+          Orden: etiquetaOrden(o.orden), Cliente: o.cliente, 'Produce para': o.cliente_produccion || '', Tipo: tipoTrabajoLabel(o), Producto: o.producto, Fecha: (o.fecha||'').slice(0,10),
           Piezas: conteo[o.orden] || 0, Estado: estado.label,
           'Avance %': estado.pct, 'Costo M.O.': costoAcumulado(o.orden)
         };

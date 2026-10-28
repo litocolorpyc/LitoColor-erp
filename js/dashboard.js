@@ -253,7 +253,9 @@ export function renderGerencial(){
     const ingresoBase = ing > 0 ? ing : (ingPres || 0);
     const otrosDirecto = ordCostoDirecto[o] || 0;
     const otros = otrosDirecto + ingresoBase * tasaOtros;
-    return { orden:o, cliente:ordCliente[o], trabajo:ordTrabajo[o], ing, ingPres, cost: ordCost[o]||0, otros, otrosDirecto };
+    const opp = DB.opp_ordenes.find(x => String(x.orden) === String(o));
+    const producePara = opp && opp.cliente_produccion && opp.cliente_produccion !== ordCliente[o] ? opp.cliente_produccion : null;
+    return { orden:o, cliente:ordCliente[o], producePara, trabajo:ordTrabajo[o], ing, ingPres, cost: ordCost[o]||0, otros, otrosDirecto };
   }
 
   // Antes esto se cortaba en las 15 con más ingreso facturado, así que
@@ -1216,7 +1218,8 @@ function renderTablaRentabilidad(){
   let rows = rentabilidadBase.filter(r => !q
     || etiquetaOrden(r.orden).toString().toLowerCase().includes(q)
     || String(r.orden).includes(q)
-    || (r.cliente || '').toString().toLowerCase().includes(q));
+    || (r.cliente || '').toString().toLowerCase().includes(q)
+    || (r.producePara || '').toLowerCase().includes(q));
   const cmpTxt = (a, b) => (a || '').toString().localeCompare(b || '', 'es', { sensitivity: 'base' });
   if(rentOrdenarPor === 'op') rows = rows.slice().sort((a,b) => Number(a.orden) - Number(b.orden));
   else if(rentOrdenarPor === 'op-desc') rows = rows.slice().sort((a,b) => Number(b.orden) - Number(a.orden));
@@ -1230,7 +1233,7 @@ function renderTablaRentabilidad(){
       ? `Incluye ${fmtCOP(r.otrosDirecto)} de costos con esta orden asociada directamente`
       : 'Prorrateado según el ingreso de esta orden';
     const color = m>=0?'var(--good)':'var(--bad)';
-    return `<tr class="fila-clicable" data-orden="${r.orden}"><td>${etiquetaOrden(r.orden)}</td><td>${r.cliente||'—'}</td><td>${(r.trabajo||'—').toString().trim()}</td><td class="num">${fmtCOP(r.ing)}</td><td class="num">${r.ingPres!=null?fmtCOP(r.ingPres):'—'}</td><td class="num">${fmtCOP(r.cost)}</td><td class="num" title="${otrosTitle}">${fmtCOP(r.otros)}<div class="card-hint" style="font-size:10.5px">directos ${fmtCOP(r.otrosDirecto)} + prorrateo ${fmtCOP(r.otros - r.otrosDirecto)}</div></td><td class="num" style="color:${color}">${fmtCOP(m)}</td><td class="num" style="color:${color}">${pct==null?'—':fmtNum(pct,0)+'%'}</td></tr>`;
+    return `<tr class="fila-clicable" data-orden="${r.orden}"><td>${etiquetaOrden(r.orden)}</td><td>${r.cliente||'—'}${r.producePara ? `<div class="card-hint" style="font-size:10.5px">produce para ${r.producePara}</div>` : ''}</td><td>${(r.trabajo||'—').toString().trim()}</td><td class="num">${fmtCOP(r.ing)}</td><td class="num">${r.ingPres!=null?fmtCOP(r.ingPres):'—'}</td><td class="num">${fmtCOP(r.cost)}</td><td class="num" title="${otrosTitle}">${fmtCOP(r.otros)}<div class="card-hint" style="font-size:10.5px">directos ${fmtCOP(r.otrosDirecto)} + prorrateo ${fmtCOP(r.otros - r.otrosDirecto)}</div></td><td class="num" style="color:${color}">${fmtCOP(m)}</td><td class="num" style="color:${color}">${pct==null?'—':fmtNum(pct,0)+'%'}</td></tr>`;
   }).join('') || `<tr><td colspan="9" style="text-align:center;color:var(--ink-faint)">${rentabilidadBase.length ? 'Ninguna orden coincide con la búsqueda' : 'Sin datos en este rango'}</td></tr>`;
   document.querySelectorAll('#tbl-ger-ordenes tbody tr[data-orden]').forEach(tr => {
     tr.addEventListener('click', () => irAOrdenYVerDetalle(parseInt(tr.dataset.orden, 10)));
@@ -1247,13 +1250,13 @@ function imprimirGerencial(){
       {
         titulo: 'Rentabilidad por orden',
         columnas: [
-          { key:'orden', label:'Orden' }, { key:'cliente', label:'Cliente' }, { key:'trabajo', label:'Trabajo' },
+          { key:'orden', label:'Orden' }, { key:'cliente', label:'Cliente (factura)' }, { key:'producePara', label:'Produce para' }, { key:'trabajo', label:'Trabajo' },
           { key:'ingreso', label:'Ingreso', num:true }, { key:'ingresoPres', label:'Ingreso presupuestado', num:true },
           { key:'costoMO', label:'Costo M.O.', num:true }, { key:'otros', label:'Otros costos', num:true }, { key:'margen', label:'Margen', num:true }, { key:'margenPct', label:'Margen %', num:true }
         ],
         filas: ultimaRentabilidad.map(r => {
           const base = r.ing > 0 ? r.ing : (r.ingPres || 0);
-          return { orden:r.orden, cliente:r.cliente||'—', trabajo:r.trabajo||'—', ingreso:fmtCOP(r.ing), ingresoPres:r.ingPres!=null?fmtCOP(r.ingPres):'—', costoMO:fmtCOP(r.cost), otros:fmtCOP(r.otros), margen:fmtCOP(base-r.cost-r.otros), margenPct: base>0 ? fmtNum((base-r.cost-r.otros)/base*100,0)+'%' : '—' };
+          return { orden:r.orden, cliente:r.cliente||'—', producePara:r.producePara||'', trabajo:r.trabajo||'—', ingreso:fmtCOP(r.ing), ingresoPres:r.ingPres!=null?fmtCOP(r.ingPres):'—', costoMO:fmtCOP(r.cost), otros:fmtCOP(r.otros), margen:fmtCOP(base-r.cost-r.otros), margenPct: base>0 ? fmtNum((base-r.cost-r.otros)/base*100,0)+'%' : '—' };
         })
       },
       {
@@ -1285,7 +1288,7 @@ function wireExportButtons(){
   if(btnRent) btnRent.addEventListener('click', () => {
     exportarExcel('LitoColor_rentabilidad_por_orden.xlsx', [{
       nombre: 'Rentabilidad',
-      filas: ultimaRentabilidad.map(r => { const base = r.ing > 0 ? r.ing : (r.ingPres || 0); return { Orden: etiquetaOrden(r.orden), Cliente: r.cliente, Trabajo: r.trabajo, Ingreso: r.ing, 'Ingreso presupuestado': r.ingPres != null ? r.ingPres : '', 'Costo M.O.': r.cost, 'Otros costos (directos + prorrateado)': Math.round(r.otros), Margen: Math.round(base - r.cost - r.otros), 'Margen %': base > 0 ? Math.round((base - r.cost - r.otros) / base * 1000) / 10 : '' }; })
+      filas: ultimaRentabilidad.map(r => { const base = r.ing > 0 ? r.ing : (r.ingPres || 0); return { Orden: etiquetaOrden(r.orden), Cliente: r.cliente, 'Produce para': r.producePara || '', Trabajo: r.trabajo, Ingreso: r.ing, 'Ingreso presupuestado': r.ingPres != null ? r.ingPres : '', 'Costo M.O.': r.cost, 'Otros costos (directos + prorrateado)': Math.round(r.otros), Margen: Math.round(base - r.cost - r.otros), 'Margen %': base > 0 ? Math.round((base - r.cost - r.otros) / base * 1000) / 10 : '' }; })
     }]);
   });
 

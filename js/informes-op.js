@@ -35,19 +35,19 @@ const nPiezas = orden => String(DB.opp_piezas.filter(p => p.orden === orden).len
 
 function repListarOP(d, h){
   const filas = ordenesEnRango(d, h).sort((a,b) => (a.fecha||'').localeCompare(b.fecha||'')).map(o => ({
-    orden: etiquetaOrden(o.orden), fecha: (o.fecha||'').slice(0,10), cliente: o.cliente || '—', producto: o.producto || '—', piezas: nPiezas(o.orden)
+    orden: etiquetaOrden(o.orden), fecha: (o.fecha||'').slice(0,10), cliente: o.cliente || '—', produce: o.cliente_produccion || '', producto: o.producto || '—', piezas: nPiezas(o.orden)
   }));
   return { titulo: 'Órdenes de producción por rango de fechas', filas,
-    columnas: [COL('orden','Orden'), COL('fecha','Fecha'), COL('cliente','Cliente'), COL('producto','Producto'), COL('piezas','Piezas',1)] };
+    columnas: [COL('orden','Orden'), COL('fecha','Fecha'), COL('cliente','Cliente (factura)'), COL('produce','Produce para'), COL('producto','Producto'), COL('piezas','Piezas',1)] };
 }
 
 function repPorCliente(d, h){
   const cli = $('iop-cliente').value;
   const filas = ordenesEnRango(d, h).filter(o => !cli || o.cliente === cli)
     .sort((a,b) => (a.cliente||'').localeCompare(b.cliente||'') || (a.fecha||'').localeCompare(b.fecha||''))
-    .map(o => ({ cliente: o.cliente || '—', orden: etiquetaOrden(o.orden), fecha: (o.fecha||'').slice(0,10), producto: o.producto || '—', piezas: nPiezas(o.orden) }));
+    .map(o => ({ cliente: o.cliente || '—', produce: o.cliente_produccion || '', orden: etiquetaOrden(o.orden), fecha: (o.fecha||'').slice(0,10), producto: o.producto || '—', piezas: nPiezas(o.orden) }));
   return { titulo: 'Órdenes por cliente', extra: cli ? `Cliente: ${cli}` : 'Todos los clientes', filas,
-    columnas: [COL('cliente','Cliente'), COL('orden','Orden'), COL('fecha','Fecha'), COL('producto','Producto'), COL('piezas','Piezas',1)] };
+    columnas: [COL('cliente','Cliente (factura)'), COL('produce','Produce para'), COL('orden','Orden'), COL('fecha','Fecha'), COL('producto','Producto'), COL('piezas','Piezas',1)] };
 }
 
 function repMaterial(d, h){

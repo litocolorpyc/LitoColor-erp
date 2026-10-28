@@ -467,11 +467,19 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Cliente</label>
+            <label>Cliente — a quién se factura</label>
             <select id="opp-cliente"><option value="">Selecciona un cliente…</option><option value="__nuevo__">+ Nuevo cliente…</option></select>
             <div id="opp-cliente-nuevo-wrap" style="display:none;margin-top:6px;display:flex;gap:6px">
               <input type="text" id="opp-cliente-nuevo-nombre" placeholder="Nombre del cliente nuevo">
               <button type="button" class="btn-secondary" id="opp-cliente-nuevo-add" style="margin:0">Agregar</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Para quién se produce <span class="card-hint">(opcional — si es distinto de a quien se factura)</span></label>
+            <select id="opp-cliente-prod"><option value="">— el mismo a quien se factura —</option><option value="__nuevo__">+ Nuevo cliente…</option></select>
+            <div id="opp-cliente-prod-nuevo-wrap" style="display:none;margin-top:6px;display:flex;gap:6px">
+              <input type="text" id="opp-cliente-prod-nuevo-nombre" placeholder="Nombre del cliente nuevo">
+              <button type="button" class="btn-secondary" id="opp-cliente-prod-nuevo-add" style="margin:0">Agregar</button>
             </div>
           </div>
           <div class="field">
@@ -1318,6 +1326,7 @@
         <p>Cada orden tiene un <b>"Tipo de trabajo"</b>: Litografía (el más usado, trae la ficha completa de papel/pliego/tintas/troquelado), o Impresión Digital, Gran Formato, Servicio de Impresión Externo y Trabajo Externo — estos 4 muestran una ficha simplificada (proveedor, costo del servicio, fecha de entrega) en vez de los campos de litografía, porque no aplican.</p>
         <div class="help-tip"><b>Tip:</b> el campo "Proveedor" te sugiere primero los proveedores del tipo más relevante según el tipo de trabajo (ej. "Proveedor de Maquila" para Trabajo Externo) — pero puedes elegir cualquiera. Si escribes uno que no existe, se crea solo.</div>
         <h4>Crear / Consultar una orden</h4>
+        <p><b>Dos clientes por orden:</b> "Cliente — a quién se factura" es el que aparece en facturas e informes de ingresos. "Para quién se produce" es opcional: úsalo cuando el trabajo es para otra marca o empresa (ej. se factura a Hiper, se produce para Santa Leña). Si lo dejas vacío se entiende que es el mismo. En las listas aparece como "(produce para …)" y se puede buscar por cualquiera de los dos nombres.</p>
         <p><b>Crear:</b> llena Orden, Cliente/Producto (listas desplegables, con "+ Nuevo…" si no existe), y cada Pieza. Al elegir el Producto, "Nombre de la pieza" sugiere las piezas ya usadas antes para ese producto — si escribes una nueva, queda registrada sola para la próxima vez. El "Pliego" solo permite 70x100 (el más común, viene por defecto) o 60x90.</p>
         <p><b>Orden de los procesos:</b> debajo de "Procesos que requiere esta pieza" hay una lista ⠿ arrastrable con los procesos que marcaste — ahí elegís en qué secuencia se van a trabajar (por defecto sale en el orden del maestro Áreas). Ese orden es el que ve el operario y el que decide en qué áreas va a aparecer cada suborden dentro de "Prioridad por área", donde se le puede asignar un operario puntual.</p>
         <p><b>Importar desde Excel:</b> si ya tienes la orden en el Excel "formulario" que usa producción (bloques de columnas, uno por pieza), usa el botón <b>"⬆ Importar desde Excel"</b> junto a "Nueva orden" — llena el formulario solo (cliente, producto, y cada pieza con papel, tintas, tamaños, acabados). No guarda nada automáticamente: siempre revisas y le das click a "Guardar orden completa", igual que si la digitaras a mano. Si el archivo trae varias órdenes juntas, te pregunta cuál importar. Este importador es para órdenes de <b>Litografía</b> (el formato clásico de planta).</p>
