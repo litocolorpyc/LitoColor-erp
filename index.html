@@ -47,6 +47,10 @@
         <button class="tab-btn" data-tab="operario" role="tab">Operario</button>
       </div>
       <div class="sidebar-group">
+        <div class="sidebar-group-label">Administrativo</div>
+        <button class="tab-btn" data-tab="administrativo" role="tab">Panel administrativo</button>
+      </div>
+      <div class="sidebar-group">
         <div class="sidebar-group-label">Operación</div>
         <button class="tab-btn" data-tab="ordenes" role="tab">Órdenes</button>
         <button class="tab-btn" data-tab="calendario" role="tab">Calendario</button>
@@ -301,6 +305,47 @@
           <label><b>Estándar presupuestado por área</b> <span class="card-hint">(unidades por hora; litografía, corte, guillotina, plastificado y troquelado se miden en pliegos)</span></label>
           <div class="iop-est-grid" style="display:flex;flex-wrap:wrap;gap:8px 18px;margin:8px 0"></div>
           <button type="button" class="btn-primary" id="iop-est-guardar">Guardar estándares</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-administrativo">
+      <div class="card">
+        <h2 class="card-title">Administrativo</h2>
+        <p class="card-hint" style="margin-top:0">Informes de administración por rango de fechas y atajos a lo que usas a diario.</p>
+        <div class="kpi-row" id="adm-kpis" style="margin-bottom:14px"></div>
+        <div class="form-row">
+          <div class="field"><label>Informe</label>
+            <select id="adm-tipo">
+              <option value="facturacion">Facturación por rango de fechas</option>
+              <option value="clientes">Ventas por cliente</option>
+              <option value="proveedores">Compras por proveedor</option>
+              <option value="materiaprima">Costos de compras de materias primas e insumos</option>
+            </select></div>
+          <div class="field" style="max-width:160px"><label>Desde</label><input type="date" id="adm-desde"></div>
+          <div class="field" style="max-width:160px"><label>Hasta</label><input type="date" id="adm-hasta"></div>
+          <div class="field" id="adm-f-docs" style="max-width:200px"><label>Documentos</label>
+            <select id="adm-docs"><option value="todo">Facturas y remisiones</option><option value="facturas">Solo facturas</option><option value="remisiones">Solo remisiones</option></select></div>
+        </div>
+        <div class="form-foot">
+          <span class="card-hint" id="adm-hint"></span>
+          <button type="button" class="btn-secondary" id="adm-exportar">⬇ Excel</button>
+          <button type="button" class="btn-secondary" id="adm-imprimir">🖶 Imprimir</button>
+          <button type="button" class="btn-primary" id="adm-consultar">Consultar</button>
+        </div>
+        <h3 id="adm-titulo" style="margin-top:14px"></h3>
+        <div class="table-wrap"><table id="tbl-adm"><thead></thead><tbody></tbody></table></div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Atajos de operación</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <button type="button" class="btn-secondary" data-adm-ir="registrar-costo" style="margin:0">Registrar costo</button>
+          <button type="button" class="btn-secondary" data-adm-ir="registrar-venta" style="margin:0">Registrar Venta</button>
+          <button type="button" class="btn-secondary" data-adm-ir="remisiones" style="margin:0">Remisión</button>
+          <button type="button" class="btn-secondary" data-adm-ir="inventario" style="margin:0">Inventario</button>
+          <button type="button" class="btn-secondary" data-adm-ir="reprocesos" style="margin:0">Reprocesos (motivos, costos y área)</button>
+          <button type="button" class="btn-secondary" data-adm-ir="m-materias" style="margin:0">Materias primas</button>
+          <button type="button" class="btn-secondary" data-adm-ir="m-costos" style="margin:0">Conceptos de costo</button>
         </div>
       </div>
     </section>
@@ -1426,6 +1471,12 @@
         <p><b>¿Dónde ver un reproceso?</b> En la pestaña <b>Reprocesos</b> (informe por área que lo generó, por motivo y por operario, más el listado con una fila por OP), y en el <b>detalle de cada orden</b>, en el recuadro <b>"↺ Reproceso de esta orden"</b>.</p>
         <p><b>Botón "Detalle" / "✎ Completar"</b> (listado de Reprocesos): muestra cada proceso con su costo y permite: (1) poner o corregir <b>motivo, área que lo generó y responsable</b> — se guarda igual en todos los procesos de esa OP; (2) <b>agregar materia prima, insumos u otros costos</b> gastados en el reproceso (el material se descuenta del inventario; "Quitar" lo devuelve); (3) <b>incluir otros procesos de la OP</b> que también se rehicieron pero el operario no marcó como reproceso (por ejemplo, el corte y la guillotina de una reimpresión); y (4) quitar un registro que no era parte del reproceso.</p>
         <div class="help-tip"><b>Tip:</b> el informe de Reprocesos se imprime con una fila por OP y se exporta a Excel con dos hojas: "Reprocesos por OP" y "Detalle por proceso" (costo de cada proceso).</div>
+      </div>
+
+      <div class="card" id="ayuda-administrativo">
+        <div class="card-head"><h3>Panel administrativo</h3></div>
+        <p>En <b>Administrativo → Panel administrativo</b> están, en un solo lugar, los informes de administración por rango de fechas: <b>Facturación</b> (facturas y remisiones, con subtotal, IVA y total), <b>Ventas por cliente</b> (con % del total), <b>Compras por proveedor</b> y <b>Costos de compras de materias primas e insumos</b>. Elige el informe, el rango y pulsa <b>Consultar</b>; después puedes imprimirlo o bajarlo a Excel. Arriba ves el resumen del rango: facturado, remisionado y compras. Abajo hay atajos a Registrar costo, Registrar Venta, Remisión, Inventario, Reprocesos, Materias primas y Conceptos de costo.</p>
+        <p>Este panel es el punto de partida de la <b>Administradora</b>: al entrar con su usuario se abre aquí y no en el tablero Gerencial. Cada persona debe entrar con <b>su propio correo</b> (Gerente, Administradora, Jefe de Producción) para ver solo lo que le corresponde.</p>
       </div>
 
       <div class="card" id="ayuda-informes-op">

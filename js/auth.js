@@ -7,8 +7,13 @@ const PERMISOS = {
   gerente:          null,
   jefe_produccion:  ['produccion', 'operario', 'ordenes', 'calendario', 'alertas', 'registrar', 'reprocesos', 'inventario', 'informes-op', 'remisiones', 'm-empleados', 'm-areas', 'm-maquinas', 'm-actividades', 'm-motivos-pausa', 'm-motivos-reproceso', 'm-subprocesos', 'm-cat-materia', 'm-materias', 'm-insumos', 'm-piezas-producto', 'm-clientes', 'm-proveedores', 'm-productos', 'm-documentos', 'ayuda'],
   disenador:        ['ordenes', 'registrar', 'm-productos', 'm-cat-materia', 'm-materias', 'm-insumos', 'm-piezas-producto', 'ayuda'],
-  administradora:   ['gerencial', 'ordenes', 'alertas', 'registrar', 'reprocesos', 'inventario', 'remisiones', 'm-empleados', 'm-clientes', 'm-proveedores', 'm-costos', 'registrar-costo', 'registrar-venta', 'm-documentos', 'ayuda'],
+  administradora:   ['administrativo', 'gerencial', 'ordenes', 'alertas', 'registrar', 'reprocesos', 'inventario', 'remisiones', 'm-empleados', 'm-clientes', 'm-proveedores', 'm-costos', 'registrar-costo', 'registrar-venta', 'm-documentos', 'ayuda'],
 };
+
+// Pestaña con la que arranca cada rol (los demás arrancan en Gerencial, la
+// primera del menú). Liliana (administradora) usa su propio panel y no el
+// tablero pensado para Julián — reunión 27oct26.
+const PAGINA_INICIO = { administradora: 'administrativo' };
 
 let currentUser = null; // { email, nombre, rol, cargo }
 
@@ -87,6 +92,16 @@ export async function restaurarSesion(){
 // Oculta del menú lateral las pestañas que el rol actual no debería ver,
 // y si la pestaña activa en este momento no está permitida, salta a la
 // primera que sí lo esté.
+function irAPestana(tab){
+  const btn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+  const panel = document.getElementById('panel-' + tab);
+  if(!btn || !panel) return;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  panel.classList.add('active');
+}
+
 export function aplicarPermisos(){
   if(!currentUser) return;
   const permitidas = PERMISOS[currentUser.rol];
@@ -99,6 +114,12 @@ export function aplicarPermisos(){
     btn.style.display = ok ? '' : 'none';
     if(ok && !primerPermitido) primerPermitido = tab;
   });
+
+  const inicio = PAGINA_INICIO[currentUser.rol];
+  if(inicio && permitidas.includes(inicio) && document.querySelector('.tab-btn.active')?.dataset.tab === 'gerencial'){
+    irAPestana(inicio);
+    return;
+  }
 
   const activo = document.querySelector('.tab-btn.active');
   if(activo && activo.style.display === 'none' && primerPermitido){
