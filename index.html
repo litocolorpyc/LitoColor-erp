@@ -42,6 +42,7 @@
     <nav class="sidebar-nav" role="tablist">
       <div class="sidebar-group">
         <div class="sidebar-group-label">Principal</div>
+        <button class="tab-btn" data-tab="dashboard-gerente" role="tab">Resumen gerencial</button>
         <button class="tab-btn active" data-tab="gerencial" role="tab">Gerencial</button>
         <button class="tab-btn" data-tab="produccion" role="tab">Producción</button>
         <button class="tab-btn" data-tab="operario" role="tab">Operario</button>
@@ -367,6 +368,69 @@
       <div id="pp-contenedor" class="pp-contenedor">
         <div id="pp-tablero"></div>
         <div class="pp-barra"><div id="pp-puntos" class="pp-puntos"></div><div id="pp-pie" class="pp-pie"></div></div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-dashboard-gerente">
+      <div class="card">
+        <div class="card-head">
+          <h2 class="card-title" style="margin:0">Resumen gerencial</h2>
+          <span style="display:flex;gap:8px">
+            <button type="button" class="btn-secondary" id="dg-exportar" style="margin:0">⬇ Excel</button>
+            <button type="button" class="btn-secondary" id="dg-actualizar" style="margin:0">↻ Actualizar</button>
+          </span>
+        </div>
+        <p class="card-hint" id="dg-hint" style="margin:6px 0 0">Cargando…</p>
+      </div>
+      <div class="kpi-row" id="dg-kpis"></div>
+      <div id="dg-contenido" style="display:none">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head"><h3>Ventas por mes: año contra año</h3><span class="card-hint">elige los años a comparar</span></div>
+            <div class="preset-row" id="dg-chips" style="margin-bottom:10px"></div>
+            <canvas id="dg-ch-anios" height="230"></canvas>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Crecimiento de las ventas</h3><span class="card-hint">total de cada año</span></div>
+            <canvas id="dg-ch-crec" height="170"></canvas>
+            <div class="table-wrap" id="dg-crec-tabla" style="margin-top:8px"></div>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head"><h3>Comportamiento de las ventas durante el año</h3><span class="card-hint">promedio de los últimos 3 años, tendencia y este año</span></div>
+            <canvas id="dg-ch-comport" height="230"></canvas>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Ventas por área</h3><span class="card-hint">litografía, servicio, digital, gran formato y tercero</span></div>
+            <canvas id="dg-ch-areas" height="170"></canvas>
+            <div class="table-wrap" id="dg-areas-tabla" style="margin-top:8px"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Crecimiento frente al mismo mes del año anterior</h3><span class="card-hint">azul: sube · frambuesa: baja</span></div>
+          <div class="table-wrap" id="dg-crec-mes"></div>
+        </div>
+        <div class="card" id="dg-anio-actual"></div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head"><h3>Facturas y remisiones por año</h3><span class="card-hint">solo años con remisiones registradas</span></div>
+            <canvas id="dg-ch-fr" height="200"></canvas>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Compras de materiales</h3><span class="card-hint">papel, planchas, troqueles y polietileno (antes de IVA)</span></div>
+            <canvas id="dg-ch-compras" height="170"></canvas>
+            <div class="table-wrap" id="dg-compras-tabla" style="margin-top:8px"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Clientes principales</h3>
+            <span style="display:flex;gap:8px;align-items:center"><label class="card-hint" for="dg-cli-anio">Año</label><select id="dg-cli-anio" style="width:auto"></select></span></div>
+          <div class="grid-2" style="margin-bottom:0">
+            <div><canvas id="dg-ch-cli" height="260"></canvas></div>
+            <div class="table-wrap" id="dg-cli-tabla"></div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -1518,6 +1582,12 @@
         <div class="card-head"><h3>Pantalla de planta</h3></div>
         <p>En <b>Operación → Pantalla de planta</b> hay una vista grande y de solo lectura pensada para un televisor. Va pasando por las áreas (Corte inicial, Litografía, Terminado…) mostrando el trabajo pendiente de cada una <b>en el orden de "Prioridad por área"</b> de Órdenes: número de orden y pieza, cliente (y para quién se produce), producto, cantidad, y si ya está <b>en curso</b> o <b>asignada a un operario</b>. Si un área tiene más trabajo del que cabe, lo muestra en varias páginas.</p>
         <p>Para el televisor: abre el sistema con <b>?pantalla=planta</b> al final de la dirección, inicia sesión una vez (por ejemplo con el usuario del Jefe de Producción) y pulsa <b>⛶ Pantalla completa</b>. Puedes dejar una sola área fija o rotar entre todas, y elegir cada cuántos segundos cambia. Los datos se actualizan solos cada 2 minutos; lo que Juan prioriza en Órdenes aparece sin tocar la pantalla.</p>
+      </div>
+
+      <div class="card" id="ayuda-resumen-gerencial">
+        <div class="card-head"><h3>Resumen gerencial (solo Gerente)</h3></div>
+        <p>En <b>Principal → Resumen gerencial</b> el Gerente ve, en una sola pantalla, los gráficos y cuadros de su Excel de datos importantes: <b>ventas por mes comparando año contra año</b> (eliges los años), <b>crecimiento de las ventas</b> de cada año, <b>comportamiento durante el año</b> (promedio de los últimos 3 años, línea de tendencia y este año), <b>ventas por área</b>, <b>crecimiento frente al mismo mes del año anterior</b>, el cuadro del año en curso con remisiones y facturas, compras de materiales y clientes principales por año. Arriba hay un resumen con el mes, el acumulado del año, el mejor mes histórico y el mejor cliente.</p>
+        <p>Los datos históricos vienen del Excel que envió Julián (hasta octubre de 2026); desde noviembre se toman de las facturas y remisiones que se registran en el aplicativo. <b>Esta información solo la puede ver el Gerente</b> con su propio usuario: ni el administrador ni la administradora la ven. El botón <b>Excel</b> baja las cuatro tablas de datos.</p>
       </div>
 
       <div class="card" id="ayuda-consolidados">

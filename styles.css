@@ -121,6 +121,8 @@ main{ padding:20px 24px 40px; }
 .kpi .val.pos{ color:var(--good); } .kpi .val.neg{ color:var(--bad); }
 
 .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
+.grid-2 > *{ min-width:0; }
+#panel-dashboard-gerente .detalle-mini-table th, #panel-dashboard-gerente .detalle-mini-table td{ white-space:nowrap; }
 @media (max-width:760px){ .grid-2{ grid-template-columns:1fr; } }
 
 .card{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px 16px; margin-bottom:14px; }

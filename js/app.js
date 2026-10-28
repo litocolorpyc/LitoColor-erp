@@ -13,6 +13,7 @@ import { initVentas, repararValorNetoFacturasVenta } from './ventas.js';
 import { initInformesOP } from './informes-op.js';
 import { initAdministrativo, renderAdministrativo } from './administrativo.js';
 import { initPantallaPlanta, renderPantallaPlanta } from './pantalla-planta.js';
+import { initDashboardGerente } from './dashboard-gerente.js';
 import { initConsultaTiempos, renderConsultaTiempos } from './consulta-tiempos.js';
 import { initInventario, renderInventario } from './inventario.js';
 import { initRemisiones, actualizarNumeroPreview } from './remisiones.js';
@@ -110,6 +111,7 @@ async function arrancarApp(){
   pasoSeguro('Informes de órdenes', initInformesOP);
   pasoSeguro('Panel administrativo', initAdministrativo);
   pasoSeguro('Pantalla de planta', initPantallaPlanta);
+  pasoSeguro('Resumen gerencial', initDashboardGerente);
   pasoSeguro('Inventario', initInventario);
   // Deja resueltas en la base las "órdenes esperando material" que ya no
   // aplican (papel ya cortado, orden cerrada, stock ya cubierto).

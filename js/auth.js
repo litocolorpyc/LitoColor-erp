@@ -13,7 +13,13 @@ const PERMISOS = {
 // Pestaña con la que arranca cada rol (los demás arrancan en Gerencial, la
 // primera del menú). Liliana (administradora) usa su propio panel y no el
 // tablero pensado para Julián — reunión 27oct26.
-const PAGINA_INICIO = { administradora: 'administrativo' };
+const PAGINA_INICIO = { administradora: 'administrativo', gerente: 'dashboard-gerente' };
+
+// Pestañas que ve ÚNICAMENTE el rol gerente: ni siquiera el administrador (que
+// por lo demás ve todo). La información del Excel de Julián (resumen
+// gerencial) es solo suya; la base de datos además lo exige (ver la migración
+// 20261028151000_datos_financieros_solo_gerente.sql).
+const SOLO_GERENTE = ['dashboard-gerente'];
 
 let currentUser = null; // { email, nombre, rol, cargo }
 
@@ -104,8 +110,17 @@ function irAPestana(tab){
 
 export function aplicarPermisos(){
   if(!currentUser) return;
+  SOLO_GERENTE.forEach(tab => {
+    const b = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+    if(b) b.style.display = currentUser.rol === 'gerente' ? '' : 'none';
+  });
+
   const permitidas = PERMISOS[currentUser.rol];
-  if(permitidas === null || permitidas === undefined) return; // ve todo
+  if(permitidas === null || permitidas === undefined){   // ve todo
+    const inicioGen = PAGINA_INICIO[currentUser.rol];
+    if(inicioGen && document.querySelector('.tab-btn.active')?.dataset.tab === 'gerencial') irAPestana(inicioGen);
+    return;
+  }
 
   let primerPermitido = null;
   document.querySelectorAll('.tab-btn').forEach(btn => {
