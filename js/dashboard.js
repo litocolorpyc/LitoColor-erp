@@ -282,18 +282,8 @@ export function renderGerencial(){
     rows.push(filaOrden(o));
   });
 
-  ultimaRentabilidad = rows;
-  document.querySelector('#tbl-ger-ordenes tbody').innerHTML = rows.map(r=>{
-    const ingresoBase = r.ing > 0 ? r.ing : (r.ingPres || 0);
-    const m = ingresoBase - r.cost - r.otros;
-    const otrosTitle = r.otrosDirecto > 0
-      ? `Incluye ${fmtCOP(r.otrosDirecto)} de costos con esta orden asociada directamente`
-      : 'Prorrateado según el ingreso de esta orden';
-    return `<tr class="fila-clicable" data-orden="${r.orden}"><td>${etiquetaOrden(r.orden)}</td><td>${r.cliente||'—'}</td><td>${(r.trabajo||'—').toString().trim()}</td><td class="num">${fmtCOP(r.ing)}</td><td class="num">${r.ingPres!=null?fmtCOP(r.ingPres):'—'}</td><td class="num">${fmtCOP(r.cost)}</td><td class="num" title="${otrosTitle}">${fmtCOP(r.otros)}</td><td class="num" style="color:${m>=0?'var(--good)':'var(--bad)'}">${fmtCOP(m)}</td></tr>`;
-  }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--ink-faint)">Sin datos en este rango</td></tr>';
-  document.querySelectorAll('#tbl-ger-ordenes tbody tr[data-orden]').forEach(tr => {
-    tr.addEventListener('click', () => irAOrdenYVerDetalle(parseInt(tr.dataset.orden, 10)));
-  });
+  rentabilidadBase = rows;
+  renderTablaRentabilidad();
 
   // ---- rentabilidad por tipo de producto ----
   const ordProducto = {};
@@ -1198,9 +1188,52 @@ export function initDashboardFilters(){
   wireEdicionRegistro();
   wireScrollBitacora();
   wireTableScroll('tbl-ger-ordenes', 'ger-rent-ir-inicio', 'ger-rent-ir-final');
+  const selRentOrden = document.getElementById('ger-rent-orden');
+  if(selRentOrden) selRentOrden.addEventListener('change', () => { rentOrdenarPor = selRentOrden.value; renderTablaRentabilidad(); });
+  const inpRentBuscar = document.getElementById('ger-rent-buscar');
+  if(inpRentBuscar) inpRentBuscar.addEventListener('input', () => { rentBuscar = inpRentBuscar.value; renderTablaRentabilidad(); });
   const btnCerrarProdArea = document.getElementById('prod-area-detalle-cerrar');
   if(btnCerrarProdArea) btnCerrarProdArea.addEventListener('click', () => {
     document.getElementById('prod-area-detalle-card').style.display = 'none';
+  });
+}
+
+// Estado del orden/búsqueda de la tabla "Rentabilidad por orden" (pedido de
+// Liliana 27oct26: antes solo salía de mayor a menor ingreso y para ver una
+// OP había que buscar fila por fila).
+let rentabilidadBase = [];
+let rentOrdenarPor = 'ingreso';
+let rentBuscar = '';
+
+function margenOrden(r){
+  const base = r.ing > 0 ? r.ing : (r.ingPres || 0);
+  const m = base - r.cost - r.otros;
+  return { base, m, pct: base > 0 ? m / base * 100 : null };
+}
+
+function renderTablaRentabilidad(){
+  const q = rentBuscar.trim().toLowerCase();
+  let rows = rentabilidadBase.filter(r => !q
+    || etiquetaOrden(r.orden).toString().toLowerCase().includes(q)
+    || String(r.orden).includes(q)
+    || (r.cliente || '').toString().toLowerCase().includes(q));
+  const cmpTxt = (a, b) => (a || '').toString().localeCompare(b || '', 'es', { sensitivity: 'base' });
+  if(rentOrdenarPor === 'op') rows = rows.slice().sort((a,b) => Number(a.orden) - Number(b.orden));
+  else if(rentOrdenarPor === 'op-desc') rows = rows.slice().sort((a,b) => Number(b.orden) - Number(a.orden));
+  else if(rentOrdenarPor === 'cliente') rows = rows.slice().sort((a,b) => cmpTxt(a.cliente, b.cliente) || Number(a.orden) - Number(b.orden));
+  else if(rentOrdenarPor === 'margen-pct') rows = rows.slice().sort((a,b) => (margenOrden(b).pct ?? -Infinity) - (margenOrden(a).pct ?? -Infinity));
+  else rows = rows.slice().sort((a,b) => b.ing - a.ing);
+  ultimaRentabilidad = rows; // lo que se ve es lo que se imprime/exporta
+  document.querySelector('#tbl-ger-ordenes tbody').innerHTML = rows.map(r=>{
+    const { m, pct } = margenOrden(r);
+    const otrosTitle = r.otrosDirecto > 0
+      ? `Incluye ${fmtCOP(r.otrosDirecto)} de costos con esta orden asociada directamente`
+      : 'Prorrateado según el ingreso de esta orden';
+    const color = m>=0?'var(--good)':'var(--bad)';
+    return `<tr class="fila-clicable" data-orden="${r.orden}"><td>${etiquetaOrden(r.orden)}</td><td>${r.cliente||'—'}</td><td>${(r.trabajo||'—').toString().trim()}</td><td class="num">${fmtCOP(r.ing)}</td><td class="num">${r.ingPres!=null?fmtCOP(r.ingPres):'—'}</td><td class="num">${fmtCOP(r.cost)}</td><td class="num" title="${otrosTitle}">${fmtCOP(r.otros)}</td><td class="num" style="color:${color}">${fmtCOP(m)}</td><td class="num" style="color:${color}">${pct==null?'—':fmtNum(pct,0)+'%'}</td></tr>`;
+  }).join('') || `<tr><td colspan="9" style="text-align:center;color:var(--ink-faint)">${rentabilidadBase.length ? 'Ninguna orden coincide con la búsqueda' : 'Sin datos en este rango'}</td></tr>`;
+  document.querySelectorAll('#tbl-ger-ordenes tbody tr[data-orden]').forEach(tr => {
+    tr.addEventListener('click', () => irAOrdenYVerDetalle(parseInt(tr.dataset.orden, 10)));
   });
 }
 
@@ -1216,11 +1249,11 @@ function imprimirGerencial(){
         columnas: [
           { key:'orden', label:'Orden' }, { key:'cliente', label:'Cliente' }, { key:'trabajo', label:'Trabajo' },
           { key:'ingreso', label:'Ingreso', num:true }, { key:'ingresoPres', label:'Ingreso presupuestado', num:true },
-          { key:'costoMO', label:'Costo M.O.', num:true }, { key:'otros', label:'Otros costos', num:true }, { key:'margen', label:'Margen', num:true }
+          { key:'costoMO', label:'Costo M.O.', num:true }, { key:'otros', label:'Otros costos', num:true }, { key:'margen', label:'Margen', num:true }, { key:'margenPct', label:'Margen %', num:true }
         ],
         filas: ultimaRentabilidad.map(r => {
           const base = r.ing > 0 ? r.ing : (r.ingPres || 0);
-          return { orden:r.orden, cliente:r.cliente||'—', trabajo:r.trabajo||'—', ingreso:fmtCOP(r.ing), ingresoPres:r.ingPres!=null?fmtCOP(r.ingPres):'—', costoMO:fmtCOP(r.cost), otros:fmtCOP(r.otros), margen:fmtCOP(base-r.cost-r.otros) };
+          return { orden:r.orden, cliente:r.cliente||'—', trabajo:r.trabajo||'—', ingreso:fmtCOP(r.ing), ingresoPres:r.ingPres!=null?fmtCOP(r.ingPres):'—', costoMO:fmtCOP(r.cost), otros:fmtCOP(r.otros), margen:fmtCOP(base-r.cost-r.otros), margenPct: base>0 ? fmtNum((base-r.cost-r.otros)/base*100,0)+'%' : '—' };
         })
       },
       {
@@ -1252,7 +1285,7 @@ function wireExportButtons(){
   if(btnRent) btnRent.addEventListener('click', () => {
     exportarExcel('LitoColor_rentabilidad_por_orden.xlsx', [{
       nombre: 'Rentabilidad',
-      filas: ultimaRentabilidad.map(r => { const base = r.ing > 0 ? r.ing : (r.ingPres || 0); return { Orden: etiquetaOrden(r.orden), Cliente: r.cliente, Trabajo: r.trabajo, Ingreso: r.ing, 'Ingreso presupuestado': r.ingPres != null ? r.ingPres : '', 'Costo M.O.': r.cost, 'Otros costos (directos + prorrateado)': Math.round(r.otros), Margen: Math.round(base - r.cost - r.otros) }; })
+      filas: ultimaRentabilidad.map(r => { const base = r.ing > 0 ? r.ing : (r.ingPres || 0); return { Orden: etiquetaOrden(r.orden), Cliente: r.cliente, Trabajo: r.trabajo, Ingreso: r.ing, 'Ingreso presupuestado': r.ingPres != null ? r.ingPres : '', 'Costo M.O.': r.cost, 'Otros costos (directos + prorrateado)': Math.round(r.otros), Margen: Math.round(base - r.cost - r.otros), 'Margen %': base > 0 ? Math.round((base - r.cost - r.otros) / base * 1000) / 10 : '' }; })
     }]);
   });
 
