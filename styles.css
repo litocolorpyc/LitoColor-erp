@@ -290,3 +290,9 @@ select, input, textarea{ font-family:inherit; font-size:13px; padding:7px 9px; b
 .pp-puntos{ display:flex; gap:10px; }
 .pp-punto{ width:14px; height:14px; border-radius:50%; background:var(--line); }
 .pp-pie{ color:var(--ink-faint); font-size:14px; }
+
+/* Panel administrativo: todo lo que maneja Liliana, en tres grupos */
+.adm-hub{ display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:16px; }
+.adm-hub-grupo{ display:flex; flex-direction:column; gap:7px; }
+.adm-hub-grupo h4{ margin:0 0 2px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); }
+.adm-hub-grupo .btn-secondary{ margin:0; text-align:left; }

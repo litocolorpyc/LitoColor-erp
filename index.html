@@ -50,6 +50,10 @@
       <div class="sidebar-group">
         <div class="sidebar-group-label">Administrativo</div>
         <button class="tab-btn" data-tab="administrativo" role="tab">Panel administrativo</button>
+        <button class="tab-btn" data-tab="administrativo" data-adm="facturacion" role="tab">Facturación</button>
+        <button class="tab-btn" data-tab="administrativo" data-adm="clientes" role="tab">Ventas por cliente</button>
+        <button class="tab-btn" data-tab="administrativo" data-adm="proveedores" role="tab">Compras por proveedor</button>
+        <button class="tab-btn" data-tab="administrativo" data-adm="materiaprima" role="tab">Costos de materias primas</button>
       </div>
       <div class="sidebar-group">
         <div class="sidebar-group-label">Operación</div>
@@ -340,16 +344,34 @@
         <h3 id="adm-titulo" style="margin-top:14px"></h3>
         <div class="table-wrap"><table id="tbl-adm"><thead></thead><tbody></tbody></table></div>
       </div>
-      <div class="card">
-        <h3 style="margin-top:0">Atajos de operación</h3>
-        <div style="display:flex;flex-wrap:wrap;gap:8px">
-          <button type="button" class="btn-secondary" data-adm-ir="registrar-costo" style="margin:0">Registrar costo</button>
-          <button type="button" class="btn-secondary" data-adm-ir="registrar-venta" style="margin:0">Registrar Venta</button>
-          <button type="button" class="btn-secondary" data-adm-ir="remisiones" style="margin:0">Remisión</button>
-          <button type="button" class="btn-secondary" data-adm-ir="inventario" style="margin:0">Inventario</button>
-          <button type="button" class="btn-secondary" data-adm-ir="reprocesos" style="margin:0">Reprocesos (motivos, costos y área)</button>
-          <button type="button" class="btn-secondary" data-adm-ir="m-materias" style="margin:0">Materias primas</button>
-          <button type="button" class="btn-secondary" data-adm-ir="m-costos" style="margin:0">Conceptos de costo</button>
+      <div class="card" id="adm-hub">
+        <div class="card-head"><h3>Todo lo que manejas</h3><span class="card-hint">un clic y vas directo a cada opción</span></div>
+        <div class="adm-hub">
+          <div class="adm-hub-grupo"><h4>Informes administrativos</h4>
+            <button type="button" class="btn-secondary" data-adm-informe="facturacion">Facturación</button>
+            <button type="button" class="btn-secondary" data-adm-informe="clientes">Ventas por cliente</button>
+            <button type="button" class="btn-secondary" data-adm-informe="proveedores">Compras por proveedor</button>
+            <button type="button" class="btn-secondary" data-adm-informe="materiaprima">Costos de materias primas</button>
+            <button type="button" class="btn-secondary" data-adm-ir="reprocesos">Reprocesos (motivos, costos y área)</button>
+            <button type="button" class="btn-secondary" data-adm-ir="gerencial">Gerencial</button>
+          </div>
+          <div class="adm-hub-grupo"><h4>Operación</h4>
+            <button type="button" class="btn-secondary" data-adm-ir="registrar-costo">Registrar costo</button>
+            <button type="button" class="btn-secondary" data-adm-ir="registrar-venta">Registrar Venta</button>
+            <button type="button" class="btn-secondary" data-adm-ir="remisiones">Remisión</button>
+            <button type="button" class="btn-secondary" data-adm-ir="inventario">Inventario</button>
+            <button type="button" class="btn-secondary" data-adm-ir="ordenes">Órdenes</button>
+            <button type="button" class="btn-secondary" data-adm-ir="alertas">Alertas</button>
+            <button type="button" class="btn-secondary" data-adm-ir="registrar">Registrar tiempos</button>
+          </div>
+          <div class="adm-hub-grupo"><h4>Maestros</h4>
+            <button type="button" class="btn-secondary" data-adm-ir="m-materias">Materias primas</button>
+            <button type="button" class="btn-secondary" data-adm-ir="m-costos">Conceptos de costo</button>
+            <button type="button" class="btn-secondary" data-adm-ir="m-clientes">Clientes</button>
+            <button type="button" class="btn-secondary" data-adm-ir="m-proveedores">Proveedores</button>
+            <button type="button" class="btn-secondary" data-adm-ir="m-empleados">Empleados</button>
+            <button type="button" class="btn-secondary" data-adm-ir="m-documentos">Documentos (numeración)</button>
+          </div>
         </div>
       </div>
     </section>

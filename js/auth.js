@@ -7,7 +7,7 @@ const PERMISOS = {
   gerente:          null,
   jefe_produccion:  ['produccion', 'operario', 'ordenes', 'calendario', 'alertas', 'registrar', 'reprocesos', 'inventario', 'informes-op', 'pantalla-planta', 'remisiones', 'm-empleados', 'm-areas', 'm-maquinas', 'm-actividades', 'm-motivos-pausa', 'm-motivos-reproceso', 'm-subprocesos', 'm-cat-materia', 'm-materias', 'm-insumos', 'm-piezas-producto', 'm-clientes', 'm-proveedores', 'm-productos', 'm-documentos', 'ayuda'],
   disenador:        ['ordenes', 'registrar', 'm-productos', 'm-cat-materia', 'm-materias', 'm-insumos', 'm-piezas-producto', 'ayuda'],
-  administradora:   ['administrativo', 'gerencial', 'ordenes', 'alertas', 'registrar', 'reprocesos', 'inventario', 'remisiones', 'm-empleados', 'm-clientes', 'm-proveedores', 'm-costos', 'registrar-costo', 'registrar-venta', 'm-documentos', 'ayuda'],
+  administradora:   ['administrativo', 'gerencial', 'ordenes', 'alertas', 'registrar', 'reprocesos', 'inventario', 'remisiones', 'm-empleados', 'm-clientes', 'm-proveedores', 'm-materias', 'm-costos', 'registrar-costo', 'registrar-venta', 'm-documentos', 'ayuda'],
 };
 
 // Pestaña con la que arranca cada rol (los demás arrancan en Gerencial, la
@@ -108,7 +108,14 @@ function irAPestana(tab){
   panel.classList.add('active');
 }
 
+// Avisa a los módulos que ya se aplicaron los permisos (ej. el panel administrativo oculta
+// los atajos que el rol no tiene).
 export function aplicarPermisos(){
+  aplicarPermisosInterno();
+  document.dispatchEvent(new Event('permisos-aplicados'));
+}
+
+function aplicarPermisosInterno(){
   if(!currentUser) return;
   SOLO_GERENTE.forEach(tab => {
     const b = document.querySelector(`.tab-btn[data-tab="${tab}"]`);

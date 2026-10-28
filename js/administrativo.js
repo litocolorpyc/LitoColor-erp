@@ -155,6 +155,18 @@ export function renderAdministrativo(){
   consultar(); // refresca con los datos recién cargados
 }
 
+// Un atajo solo se muestra si la pestaña a la que lleva está permitida para el rol actual.
+function ajustarAtajos(){
+  const visible = tab => { const b = document.querySelector(`.tab-btn[data-tab="${tab}"]:not([data-adm])`); return !!b && b.style.display !== 'none'; };
+  document.querySelectorAll('[data-adm-ir]').forEach(b => { b.style.display = visible(b.dataset.admIr) ? '' : 'none'; });
+  document.querySelectorAll('.adm-hub-grupo').forEach(g => { g.style.display = Array.from(g.querySelectorAll('button')).some(b => b.style.display !== 'none') ? '' : 'none'; });
+}
+
+function abrirInforme(tipo){
+  $('adm-tipo').value = tipo;
+  consultar();
+}
+
 export function initAdministrativo(){
   if(!$('adm-consultar')) return;
   const { desde, hasta } = rangoFechas('mes');
@@ -165,5 +177,13 @@ export function initAdministrativo(){
   $('adm-imprimir').addEventListener('click', imprimir);
   $('adm-exportar').addEventListener('click', exportar);
   document.querySelectorAll('[data-adm-ir]').forEach(b => b.addEventListener('click', () => irA(b.dataset.admIr)));
+  // Menú lateral (Facturación, Ventas por cliente…) y atajos del panel: abren el informe elegido.
+  document.querySelectorAll('.tab-btn[data-adm]').forEach(b => b.addEventListener('click', () => abrirInforme(b.dataset.adm)));
+  document.querySelectorAll('[data-adm-informe]').forEach(b => b.addEventListener('click', () => {
+    abrirInforme(b.dataset.admInforme);
+    document.querySelector('#panel-administrativo .card-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
+  document.addEventListener('permisos-aplicados', ajustarAtajos);
+  ajustarAtajos();
   consultar();
 }
