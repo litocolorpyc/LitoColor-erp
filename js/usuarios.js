@@ -90,6 +90,7 @@ export function initUsuarios(){
   renderUsuarios();
   renderMatrizPermisos();
   document.getElementById('mp-guardar')?.addEventListener('click', guardarMatriz);
+  document.getElementById('mp-ir')?.addEventListener('click', () => document.getElementById('card-matriz-permisos')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   document.getElementById('mp-restaurar')?.addEventListener('click', () => {
     ROLES_CONFIGURABLES.forEach(r => {
       const base = new Set(permisosPorDefecto(r));

@@ -1609,7 +1609,7 @@
 
     <section class="tab-panel" id="panel-usuarios">
       <div class="card">
-        <div class="card-head"><h3>Usuarios y accesos</h3><span class="card-hint">solo Gerente y Admin ven esta pestaña</span></div>
+        <div class="card-head"><h3>Usuarios y accesos</h3><span style="display:flex;gap:10px;align-items:center"><span class="card-hint">solo Gerente y Admin ven esta pestaña</span><button type="button" class="btn-primary" id="mp-ir" style="margin:0">Ir a permisos por rol ↓</button></span></div>
         <p class="card-hint" style="margin-bottom:14px">Para dar acceso a alguien nuevo: ponle su correo y elige su rol aquí, y dile que entre a esta página y use <b>"¿Primera vez? Crea tu contraseña aquí"</b> en la pantalla de login. No necesitas pedirme ningún SQL.</p>
         <div class="table-wrap">
           <table id="tbl-usuarios">
@@ -1619,7 +1619,7 @@
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" id="card-matriz-permisos">
         <div class="card-head"><h3>Qué opciones ve cada rol</h3>
           <span style="display:flex;gap:8px">
             <button type="button" class="btn-secondary" id="mp-restaurar" style="margin:0">Restaurar lista original</button>
