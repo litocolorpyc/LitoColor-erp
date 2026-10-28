@@ -5,9 +5,9 @@ import { sb } from './supabase-client.js';
 const PERMISOS = {
   admin:            null,
   gerente:          null,
-  jefe_produccion:  ['produccion', 'operario', 'ordenes', 'calendario', 'alertas', 'registrar', 'reprocesos', 'inventario', 'informes-op', 'pantalla-planta', 'remisiones', 'm-empleados', 'm-areas', 'm-maquinas', 'm-actividades', 'm-motivos-pausa', 'm-motivos-reproceso', 'm-subprocesos', 'm-cat-materia', 'm-materias', 'm-insumos', 'm-piezas-producto', 'm-clientes', 'm-proveedores', 'm-productos', 'm-documentos', 'ayuda'],
+  jefe_produccion:  ['produccion', 'operario', 'ordenes', 'calendario', 'alertas', 'registrar', 'reprocesos', 'inventario', 'producto-terminado', 'informes-op', 'pantalla-planta', 'remisiones', 'm-empleados', 'm-areas', 'm-maquinas', 'm-actividades', 'm-motivos-pausa', 'm-motivos-reproceso', 'm-subprocesos', 'm-cat-materia', 'm-materias', 'm-insumos', 'm-piezas-producto', 'm-clientes', 'm-proveedores', 'm-productos', 'm-documentos', 'ayuda'],
   disenador:        ['ordenes', 'registrar', 'm-productos', 'm-cat-materia', 'm-materias', 'm-insumos', 'm-piezas-producto', 'ayuda'],
-  administradora:   ['administrativo', 'gerencial', 'ordenes', 'alertas', 'registrar', 'reprocesos', 'inventario', 'remisiones', 'm-empleados', 'm-clientes', 'm-proveedores', 'm-materias', 'm-costos', 'registrar-costo', 'registrar-venta', 'm-documentos', 'ayuda'],
+  administradora:   ['administrativo', 'gerencial', 'ordenes', 'alertas', 'registrar', 'reprocesos', 'inventario', 'producto-terminado', 'remisiones', 'm-empleados', 'm-clientes', 'm-proveedores', 'm-materias', 'm-costos', 'registrar-costo', 'registrar-venta', 'm-documentos', 'ayuda'],
 };
 
 // Pestaña con la que arranca cada rol (los demás arrancan en Gerencial, la

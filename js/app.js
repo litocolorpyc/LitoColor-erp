@@ -18,6 +18,7 @@ import { initConsultaTiempos, renderConsultaTiempos } from './consulta-tiempos.j
 import { initInventario, renderInventario } from './inventario.js';
 import { initRemisiones, actualizarNumeroPreview } from './remisiones.js';
 import { initIndicadoresReprocesos, renderIndicadoresReprocesos } from './reproceso-indicadores.js';
+import { initProductoTerminado, renderProductoTerminado } from './producto-terminado.js';
 import { initReprocesos, abrirNuevoReprocesoDesdeOrden, renderListadoReprocesos, renderInformeReprocesos, poblarOperarioRep, poblarMotivoRep } from './reprocesos.js';
 import { restaurarSesion, iniciarSesion, cerrarSesion, cambiarContrasena, crearCuentaPropia, getCurrentUser, aplicarPermisos } from './auth.js';
 
@@ -45,6 +46,7 @@ function onRegistrarChange(){
   pasoSeguro('refrescar listado de Reprocesos', renderListadoReprocesos);
   pasoSeguro('refrescar informe de Reprocesos', renderInformeReprocesos);
   pasoSeguro('refrescar indicadores de Reprocesos', renderIndicadoresReprocesos);
+  pasoSeguro('refrescar Producto terminado', renderProductoTerminado);
 }
 
 function onMaestrosChange(){
@@ -123,6 +125,7 @@ async function arrancarApp(){
   pasoSeguro('Remisiones', initRemisiones);
   pasoSeguro('Reprocesos', initReprocesos);
   pasoSeguro('Indicadores de Reprocesos', initIndicadoresReprocesos);
+  pasoSeguro('Producto terminado', initProductoTerminado);
 
   pasoSeguro('Botón Excel en todas las tablas', () => activarExcelEnTarjetas());
   pasoSeguro('Permisos', aplicarPermisos);

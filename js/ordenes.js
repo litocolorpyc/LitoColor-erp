@@ -2092,6 +2092,7 @@ function resetOppForm(nextOrden){
   document.getElementById('opp-orden').disabled = false;
   document.getElementById('opp-fecha').value = fechaHoyLocal();
   document.getElementById('opp-observaciones').value = '';
+  { const a = document.getElementById('opp-cant-pedido'), u = document.getElementById('opp-unidad-pedido'); if(a) a.value = ''; if(u) u.value = 'unid.'; }
   setValSafe('opp-tipo-trabajo', 'Litografia');
   aplicarTipoTrabajo();
   addPiezaCard();
@@ -2105,6 +2106,7 @@ function loadOrdenParaEditar(orden){
   document.getElementById('opp-orden').value = etiquetaOrden(orden);
   document.getElementById('opp-orden').disabled = true;
   document.getElementById('opp-observaciones').value = o.observaciones || '';
+  { const a = document.getElementById('opp-cant-pedido'), u = document.getElementById('opp-unidad-pedido'); if(a) a.value = o.cantidad_pedido ?? ''; if(u) u.value = o.unidad_pedido || 'unid.'; }
   ensureOptionExists(document.getElementById('opp-cliente'), o.cliente || '');
   ensureOptionExists(document.getElementById('opp-cliente-prod'), o.cliente_produccion || '');
   ensureOptionExists(document.getElementById('opp-producto'), o.producto || '');
@@ -2136,6 +2138,7 @@ function duplicarOrden(orden){
   ensureOptionExists(document.getElementById('opp-producto'), o.producto || '');
   document.getElementById('opp-fecha').value = fechaHoyLocal();
   document.getElementById('opp-observaciones').value = ''; // observación es de la orden original, no aplica igual a la copia
+  { const a = document.getElementById('opp-cant-pedido'), u = document.getElementById('opp-unidad-pedido'); if(a) a.value = o.cantidad_pedido ?? ''; if(u) u.value = o.unidad_pedido || 'unid.'; }
   setValSafe('opp-tipo-trabajo', o.tipo_trabajo || 'Litografia');
   aplicarTipoTrabajo();
   renderProductoRef();
@@ -2241,6 +2244,8 @@ async function saveOpp(){
     const esExterno = esTipoExterno(tipoTrabajo);
     const cabecera = {
       orden, cliente,
+      cantidad_pedido: parseFloat(document.getElementById('opp-cant-pedido')?.value) || null,
+      unidad_pedido: document.getElementById('opp-cant-pedido')?.value ? (document.getElementById('opp-unidad-pedido')?.value.trim() || 'unid.') : null,
       cliente_produccion: (() => { const v = document.getElementById('opp-cliente-prod')?.value.trim(); return (v && v !== '__nuevo__') ? v : null; })(),
       producto: document.getElementById('opp-producto').value.trim() || null,
       fecha: document.getElementById('opp-fecha').value,

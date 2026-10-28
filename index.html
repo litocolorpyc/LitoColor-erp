@@ -66,6 +66,7 @@
         <button class="tab-btn" data-tab="registrar-venta" role="tab">Registrar Venta</button>
         <button class="tab-btn" data-tab="remisiones" role="tab">Remisión</button>
         <button class="tab-btn" data-tab="inventario" role="tab">Inventario</button>
+        <button class="tab-btn" data-tab="producto-terminado" role="tab">Producto terminado</button>
         <button class="tab-btn" data-tab="informes-op" role="tab">Informes de órdenes</button>
         <button class="tab-btn" data-tab="pantalla-planta" role="tab">Pantalla de planta</button>
       </div>
@@ -472,6 +473,57 @@
       </div>
     </section>
 
+    <section class="tab-panel" id="panel-producto-terminado">
+      <div class="card">
+        <div class="card-head">
+          <h2 class="card-title" style="margin:0">Producto terminado y en proceso</h2>
+          <button type="button" class="btn-secondary" id="ipt-exportar" style="margin:0">⬇ Excel</button>
+        </div>
+        <p class="card-hint" style="margin:6px 0 0">Compara lo pedido con lo despachado, y lleva el producto en proceso, terminado, sobrante y en cuarentena (procedimiento de daños, pasos 8.1 y 8.2).</p>
+      </div>
+      <div class="kpi-row" id="ipt-kpis"></div>
+
+      <div class="card">
+        <div class="card-head"><h3>Cumplimiento de pedidos</h3><span class="card-hint" id="ipt-cump-hint"></span></div>
+        <div class="form-row">
+          <div class="field"><label>Buscar</label><input type="text" id="ipt-cump-q" placeholder="orden, cliente o producto"></div>
+          <div class="field" style="max-width:300px"><label>Mostrar</label>
+            <select id="ipt-cump-f"><option value="">Órdenes con pedido definido</option><option value="incompletos">Entrega incompleta (órdenes terminadas)</option><option value="parciales">Despacho parcial</option><option value="exceso">Con sobrante</option><option value="sin">Sin pedido definido</option></select></div>
+        </div>
+        <div class="table-wrap" id="ipt-cump-tabla"></div>
+      </div>
+
+      <div class="card" id="ipt-form">
+        <div class="card-head"><h3 id="ipt-form-modo">Registrar producto</h3><span class="card-hint">en proceso, terminado, sobrante o en cuarentena</span></div>
+        <div class="form-row">
+          <div class="field" style="max-width:170px"><label>Orden <span class="card-hint">(opcional)</span></label><input type="text" id="ipt-orden" placeholder="ej. 5944 o S-0001"></div>
+          <div class="field" style="max-width:120px"><label>Pieza</label><input type="number" id="ipt-sub" min="1" placeholder="sub."></div>
+          <div class="field"><label>Producto</label><input type="text" id="ipt-desc" placeholder="se completa con el de la orden"></div>
+          <div class="field" style="max-width:140px"><label>Cantidad</label><input type="number" id="ipt-cant" min="0" step="any"></div>
+          <div class="field" style="max-width:120px"><label>Unidad</label><input type="text" id="ipt-unidad" value="unid."></div>
+        </div>
+        <div class="form-row">
+          <div class="field" style="max-width:190px"><label>Estado</label><select id="ipt-estado"></select></div>
+          <div class="field" id="ipt-disp-wrap" style="display:none;max-width:240px"><label>Disposición <span class="card-hint">(qué se decide hacer)</span></label><select id="ipt-disp"></select></div>
+          <div class="field"><label>Ubicación</label><input type="text" id="ipt-ubic" placeholder="ej. estante 3, bodega"></div>
+          <div class="field"><label>Caso de daño vinculado</label><select id="ipt-caso"><option value="">— ninguno —</option></select></div>
+        </div>
+        <div class="field full"><label>Nota <span class="card-hint">(en cuarentena: motivo de la retención)</span></label><input type="text" id="ipt-nota"></div>
+        <div class="form-foot"><span></span>
+          <button type="button" class="btn-secondary" id="ipt-cancelar" style="display:none">Cancelar edición</button>
+          <button type="button" class="btn-primary" id="ipt-guardar">Guardar</button></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Inventario de producto</h3><span class="card-hint">en cuarentena: elige la disposición para resolverla</span></div>
+        <div class="form-row">
+          <div class="field"><label>Buscar</label><input type="text" id="ipt-inv-q" placeholder="orden, cliente, producto, ubicación…"></div>
+          <div class="field" style="max-width:220px"><label>Estado</label><select id="ipt-inv-f"></select></div>
+        </div>
+        <div class="table-wrap" id="ipt-inv-tabla"></div>
+      </div>
+    </section>
+
     <section class="tab-panel" id="panel-operario">
       <div class="op-select-row">
         <label for="op-select">Operario</label>
@@ -675,6 +727,11 @@
               <button type="button" class="btn-secondary" id="opp-producto-nuevo-add" style="margin:0">Agregar</button>
             </div>
           </div>
+        </div>
+        <div class="form-row">
+          <div class="field" style="max-width:250px"><label>Cantidad del pedido <span class="card-hint">(producto terminado; opcional)</span></label><input type="number" id="opp-cant-pedido" min="0" step="any" placeholder="ej. 1000"></div>
+          <div class="field" style="max-width:150px"><label>Unidad</label><input type="text" id="opp-unidad-pedido" value="unid."></div>
+          <div class="field" style="justify-content:flex-end"><span class="card-hint" style="padding-bottom:8px">Sirve para comparar lo pedido con lo despachado y avisar si una orden terminada se entregó incompleta.</span></div>
         </div>
         <div id="opp-producto-ref" style="display:none;margin-bottom:14px"></div>
 

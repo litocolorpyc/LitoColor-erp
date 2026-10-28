@@ -2,6 +2,7 @@ import { DB } from './store.js';
 import { faltanteVigente } from './registrar.js';
 import { estadoOrden } from './ordenes.js';
 import { fmtNum, etiquetaOrden } from './helpers.js';
+import { pedidosConEntregaIncompleta } from './producto-terminado.js';
 
 function diasDesde(fechaStr){
   if(!fechaStr) return null;
@@ -132,6 +133,16 @@ function calcularAlertas(){
       severidad: 'media',
       icono: '❓',
       mensaje: `El registro de <b>${r.operario || 'un operario'}</b> en la orden <b>${r.orden != null ? etiquetaOrden(r.orden) : '—'}</b> (${(r.fecha||'').slice(0,10)}) anotó <b>"${r.materiaPrima}"</b> como insumo, que no existe igual en ningún maestro — no se descontó del inventario ni se costeó. Corrígelo desde el Historial de esa orden &gt; "Ajustar".`
+    });
+  });
+
+  // H) órdenes terminadas cuya entrega quedó por debajo del pedido (procedimiento de
+  // daños: "reprocesos por no salir el pedido"). Necesita la cantidad del pedido en la orden.
+  pedidosConEntregaIncompleta().forEach(({ o, c }) => {
+    alertas.push({
+      severidad: 'media',
+      icono: '📦',
+      mensaje: `La orden <b>${etiquetaOrden(o.orden)}</b> (${o.cliente || 'sin cliente'}) está terminada pero solo se despacharon <b>${fmtNum(c.despachado, 0)}</b> de <b>${fmtNum(c.pedido, 0)}</b> ${o.unidad_pedido || 'unid.'} (faltan <b>${fmtNum(c.pendiente, 0)}</b>${c.bodega ? `; hay ${fmtNum(c.bodega, 0)} en bodega` : ''}). Revisa en Producto terminado.`
     });
   });
 
