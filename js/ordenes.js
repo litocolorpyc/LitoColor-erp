@@ -23,9 +23,17 @@ const HINT_TIPO_TRABAJO = {
   'Litografia': '',
   'Impresión Digital': 'Ficha simplificada: no requiere pliego ni imposición.',
   'Gran Formato': 'Ficha simplificada: banners, pendones, vinilos, etc.',
-  'Servicio de Impresión Externo': 'Ficha simplificada: trabajo que se subcontrata con un proveedor.',
-  'Trabajo Externo': 'Ficha simplificada: cualquier trabajo que no es de planta propia.'
+  'Servicio de Impresión Externo': 'Ficha completa (papel, tintas, acabados… todo opcional) + proveedor y costo del servicio.',
+  'Trabajo Externo': 'Ficha completa (papel, tintas, acabados… todo opcional) + proveedor y costo del servicio.'
 };
+
+// Los trabajos externos usan la MISMA ficha que Litografía (Juan, 27oct26):
+// a veces el cliente trae todo y solo se cobra la máquina, pero otras veces
+// hay que registrar papel, tinta, pegante, etc. — por eso todo es opcional y
+// además se muestran los campos de proveedor / costo del servicio.
+const TIPOS_EXTERNOS = ['Servicio de Impresión Externo', 'Trabajo Externo'];
+const esTipoExterno = (tipo) => TIPOS_EXTERNOS.includes(tipo);
+const esFichaCompleta = (tipo) => tipo === 'Litografia' || esTipoExterno(tipo);
 
 // Qué tipo de proveedor tiene más sentido sugerir primero según el tipo de
 // trabajo de la orden. No es una restricción — solo ordena la lista para
@@ -130,6 +138,8 @@ function procesosOrdenados(node){
 function sincronizarProcesosLitografia(node){
   const tipoSel = document.getElementById('opp-tipo-trabajo');
   const esLitografia = (tipoSel?.value || 'Litografia') === 'Litografia';
+  // En trabajos externos los procesos se ven (ficha completa) pero NO se
+  // marcan solos: solo los que de verdad se hagan en planta.
   node.querySelectorAll('.litografia-only-check .f-proc').forEach(cb => { cb.checked = esLitografia; });
 }
 
@@ -138,8 +148,8 @@ function aplicarTipoTrabajo(){
   const piezasList = document.getElementById('opp-piezas-list');
   if(!tipoSel || !piezasList) return;
   const tipo = tipoSel.value;
-  const esLitografia = tipo === 'Litografia';
-  piezasList.classList.toggle('tipo-otros', !esLitografia);
+  piezasList.classList.toggle('tipo-otros', !esFichaCompleta(tipo));
+  piezasList.classList.toggle('tipo-externo', esTipoExterno(tipo));
   piezasList.querySelectorAll('.opp-pieza-card').forEach(node => {
     sincronizarProcesosLitografia(node);
     refrescarOrdenProcesos(node);
@@ -844,6 +854,16 @@ function puedeEditarPresupuesto(){
   return puedeReordenarPrioridad();
 }
 
+// "Apellido" de la orden para distinguir trabajos del mismo cliente en las
+// listas de prioridad (ej. Magic Medios · Cuaderno vs. Magic Medios · Bolsa,
+// pedido de Julián 27oct26): el producto de la orden o, si no tiene, los
+// nombres de sus piezas.
+function apellidoOrden(o){
+  if(o.producto && String(o.producto).trim()) return String(o.producto).trim();
+  const nombres = [...new Set((DB.opp_piezas || []).filter(p => p.orden === o.orden).map(p => (p.pieza || '').trim()).filter(Boolean))];
+  return nombres.slice(0, 3).join(', ') + (nombres.length > 3 ? '…' : '');
+}
+
 function renderPrioridadOrdenes(){
   const cont = document.getElementById('opp-prioridad-list');
   if(!cont) return;
@@ -866,7 +886,7 @@ function renderPrioridadOrdenes(){
     return `<div class="prioridad-row" data-orden="${o.orden}" draggable="${puedeArrastrar}">
       <span class="prioridad-handle">${puedeArrastrar ? '⠿' : '·'}</span>
       <span class="prioridad-num">${i + 1}</span>
-      <span class="prioridad-info fila-clicable"><b>Orden ${etiquetaOrden(o.orden)}</b> — ${o.cliente || '—'} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></span>
+      <span class="prioridad-info fila-clicable"><b>Orden ${etiquetaOrden(o.orden)}</b> — ${o.cliente || '—'}${apellidoOrden(o) ? ' · <b>' + apellidoOrden(o) + '</b>' : ''} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></span>
       ${estadoBadgeHTML(estado)}
     </div>`;
   }).join('');
@@ -2193,7 +2213,8 @@ async function saveOpp(){
   btn.disabled = true; btn.textContent = 'Guardando…';
   try{
     const tipoTrabajo = document.getElementById('opp-tipo-trabajo')?.value || 'Litografia';
-    const esLitografia = tipoTrabajo === 'Litografia';
+    const esLitografia = esFichaCompleta(tipoTrabajo);
+    const esExterno = esTipoExterno(tipoTrabajo);
     const cabecera = {
       orden, cliente,
       producto: document.getElementById('opp-producto').value.trim() || null,
@@ -2241,6 +2262,11 @@ async function saveOpp(){
       const extrasPieza = leerMaterialesExtra(node);
       return {
         ...base,
+        ...(esExterno ? {
+          proveedor: node.querySelector('.f-proveedor')?.value.trim() || null,
+          costo_externo: parseFloat(node.querySelector('.f-costo-externo')?.value) || null,
+          fecha_entrega_estimada: node.querySelector('.f-fecha-entrega')?.value || null
+        } : {}),
         tamano_ancho: parseFloat(node.querySelector('.f-tam-ancho').value) || null,
         tamano_alto: parseFloat(node.querySelector('.f-tam-alto').value) || null,
         papel: node.querySelector('.f-papel').value.trim() || null,

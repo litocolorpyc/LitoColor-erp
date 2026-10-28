@@ -114,7 +114,9 @@ main{ padding:20px 24px 40px; }
 .card{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px 16px; margin-bottom:14px; }
 .card-head{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:10px; }
 .card-hint{ font-size:11px; color:var(--ink-faint); }
-.table-wrap{ overflow-x:auto; }
+.table-wrap{ overflow:auto; max-height:70vh; }
+/* Encabezados fijos al desplazarse, como en Excel (pedido de Liliana, 27oct26). */
+.table-wrap thead th{ position:sticky; top:0; z-index:2; background:var(--card); box-shadow:0 1px 0 var(--line); }
 
 .badge{ display:inline-block; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:600; }
 
@@ -214,6 +216,9 @@ select, input, textarea{ font-family:inherit; font-size:13px; padding:7px 9px; b
 #opp-piezas-list.tipo-otros .litografia-only,
 #opp-piezas-list.tipo-otros .litografia-only-check{ display:none; }
 #opp-piezas-list.tipo-otros .otros-tipos-only{ display:block; }
+/* Trabajo externo: ficha completa + bloque de proveedor/costo; el campo de notas simple sobra (ya está "Otros acabados"). */
+#opp-piezas-list.tipo-externo .otros-tipos-only{ display:block; }
+#opp-piezas-list.tipo-externo .solo-ficha-simple{ display:none; }
 .tipo-trabajo-chip{ display:inline-block; font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:20px; background:var(--brand-soft,#e8f0fb); color:var(--brand,#185FA5); }
 
 /* Prioridad de producción: lista arrastrable */

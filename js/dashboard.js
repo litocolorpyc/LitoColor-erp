@@ -1230,7 +1230,7 @@ function renderTablaRentabilidad(){
       ? `Incluye ${fmtCOP(r.otrosDirecto)} de costos con esta orden asociada directamente`
       : 'Prorrateado según el ingreso de esta orden';
     const color = m>=0?'var(--good)':'var(--bad)';
-    return `<tr class="fila-clicable" data-orden="${r.orden}"><td>${etiquetaOrden(r.orden)}</td><td>${r.cliente||'—'}</td><td>${(r.trabajo||'—').toString().trim()}</td><td class="num">${fmtCOP(r.ing)}</td><td class="num">${r.ingPres!=null?fmtCOP(r.ingPres):'—'}</td><td class="num">${fmtCOP(r.cost)}</td><td class="num" title="${otrosTitle}">${fmtCOP(r.otros)}</td><td class="num" style="color:${color}">${fmtCOP(m)}</td><td class="num" style="color:${color}">${pct==null?'—':fmtNum(pct,0)+'%'}</td></tr>`;
+    return `<tr class="fila-clicable" data-orden="${r.orden}"><td>${etiquetaOrden(r.orden)}</td><td>${r.cliente||'—'}</td><td>${(r.trabajo||'—').toString().trim()}</td><td class="num">${fmtCOP(r.ing)}</td><td class="num">${r.ingPres!=null?fmtCOP(r.ingPres):'—'}</td><td class="num">${fmtCOP(r.cost)}</td><td class="num" title="${otrosTitle}">${fmtCOP(r.otros)}<div class="card-hint" style="font-size:10.5px">directos ${fmtCOP(r.otrosDirecto)} + prorrateo ${fmtCOP(r.otros - r.otrosDirecto)}</div></td><td class="num" style="color:${color}">${fmtCOP(m)}</td><td class="num" style="color:${color}">${pct==null?'—':fmtNum(pct,0)+'%'}</td></tr>`;
   }).join('') || `<tr><td colspan="9" style="text-align:center;color:var(--ink-faint)">${rentabilidadBase.length ? 'Ninguna orden coincide con la búsqueda' : 'Sin datos en este rango'}</td></tr>`;
   document.querySelectorAll('#tbl-ger-ordenes tbody tr[data-orden]').forEach(tr => {
     tr.addEventListener('click', () => irAOrdenYVerDetalle(parseInt(tr.dataset.orden, 10)));
