@@ -1626,6 +1626,10 @@
             <button type="button" class="btn-primary" id="mp-guardar" style="margin:0">Guardar permisos</button>
           </span></div>
         <p class="card-hint" style="margin:6px 0 10px">Marca las opciones del menú que puede ver cada rol. <b>Admin</b> y <b>Gerente</b> ven todo; "Resumen gerencial" y "Resultado por Área Comercial" son solo del Gerente. Los cambios se ven cuando la persona vuelve a entrar. Esto controla el menú; los datos financieros siguen protegidos por la base de datos.</p>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+          <input type="text" id="mp-nombre-rol" placeholder="Nombre del rol nuevo (ej. Contador)" style="max-width:280px">
+          <button type="button" class="btn-secondary" id="mp-crear" style="margin:0">Crear rol</button>
+        </div>
         <div class="table-wrap" id="matriz-permisos"></div>
       </div>
     </section>

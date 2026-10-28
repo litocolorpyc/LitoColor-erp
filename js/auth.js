@@ -22,22 +22,55 @@ const PAGINA_INICIO = { administradora: 'administrativo', gerente: 'dashboard-ge
 const SOLO_GERENTE = ['dashboard-gerente', 'resultado-areas'];
 
 // Roles cuya lista de opciones se edita en la matriz de Usuarios (admin y gerente ven todo).
-export const ROLES_CONFIGURABLES = ['administradora', 'jefe_produccion', 'disenador'];
-export const permisosPorDefecto = rol => (PERMISOS[rol] || []).slice();
+// A los de fábrica se suman los roles nuevos que el Gerente/Admin crea (tabla roles_personalizados).
+const ROLES_BASE_CONFIGURABLES = ['administradora', 'jefe_produccion', 'disenador'];
+const ROLES_RESERVADOS = ['admin', 'gerente', 'operario', ...ROLES_BASE_CONFIGURABLES];
+let rolesPersonalizados = [];   // [{ clave, nombre }]
+export const rolesConfigurables = () => [...ROLES_BASE_CONFIGURABLES, ...rolesPersonalizados.map(r => r.clave)];
+export const rolesNuevos = () => rolesPersonalizados.slice();
+export const permisosPorDefecto = rol => (PERMISOS[rol] || (ROLES_BASE_CONFIGURABLES.includes(rol) ? [] : ['ayuda'])).slice();
 
 // Permisos guardados en la base (tabla permisos_rol), por rol. Si un rol no tiene filas
 // (o no se pudo leer la tabla) se usan los de arriba.
 let permisosDB = {};
 export async function cargarPermisosRol(){
   const { data, error } = await sb.from('permisos_rol').select('rol,tab');
-  if(error || !data){ permisosDB = {}; return; }
-  const m = {};
-  data.forEach(r => { (m[r.rol] = m[r.rol] || []).push(r.tab); });
-  permisosDB = m;
+  if(error || !data){ permisosDB = {}; }
+  else {
+    const m = {};
+    data.forEach(r => { (m[r.rol] = m[r.rol] || []).push(r.tab); });
+    permisosDB = m;
+  }
+  const rp = await sb.from('roles_personalizados').select('clave,nombre').order('nombre');
+  rolesPersonalizados = rp.error || !rp.data ? [] : rp.data;
 }
 export function permisosDeRol(rol){
   if(PERMISOS[rol] === null) return null;                 // admin y gerente: todo
-  return permisosDB[rol] || PERMISOS[rol];
+  // Un rol desconocido nunca "ve todo": sin filas guardadas solo ve la Ayuda.
+  return permisosDB[rol] || PERMISOS[rol] || ['ayuda'];
+}
+const aClave = n => n.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+// Crea un rol nuevo; arranca viendo solo la Ayuda hasta que se marquen sus opciones.
+export async function crearRolNuevo(nombre){
+  nombre = nombre.trim();
+  const clave = aClave(nombre);
+  if(!clave) return { error: { message: 'Escribe un nombre para el rol' } };
+  if(ROLES_RESERVADOS.includes(clave) || rolesPersonalizados.some(r => r.clave === clave)) return { error: { message: 'Ya existe un rol con ese nombre' } };
+  const ins = await sb.from('roles_personalizados').insert({ clave, nombre });
+  if(ins.error) return { error: ins.error };
+  const perm = await guardarPermisosRol(clave, ['ayuda']);
+  if(perm.error) return perm;
+  rolesPersonalizados.push({ clave, nombre });
+  return { clave };
+}
+export async function eliminarRolNuevo(clave){
+  const d1 = await sb.from('permisos_rol').delete().eq('rol', clave);
+  if(d1.error) return { error: d1.error };
+  const d2 = await sb.from('roles_personalizados').delete().eq('clave', clave);
+  if(d2.error) return { error: d2.error };
+  rolesPersonalizados = rolesPersonalizados.filter(r => r.clave !== clave);
+  delete permisosDB[clave];
+  return {};
 }
 // Reemplaza la lista de opciones de un rol (solo Gerente/Admin; lo exige también la base).
 export async function guardarPermisosRol(rol, tabs){
