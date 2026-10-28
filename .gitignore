@@ -1,3 +1,6 @@
 # Este archivo se genera automáticamente en cada despliegue de Vercel
 # (ver build.js) y nunca debe subirse a GitHub con credenciales reales.
 # config.js
+
+# Token de Supabase de este proyecto (nunca subir)
+.supabase-token
