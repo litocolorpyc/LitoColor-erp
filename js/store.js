@@ -11,7 +11,7 @@ export const DB = {
   categorias_materia_prima: [], materias_primas_areas: [], areas: [], prioridad_area: [],
   alertas_faltante_material: [], inventario_ajustes: [], facturas_venta: [], facturas_venta_items: [],
   consecutivos_documentos: [], remisiones: [], remision_ordenes: [], remision_items: [],
-  motivos_reproceso: []
+  motivos_reproceso: [], reproceso_casos: []
 };
 
 export function normProd(r){

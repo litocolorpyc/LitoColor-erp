@@ -924,11 +924,13 @@
       <div class="card">
         <div class="card-head"><h3>Reprocesos registrados (por OP)</h3><span class="card-hint">una fila por OP · "Detalle" muestra cada proceso con su costo, permite corregir motivo/área que lo generó, agregar consumos de materia prima, insumos u otros costos, e incluir otros procesos de la OP que también se rehicieron</span></div>
         <p class="card-hint" id="rep-sin-motivo-aviso" style="display:none;color:var(--bad)"></p>
+        <p class="card-hint" id="rep-casos-resumen" style="margin:4px 0 10px"></p>
         <div class="form-row">
           <div class="field"><label>N° de orden</label><input type="text" id="rep-f-orden" placeholder="ej. 5944 o S-0001"></div>
           <div class="field"><label>Área (origen o rehecha)</label><input type="text" id="rep-f-area" placeholder="contiene…"></div>
           <div class="field"><label>Motivo</label><input type="text" id="rep-f-motivo" placeholder="contiene…"></div>
           <div class="field"><label>Operario / Responsable</label><input type="text" id="rep-f-persona" placeholder="contiene…"></div>
+          <div class="field" style="max-width:170px"><label>Caso</label><select id="rep-f-caso"><option value="">Todos</option><option>Abierto</option><option>En análisis</option><option>Cerrado</option></select></div>
           <div class="field" style="max-width:160px"><label>Desde</label><input type="date" id="rep-f-desde"></div>
           <div class="field" style="max-width:160px"><label>Hasta</label><input type="date" id="rep-f-hasta"></div>
         </div>
@@ -938,7 +940,7 @@
         </div>
         <div class="table-wrap">
           <table id="tbl-rep-listado">
-            <thead><tr><th>Fecha</th><th>Orden</th><th>Área que lo generó</th><th>Motivo</th><th>Procesos rehechos</th><th>Estado</th><th class="num">Mano de obra</th><th class="num">Materia prima</th><th class="num">Insumos</th><th class="num">Otros</th><th class="num">Total</th><th></th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Orden</th><th>Área que lo generó</th><th>Motivo</th><th>Procesos rehechos</th><th>Estado</th><th>Caso</th><th class="num">Mano de obra</th><th class="num">Materia prima</th><th class="num">Insumos</th><th class="num">Otros</th><th class="num">Total</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -1504,6 +1506,7 @@
         </ol>
         <p>En ambos casos hay que asignar un <b>operario</b>, elegir el <b>motivo</b> (catálogo en Maestros → "Motivos de reproceso"), y opcionalmente anotar el <b>responsable</b> (quién o qué lo causó) y un <b>costo adicional</b> (si aplica, se carga como un costo más de esa orden).</p>
         <p>El operario asignado lo ve en <b>Registrar</b> como una actividad más ("📌 asignada, sin iniciar") — la empieza y la termina igual que cualquier otra, y el tiempo/costo de mano de obra queda registrado solo, sin nada especial que hacer. Si un operario marca "¿Reproceso?" = Sí por su cuenta al finalizar una actividad normal (sin pasar por el botón "↺"), también se le piden esos mismos 3 datos ahí mismo.</p>
+        <p><b>Seguimiento y cierre del caso:</b> en "Detalle / ✎ Completar" de cada reproceso hay un bloque <b>Seguimiento y cierre del caso</b>: estado (Abierto, En análisis, Cerrado), severidad (menor, mayor, crítico), qué se dañó, <b>causa raíz</b> (por qué pasó, hasta la causa de fondo), <b>acción correctiva</b> (qué se hará para que no se repita), responsable y fecha compromiso, y la verificación o lecciones aprendidas. Para <b>cerrar</b> el caso se piden severidad, causa raíz y acción correctiva, y que todos los procesos estén terminados; al cerrar queda la fecha. Arriba de la lista ves cuántos casos hay abiertos, en análisis y cerrados, y el <b>tiempo promedio de cierre</b> (meta del procedimiento de daños: 10 días). Se puede filtrar la lista por estado del caso.</p>
         <p><b>Un reproceso = una OP.</b> Si en una misma orden se tuvieron que repetir varios procesos (ej. la OP 5972, con 13 registros de reproceso), para las estadísticas cuenta como <b>un solo reproceso</b>. Cada reproceso guarda el <b>área que lo generó</b> (ej. se rehízo en Terminado porque Litografía imprimió mal), que es distinta del área donde se rehízo el trabajo.</p>
         <p><b>Costo del reproceso:</b> suma <b>todos los procesos involucrados</b>, cada uno con su <b>mano de obra</b> (horas × valor/hora), <b>materia prima</b>, <b>insumos</b> y <b>otros costos</b> (costo adicional y otros). El material que el operario anota al terminar el proceso se suma solo.</p>
         <p><b>¿Dónde ver un reproceso?</b> En la pestaña <b>Reprocesos</b> (informe por área que lo generó, por motivo y por operario, más el listado con una fila por OP), y en el <b>detalle de cada orden</b>, en el recuadro <b>"↺ Reproceso de esta orden"</b>.</p>

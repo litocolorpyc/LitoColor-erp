@@ -65,6 +65,53 @@ function estadoGrupo(g){
   return 'Terminado';
 }
 
+// ---------- seguimiento y cierre del caso (procedimiento PR-PROD-DAÑ-01) ----------
+// Un caso = un reproceso por OP (mismo `key` que agruparReprocesosPorOP). Se
+// guarda aparte en reproceso_casos: estado, severidad, clasificación, causa
+// raíz, acción correctiva y cierre. Sin fila = caso "Abierto".
+const ESTADOS_CASO = ['Abierto', 'En análisis', 'Cerrado'];
+const SEVERIDADES = ['Menor', 'Mayor', 'Crítico'];
+const CLASIFICACIONES = ['Materia prima', 'Producto en proceso', 'Producto terminado', 'Maquinaria o herramienta', 'Infraestructura', 'Propiedad del cliente'];
+
+function casoDe(key){
+  return DB.reproceso_casos.find(c => c.clave === key) || null;
+}
+
+export async function cargarCasosReproceso(){
+  const { data, error } = await sb.from('reproceso_casos').select('*');
+  if(!error) DB.reproceso_casos = data || [];
+}
+
+function badgeCaso(key){
+  const c = casoDe(key);
+  const estado = c ? c.estado : 'Abierto';
+  const color = estado === 'Cerrado' ? 'var(--good)' : (estado === 'En análisis' ? '#B7791F' : 'var(--bad)');
+  return `<span style="color:${color};font-weight:600">${estado}</span>${c && c.severidad ? `<div class="card-hint" style="font-size:10.5px">${esc(c.severidad)}</div>` : ''}`;
+}
+
+function diasEntre(desde, hasta){
+  const a = new Date(String(desde).slice(0,10)), b = new Date(String(hasta).slice(0,10));
+  return Math.round((b - a) / 86400000);
+}
+
+// Resumen sobre los casos de la lista: abiertos, en análisis, cerrados y
+// tiempo promedio de cierre (indicador de la sección 10 del procedimiento).
+function pintarResumenCasos(grupos){
+  const el = document.getElementById('rep-casos-resumen');
+  if(!el) return;
+  const cuenta = { 'Abierto': 0, 'En análisis': 0, 'Cerrado': 0 };
+  const dias = [];
+  grupos.forEach(g => {
+    const c = casoDe(g.key);
+    const estado = c ? c.estado : 'Abierto';
+    cuenta[estado]++;
+    if(c && c.estado === 'Cerrado' && c.fecha_cierre) dias.push(diasEntre(g.fechaIni, c.fecha_cierre));
+  });
+  const prom = dias.length ? dias.reduce((s, d) => s + d, 0) / dias.length : null;
+  el.textContent = `Casos: ${cuenta['Abierto']} abierto(s) · ${cuenta['En análisis']} en análisis · ${cuenta['Cerrado']} cerrado(s)` +
+    (prom != null ? ` · tiempo promedio de cierre ${fmtNum(prom, 1)} día(s) (meta del procedimiento: 10)` : '');
+}
+
 // ---------- "Nuevo reproceso" ----------
 function mostrarCrearCard(){ document.getElementById('rep-crear-card').style.display = ''; }
 function ocultarCrearCard(){ document.getElementById('rep-crear-card').style.display = 'none'; }
@@ -287,6 +334,8 @@ function gruposFiltradosListado(){
   if(fArea) grupos = grupos.filter(g => (g.areaOrigen||'').toLowerCase().includes(fArea) || g.areasRehechas.some(a => a.toLowerCase().includes(fArea)));
   if(fMotivo) grupos = grupos.filter(g => (g.motivo||'').toLowerCase().includes(fMotivo));
   if(fPersona) grupos = grupos.filter(g => g.operarios.some(o => o.toLowerCase().includes(fPersona)) || (g.responsable||'').toLowerCase().includes(fPersona));
+  const fCaso = document.getElementById('rep-f-caso')?.value;
+  if(fCaso) grupos = grupos.filter(g => ((casoDe(g.key) || {}).estado || 'Abierto') === fCaso);
   return grupos.sort((a,b) => b.fechaFin.localeCompare(a.fechaFin));
 }
 
@@ -302,6 +351,7 @@ export function renderListadoReprocesos(){
     <td>${g.motivo ? esc(g.motivo) : '<span class="card-hint">sin motivo</span>'}</td>
     <td>${g.registros.length} — ${esc(g.areasRehechas.join(', '))}</td>
     <td>${estadoGrupo(g)}</td>
+    <td>${badgeCaso(g.key)}</td>
     <td class="num">${fmtCOP(g.costos.mo)}</td>
     <td class="num">${fmtCOP(g.costos.mp)}</td>
     <td class="num">${fmtCOP(g.costos.ins)}</td>
@@ -311,7 +361,8 @@ export function renderListadoReprocesos(){
       <button type="button" class="row-btn" data-detalle-rep>${g.motivo && g.areaOrigen ? 'Detalle' : '✎ Completar'}</button>
       ${g.orden!=null ? '<button type="button" class="row-btn" data-ver-orden-rep>Ver orden</button>' : ''}
     </td>
-  </tr>`).join('') || '<tr><td colspan="12" style="text-align:center;color:var(--ink-faint)">Sin reprocesos registrados todavía</td></tr>';
+  </tr>`).join('') || '<tr><td colspan="13" style="text-align:center;color:var(--ink-faint)">Sin reprocesos registrados todavía</td></tr>';
+  pintarResumenCasos(grupos);
 
   const incompletos = grupos.filter(g => !g.motivo || !g.areaOrigen).length;
   const aviso = document.getElementById('rep-sin-motivo-aviso');
@@ -400,9 +451,10 @@ function abrirDetalleOP(tr, g){
       <td>${esc(r.materiaPrima ? r.materiaPrima + (r.consumoMP ? ' (' + r.consumoMP + ')' : '') : '')}</td>
       <td class="num">${fmtCOP(r.valorActividad||0)}</td></tr>`;
 
+  const caso = casoDe(g.key) || { estado: 'Abierto' };
   const fila = document.createElement('tr');
   fila.className = 'rep-edit-row';
-  fila.innerHTML = `<td colspan="12" style="background:var(--bg-soft, #f6f4ef)">
+  fila.innerHTML = `<td colspan="13" style="background:var(--bg-soft, #f6f4ef)">
     <h4 style="margin:4px 0 8px">Reproceso de la orden ${g.orden != null ? etiquetaOrden(g.orden) : '—'} — ${g.registros.length} proceso(s) · costo total ${fmtCOP(g.costos.total)}</h4>
     <div class="form-row" style="align-items:flex-end">
       <div class="field"><label>Motivo del reproceso</label><select class="rep-ed-motivo"><option value="">— elige un motivo —</option>${motivos.map(m=>`<option value="${esc(m.nombre)}"${m.nombre===g.motivo?' selected':''}>${esc(m.nombre)}</option>`).join('')}</select></div>
@@ -411,6 +463,24 @@ function abrirDetalleOP(tr, g){
       <div class="field" style="flex:0 0 auto"><button type="button" class="btn-primary rep-ed-guardar">Guardar datos del reproceso</button></div>
     </div>
     <p class="card-hint">Se guarda igual en todos los procesos de este reproceso — para estadísticas cuenta como uno solo.</p>
+
+    <h4 style="margin:12px 0 6px">Seguimiento y cierre del caso</h4>
+    <div class="form-row">
+      <div class="field"><label>Estado del caso</label><select class="rep-caso-estado">${ESTADOS_CASO.map(e => `<option${e === caso.estado ? ' selected' : ''}>${e}</option>`).join('')}</select></div>
+      <div class="field"><label>Severidad</label><select class="rep-caso-severidad"><option value="">—</option>${SEVERIDADES.map(e => `<option${e === caso.severidad ? ' selected' : ''}>${e}</option>`).join('')}</select></div>
+      <div class="field"><label>Qué se dañó (clasificación)</label><select class="rep-caso-clasif"><option value="">—</option>${CLASIFICACIONES.map(e => `<option${e === caso.clasificacion ? ' selected' : ''}>${e}</option>`).join('')}</select></div>
+    </div>
+    <div class="form-row">
+      <div class="field"><label>Causa raíz <span class="card-hint">(¿por qué pasó? — hasta llegar a la causa de fondo)</span></label><textarea class="rep-caso-causa" rows="2">${esc(caso.causa_raiz || '')}</textarea></div>
+      <div class="field"><label>Acción correctiva <span class="card-hint">(qué se hará para que no se repita)</span></label><textarea class="rep-caso-accion" rows="2">${esc(caso.accion_correctiva || '')}</textarea></div>
+    </div>
+    <div class="form-row">
+      <div class="field"><label>Responsable de la acción</label><input type="text" class="rep-caso-resp" value="${esc(caso.responsable_accion || '')}"></div>
+      <div class="field" style="max-width:190px"><label>Fecha compromiso</label><input type="date" class="rep-caso-fecha" value="${esc((caso.fecha_compromiso || '').slice(0,10))}"></div>
+      <div class="field"><label>Verificación y lecciones aprendidas</label><input type="text" class="rep-caso-lecciones" value="${esc(caso.lecciones || '')}" placeholder="¿la corrección funcionó? ¿qué se aprendió?"></div>
+    </div>
+    <div class="form-foot"><span class="card-hint">${caso.estado === 'Cerrado' && caso.fecha_cierre ? `Cerrado el ${String(caso.fecha_cierre).slice(0,10)} · ${diasEntre(g.fechaIni, caso.fecha_cierre)} día(s) desde el primer proceso.` : 'Para cerrar el caso se piden severidad, causa raíz y acción correctiva, y que todos los procesos estén terminados.'}</span>
+      <button type="button" class="btn-primary rep-caso-guardar">Guardar seguimiento</button></div>
 
     <h4 style="margin:12px 0 6px">Procesos involucrados y su costo</h4>
     <div class="table-wrap"><table class="detalle-mini-table">
@@ -449,6 +519,39 @@ function abrirDetalleOP(tr, g){
 
   const key = g.key;
   fila.querySelector('.rep-ed-cerrar').addEventListener('click', () => fila.remove());
+
+  fila.querySelector('.rep-caso-guardar').addEventListener('click', async (ev) => {
+    const val = sel => fila.querySelector(sel).value.trim() || null;
+    const estado = fila.querySelector('.rep-caso-estado').value;
+    const fila_ = {
+      clave: key, estado, severidad: val('.rep-caso-severidad'), clasificacion: val('.rep-caso-clasif'),
+      causa_raiz: val('.rep-caso-causa'), accion_correctiva: val('.rep-caso-accion'),
+      responsable_accion: val('.rep-caso-resp'), fecha_compromiso: val('.rep-caso-fecha'), lecciones: val('.rep-caso-lecciones'),
+      actualizado_por: getCurrentUser()?.nombre || null, actualizado_en: new Date().toISOString()
+    };
+    if(estado === 'Cerrado'){
+      if(!fila_.severidad){ toast('Para cerrar el caso elige la severidad'); return; }
+      if(!fila_.causa_raiz){ toast('Para cerrar el caso escribe la causa raíz'); return; }
+      if(!fila_.accion_correctiva){ toast('Para cerrar el caso escribe la acción correctiva'); return; }
+      if(estadoGrupo(g) !== 'Terminado'){ toast('Aún hay procesos de este reproceso sin terminar'); return; }
+      fila_.fecha_cierre = (caso.estado === 'Cerrado' && caso.fecha_cierre) ? String(caso.fecha_cierre).slice(0,10) : fechaHoyLocal();
+    } else {
+      fila_.fecha_cierre = null; // un caso reabierto deja de estar cerrado
+    }
+    const btn = ev.currentTarget; btn.disabled = true; btn.textContent = 'Guardando…';
+    try{
+      const { data, error } = await sb.from('reproceso_casos').upsert(fila_, { onConflict: 'clave' }).select();
+      if(error) throw error;
+      const i = DB.reproceso_casos.findIndex(c => c.clave === key);
+      if(i >= 0) DB.reproceso_casos[i] = data[0]; else DB.reproceso_casos.push(data[0]);
+      toast(estado === 'Cerrado' ? 'Caso cerrado' : 'Seguimiento guardado');
+      refrescarTrasCambio(key);
+    }catch(err){
+      console.error(err);
+      toast('No se pudo guardar el seguimiento — revisa la consola');
+      btn.disabled = false; btn.textContent = 'Guardar seguimiento';
+    }
+  });
 
   fila.querySelector('.rep-ed-guardar').addEventListener('click', async (ev) => {
     const motivo = fila.querySelector('.rep-ed-motivo').value || null;
@@ -816,7 +919,7 @@ export function initReprocesos(){
 
   document.getElementById('rep-f-buscar').addEventListener('click', renderListadoReprocesos);
   document.getElementById('rep-f-limpiar').addEventListener('click', () => {
-    ['rep-f-orden','rep-f-area','rep-f-motivo','rep-f-persona','rep-f-desde','rep-f-hasta'].forEach(id => document.getElementById(id).value = '');
+    ['rep-f-orden','rep-f-area','rep-f-motivo','rep-f-persona','rep-f-caso','rep-f-desde','rep-f-hasta'].forEach(id => document.getElementById(id).value = '');
     renderListadoReprocesos();
   });
 
@@ -828,4 +931,5 @@ export function initReprocesos(){
   poblarPiezasRep(null);
   renderListadoReprocesos();
   renderInformeReprocesos();
+  cargarCasosReproceso().then(renderListadoReprocesos);
 }
