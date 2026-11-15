@@ -1,0 +1,54 @@
+# Respaldo semanal de la base de datos de Supabase (plan gratis no trae respaldos).
+#
+# IMPORTANTE: este repo es PÚBLICO y los "artifacts" de un repo público los puede
+# descargar cualquiera con cuenta de GitHub. Por eso el respaldo se CIFRA antes de
+# guardarse. Sin la contraseña (BACKUP_PASSPHRASE) el archivo no sirve para nadie.
+#
+# Secretos necesarios (Settings > Secrets and variables > Actions):
+#   SUPABASE_DB_URL    -> cadena de conexión "Session pooler" de Supabase (con la clave de la BD)
+#   BACKUP_PASSPHRASE  -> contraseña larga que tú inventas para cifrar el respaldo
+#
+# Los respaldos quedan 90 días (máximo que permite GitHub) en la ejecución del flujo,
+# sección "Artifacts". Descarga uno de vez en cuando y guárdalo en un lugar tuyo.
+name: Respaldo base de datos
+
+on:
+  schedule:
+    - cron: '30 8 * * 0'   # domingos 08:30 UTC (3:30 a.m. Colombia)
+  workflow_dispatch:
+
+jobs:
+  respaldo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generar respaldo cifrado
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ] || [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::error::Faltan los secretos SUPABASE_DB_URL y/o BACKUP_PASSPHRASE. No se hizo el respaldo."
+            exit 1
+          fi
+          fecha=$(date -u +%Y%m%d)
+          # Esquema public (todas las tablas de LitoColor) + auth (usuarios y claves)
+          docker run --rm postgres:17 pg_dump "$SUPABASE_DB_URL" \
+            --no-owner --no-privileges --schema=public --schema=auth \
+            > "respaldo_$fecha.sql"
+          tam=$(wc -c < "respaldo_$fecha.sql")
+          echo "Tamaño del respaldo sin cifrar: $tam bytes"
+          if [ "$tam" -lt 10000 ]; then
+            echo "::error::El respaldo salió sospechosamente pequeño. Algo falló."
+            exit 1
+          fi
+          gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 \
+            --passphrase "$BACKUP_PASSPHRASE" -o "respaldo_$fecha.sql.gpg" "respaldo_$fecha.sql"
+          rm "respaldo_$fecha.sql"
+          echo "FECHA_RESPALDO=$fecha" >> "$GITHUB_ENV"
+
+      - name: Guardar respaldo cifrado (90 días)
+        uses: actions/upload-artifact@v4
+        with:
+          name: respaldo-${{ env.FECHA_RESPALDO }}
+          path: respaldo_*.sql.gpg
+          retention-days: 90
