@@ -1,0 +1,36 @@
+# Despertador de Supabase: el plan gratis pausa el proyecto tras 7 días sin
+# actividad. Este flujo hace una consulta pequeña cada 3 días para que
+# Supabase lo vea activo. No modifica ningún dato.
+#
+# Necesita dos "secretos" en GitHub (Settings > Secrets and variables > Actions):
+#   SUPABASE_URL       -> https://nvczpuelhdgrnghxzked.supabase.co
+#   SUPABASE_ANON_KEY  -> la misma llave "anon" pública que usa el sitio
+name: Mantener Supabase activo
+
+on:
+  schedule:
+    - cron: '17 9 */3 * *'   # cada 3 días, 09:17 UTC
+  workflow_dispatch:          # permite correrlo a mano desde la pestaña Actions
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consulta ligera a la base de datos
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::warning::Faltan los secretos SUPABASE_URL y/o SUPABASE_ANON_KEY. No se hizo la consulta."
+            exit 0
+          fi
+          code=$(curl -s -o /dev/null -w "%{http_code}" \
+            "$SUPABASE_URL/rest/v1/produccion?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+          echo "Respuesta de Supabase: $code"
+          if [ "$code" -ge 500 ] || [ "$code" -eq 000 ]; then
+            echo "::error::Supabase no respondió bien (código $code). ¿Está pausado?"
+            exit 1
+          fi
