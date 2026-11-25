@@ -1,7 +1,8 @@
 import { sb } from './supabase-client.js';
-import { DB, normProd } from './store.js';
+import { DB, normProd, loadOpp } from './store.js';
 import { AREAS_COMERCIALES, areaPorDefecto } from './areas-comerciales.js';
 import { inductoresDePieza } from './inductores.js';
+import { planCompletarOrden, resumenPlan } from './completar-orden.js';
 import { toast, fmtNum, exportarExcel, fechaHoyLocal, wireTableScroll, agregarBotonExcelVentana, etiquetaOrden, parseOrden, esOrdenServicio, BASE_ORDEN_SERVICIO, requerimientosMaterialPieza, MARCA, MARCA_CSS, encabezadoMarca } from './helpers.js';
 import { getCurrentUser, puedeEditarProduccion } from './auth.js';
 import { poblarDatalistProveedores } from './costos.js';
@@ -316,8 +317,8 @@ function addPiezaCard(prefill){
 
   sincronizarProcesosLitografia(node);
   if(prefill) fillPiezaCard(node, prefill);
+  recalcPieza(node); // marca o desmarca Troquelado/Plastificado/Engomadora antes de armar la lista
   refrescarOrdenProcesos(node, Array.isArray(prefill?.procesos_requeridos) ? prefill.procesos_requeridos : null);
-  recalcPieza(node);
   updateOppPreview();
   return node;
 }
@@ -1925,6 +1926,10 @@ function extraerPiezasDelGrid(grid){
   const filaOtros = buscarFila(grid, ['Otros']);
   const filaUnidadesMontaje = buscarFila(grid, ['Unidades Por Montaje', 'Unidades por Montaje']);
   const filaTamProgramados = buscarFila(grid, ['Tamaños Programados', 'Tamanos Programados']);
+  const filaMontaje = buscarFila(grid, ['Tipo de Montaje']);
+  // El Excel dice "Laminado Mate"; el formulario, "Mate" / "Brillante".
+  const nombreLaminado = v => !v ? null : /mate/i.test(v) ? 'Mate' : /bri|bte/i.test(v) ? 'Brillante' : null;
+  const nombreMontaje = v => { const t = String(v || '').toUpperCase().replace(/\s+/g, ' ').trim(); return t === 'T/R' || t === 'T Y R' ? t : null; };
   const filaMedidas = buscarFila(grid, ['Medidas Tamaño', 'Medida Tamaño', 'Medidas Tamano']);
   const filaTamPorPliego = buscarFila(grid, ['Tamaños por pliego', 'Tamanos por pliego']);
   // filas del presupuesto que trae el Excel (parte de abajo, "ITEMS" sub-total)
@@ -1986,15 +1991,16 @@ function extraerPiezasDelGrid(grid){
       tintas_atras: tintasLimpias ? parseFloat(tintasAtrasRaw) : null,
       tintas_detalle_tiro: tintasLimpias ? null : `Según Excel: ${tintasFrenteRaw ?? '—'}`,
       tintas_detalle_retiro: tintasLimpias ? null : `Según Excel: ${tintasAtrasRaw ?? '—'}`,
-      ctp: valorCelda(grid, filaCtp, c) || 'Convencional',
-      laminado: valorCelda(grid, filaLaminados, c),
+      ctp: valorCelda(grid, filaCtp, c),
+      laminado: nombreLaminado(valorCelda(grid, filaLaminados, c)),
+      tira_retira: nombreMontaje(valorCelda(grid, filaMontaje, c)),
       laminado_lados: valorCelda(grid, filaLaminados, c + 2),
       barniz_uv: !!valorCelda(grid, filaBarniz, c),
       troquelado: !!valorCelda(grid, filaTroquelado, c),
       troquel_detalle: valorCelda(grid, filaTroquel, c),
       talonarios: !!valorCelda(grid, filaTalonarios, c),
       otros_acabados: otrosLineas.length ? otrosLineas.join(', ') : null,
-      unidades_por_montaje: valorCelda(grid, filaUnidadesMontaje, c) || 1,
+      unidades_por_montaje: valorCelda(grid, filaUnidadesMontaje, c),
       tamanos_programados: valorCelda(grid, filaTamProgramados, c),
       medida_tamano_ancho: valorCelda(grid, filaMedidas, c),
       medida_tamano_alto: valorCelda(grid, filaMedidas, c + 2),
@@ -2014,11 +2020,8 @@ function extraerPiezasDelGrid(grid){
 // sigue teniendo que revisar y darle "Guardar orden completa". El
 // formato importado es siempre de Litografía.
 function aplicarImportacion(ordenNum, piezas){
-  const yaExiste = DB.opp_ordenes.some(o => o.orden === ordenNum);
-  editingOrden = yaExiste ? ordenNum : null;
-  document.getElementById('opp-form-mode').textContent = yaExiste
-    ? `Importado desde Excel — la orden ${etiquetaOrden(ordenNum)} ya existía, esto va a ACTUALIZARLA. Revisa antes de guardar`
-    : 'Importado desde Excel — revisa los datos antes de guardar';
+  editingOrden = null;
+  document.getElementById('opp-form-mode').textContent = 'Importado desde Excel — revisa los datos antes de guardar';
   document.getElementById('opp-orden').value = etiquetaOrden(ordenNum);
   document.getElementById('opp-orden').disabled = false;
   document.getElementById('opp-fecha').value = fechaHoyLocal();
@@ -2045,6 +2048,7 @@ function aplicarImportacion(ordenNum, piezas){
     tintas_atras: p.tintas_atras,
     tintas_detalle_tiro: p.tintas_detalle_tiro,
     tintas_detalle_retiro: p.tintas_detalle_retiro,
+    tira_retira: p.tira_retira,
     ctp: p.ctp,
     laminado: p.laminado,
     laminado_lados: p.laminado_lados,
@@ -2078,11 +2082,83 @@ function aplicarImportacion(ordenNum, piezas){
   };
   const hayPresupuesto = presupuestoPendienteImportacion.costo || presupuestoPendienteImportacion.precio_venta_antes_iva;
 
-  const avisoExiste = yaExiste ? ` ⚠️ La orden ${ordenNum} ya existía — al guardar se van a REEMPLAZAR sus piezas actuales por las del Excel.` : '';
-  toast((hayPresupuesto
+  toast(hayPresupuesto
     ? `Se leyeron ${piezas.length} pieza(s) de la orden ${ordenNum} — el presupuesto también se leyó y se guardará junto con la orden`
-    : `Se leyeron ${piezas.length} pieza(s) de la orden ${ordenNum} — revísalas antes de guardar`) + avisoExiste);
+    : `Se leyeron ${piezas.length} pieza(s) de la orden ${ordenNum} — revísalas antes de guardar`);
   document.getElementById('panel-ordenes').scrollIntoView({ behavior: 'smooth' });
+}
+
+// Fila de una suborden que está en el Excel pero no en el aplicativo: se arma
+// igual que en una importación normal, usando una tarjeta temporal.
+function piezaNuevaDesdeExcel(orden, suborden, x){
+  const contador = oppPiezaCount;
+  const { suborden: _s, ...datos } = x;
+  const node = addPiezaCard(datos);
+  // La tarjeta toma el tipo de trabajo del formulario; el Excel siempre es de Litografía.
+  node.querySelectorAll('.litografia-only-check .f-proc').forEach(cb => { cb.checked = true; });
+  recalcPieza(node);
+  refrescarOrdenProcesos(node);
+  const fila = leerPiezaDeCard(node, orden, suborden, true, false);
+  node.remove();
+  oppPiezaCount = contador;
+  updateOppPreview();
+  return fila;
+}
+
+// La orden ya existe: solo se rellena lo que está en blanco (ver completar-orden.js).
+async function completarOrdenExistente(orden, excel){
+  const [r1, r2] = await Promise.all([
+    sb.from('presupuesto_orden').select('*').eq('orden', orden),
+    sb.from('presupuesto_pieza').select('*').eq('orden', orden)
+  ]);
+  if(r1.error || r2.error) throw (r1.error || r2.error);
+  const cabecera = DB.opp_ordenes.find(o => o.orden === orden);
+  const presupuesto = (r1.data || [])[0] || null;
+  const plan = planCompletarOrden({ orden: cabecera, piezas: DB.opp_piezas.filter(p => p.orden === orden), presupuesto, presupuestoPiezas: r2.data || [], excel });
+  const texto = resumenPlan(plan, etiquetaOrden(orden));
+  const titulo = `La orden ${etiquetaOrden(orden)} ya existe (${cabecera.cliente || 'sin cliente'}).`;
+
+  if(!plan.hayCambios){
+    alert(`${titulo}\n\nNo hay datos en blanco para rellenar con este Excel. No se cambió nada.${texto.distintos ? '\n\n' + texto.distintos : ''}`);
+    return;
+  }
+  const acepta = confirm(`${titulo}\nSolo se rellena lo que está en blanco; lo que ya tiene dato se deja igual.\n\nSe va a rellenar:\n${texto.rellena}${texto.distintos ? '\n\n' + texto.distintos : ''}\n\n¿Completar la orden?`);
+  if(!acepta){ toast('No se cambió nada en la orden ' + etiquetaOrden(orden)); return; }
+
+  // Cada escritura pide las filas de vuelta: si la base no dejó guardar, se avisa.
+  const exigir = ({ data, error }) => { if(error) throw error; if(!data || !data.length) throw new Error('La base no permitió guardar los cambios'); };
+  const ahora = new Date().toISOString();
+  if(Object.keys(plan.cabecera).length) exigir(await sb.from('opp_ordenes').update(plan.cabecera).eq('orden', orden).select());
+  for(const p of plan.piezas) exigir(await sb.from('opp_piezas').update(p.cambios).eq('id', p.id).select());
+  const nuevas = plan.nuevas.map(p => piezaNuevaDesdeExcel(orden, p.suborden, p.excel));
+  for(const fila of nuevas) exigir(await sb.from('opp_piezas').insert([fila]).select());
+  if(plan.presupuesto){
+    const cambios = { ...plan.presupuesto.cambios, actualizado_en: ahora };
+    exigir(plan.presupuesto.existe
+      ? await sb.from('presupuesto_orden').update(cambios).eq('orden', orden).select()
+      : await sb.from('presupuesto_orden').insert([{ orden, ...cambios }]).select());
+    const registro = { ...(presupuesto || { orden }), ...cambios };
+    const idx = DB.presupuesto_orden.findIndex(p => p.orden === orden);
+    if(idx >= 0) DB.presupuesto_orden[idx] = registro; else DB.presupuesto_orden.push(registro);
+  }
+  for(const p of plan.presupuestoPiezas){
+    const cambios = { ...p.cambios, actualizado_en: ahora };
+    exigir(p.existe
+      ? await sb.from('presupuesto_pieza').update(cambios).eq('orden', orden).eq('suborden', p.suborden).select()
+      : await sb.from('presupuesto_pieza').insert([{ orden, suborden: p.suborden, pieza: p.pieza, ...cambios }]).select());
+  }
+
+  await loadOpp();
+  const piezasFinales = DB.opp_piezas.filter(p => p.orden === orden);
+  const final = DB.opp_ordenes.find(o => o.orden === orden);
+  if(nuevas.length || plan.piezas.some(p => 'papel' in p.cambios || 'pliegos' in p.cambios)) await alertarStockPapelInsuficiente(orden, piezasFinales);
+  await registrarPiezasYProveedoresNuevos(final.cliente, final.producto, piezasFinales);
+  // Si el formulario tenía esta orden abierta, quedaría con datos viejos.
+  if(editingOrden === orden) resetOppForm(suggestNextOrden());
+  renderOppRecent();
+  if(onOrdenesChangeCallback) onOrdenesChangeCallback();
+  toast('Orden ' + etiquetaOrden(orden) + ' completada con los datos que estaban en blanco', 5000);
+  mostrarDetalleOrden(orden);
 }
 
 async function importarOrdenExcel(file){
@@ -2113,19 +2189,10 @@ async function importarOrdenExcel(file){
     .filter(b => parseOrden(b.orden) === ordenElegida)
     .sort((a, b) => (parseFloat(a.suborden) || 0) - (parseFloat(b.suborden) || 0));
 
-  const existente = DB.opp_ordenes.find(o => o.orden === ordenElegida);
-  if(existente){
-    const piezasActuales = DB.opp_piezas.filter(p => p.orden === ordenElegida).length;
-    const reemplazar = confirm(
-      `La orden ${etiquetaOrden(ordenElegida)} ya existe en el sistema (${existente.cliente || 'sin cliente'} — ${piezasActuales} pieza(s) guardadas actualmente).\n\n` +
-      `¿Qué quieres hacer?\n\n` +
-      `Aceptar = REEMPLAZAR la orden guardada con los datos de este Excel (se pierden los datos actuales de esa orden).\n` +
-      `Cancelar = CONSERVAR la orden como está — no se importa nada.`
-    );
-    if(!reemplazar){
-      toast(`Se conservó la orden ${etiquetaOrden(ordenElegida)} tal como estaba — no se importó nada`);
-      return;
-    }
+  await loadOpp(); // datos frescos: otra persona pudo haber llenado algo
+  if(DB.opp_ordenes.some(o => o.orden === ordenElegida)){
+    await completarOrdenExistente(ordenElegida, piezas);
+    return;
   }
 
   aplicarImportacion(ordenElegida, piezas);
@@ -2281,6 +2348,66 @@ async function alertarStockPapelInsuficiente(orden, piezasPayload){
   }
 }
 
+// Convierte una tarjeta de pieza del formulario en la fila que se guarda.
+function leerPiezaDeCard(node, orden, suborden, esLitografia, esExterno){
+  const base = {
+    orden, suborden, op: etiquetaOrden(orden) + '-' + suborden,
+    pieza: node.querySelector('.f-pieza').value.trim() || null,
+    cantidad: parseFloat(node.querySelector('.f-cantidad').value) || null,
+    procesos_requeridos: procesosOrdenados(node)
+  };
+
+  if(!esLitografia){
+    // ficha simplificada: nada de imposición/pliego, solo lo relevante
+    // para Impresión Digital, Gran Formato, Servicio de Impresión
+    // Externo o Trabajo Externo.
+    return {
+      ...base,
+      proveedor: node.querySelector('.f-proveedor')?.value.trim() || null,
+      costo_externo: parseFloat(node.querySelector('.f-costo-externo')?.value) || null,
+      fecha_entrega_estimada: node.querySelector('.f-fecha-entrega')?.value || null,
+      otros_acabados: node.querySelector('.f-otros-simple')?.value.trim() || null
+    };
+  }
+
+  const pliego = node.querySelector('.f-pliego').value.split('x').map(Number);
+  const extrasPieza = leerMaterialesExtra(node);
+  return {
+    ...base,
+    ...(esExterno ? {
+      proveedor: node.querySelector('.f-proveedor')?.value.trim() || null,
+      costo_externo: parseFloat(node.querySelector('.f-costo-externo')?.value) || null,
+      fecha_entrega_estimada: node.querySelector('.f-fecha-entrega')?.value || null
+    } : {}),
+    tamano_ancho: parseFloat(node.querySelector('.f-tam-ancho').value) || null,
+    tamano_alto: parseFloat(node.querySelector('.f-tam-alto').value) || null,
+    papel: node.querySelector('.f-papel').value.trim() || null,
+    ...(extrasPieza.length ? { materiales_adicionales: extrasPieza } : {}),
+    pliego_ancho: pliego[0] || null, pliego_alto: pliego[1] || null,
+    tintas_frente: parseInt(node.querySelector('.f-tintas-frente').value) || 0,
+    tintas_atras: parseInt(node.querySelector('.f-tintas-atras').value) || 0,
+    tintas_detalle_tiro: node.querySelector('.f-tintas-detalle-tiro')?.value.trim() || null,
+    tintas_detalle_retiro: node.querySelector('.f-tintas-detalle-retiro')?.value.trim() || null,
+    ctp: node.querySelector('.f-ctp').value,
+    tira_retira: node.querySelector('.f-tira').value,
+    giro: node.querySelector('.f-giro')?.value.trim() || null,
+    laminado: node.querySelector('.f-laminado').value || null,
+    laminado_lados: parseInt(node.querySelector('.f-laminado-lados').value) || 0,
+    barniz_uv: node.querySelector('.f-barniz').checked,
+    troquelado: node.querySelector('.f-troquelado').checked,
+    troquel_detalle: node.querySelector('.f-troquel-detalle').value.trim() || null,
+    talonarios: node.querySelector('.f-talonarios').checked,
+    otros_acabados: node.querySelector('.f-otros').value.trim() || null,
+    unidades_por_montaje: parseFloat(node.querySelector('.f-unidades-montaje').value) || 1,
+    tamanos_solicitados: parseFloat(node.querySelector('.f-tam-solicitados').value) || null,
+    tamanos_programados: parseFloat(node.querySelector('.f-tam-programados').value) || null,
+    medida_tamano_ancho: parseFloat(node.querySelector('.f-medida-ancho').value) || null,
+    medida_tamano_alto: parseFloat(node.querySelector('.f-medida-alto').value) || null,
+    tamanos_por_pliego: parseFloat(node.querySelector('.f-tam-por-pliego').value) || null,
+    pliegos: parseFloat(node.querySelector('.f-pliegos-result').textContent.replace(/\./g,'')) || null
+  };
+}
+
 // Guarda el presupuesto de cada suborden que venía en el Excel (lo usa el
 // Dashboard OP). Se empareja por nombre de pieza y, si no, por posición.
 async function guardarPresupuestoPorPieza(orden, importadas, piezasPayload){
@@ -2348,65 +2475,7 @@ async function saveOpp(){
       if(errIns) throw errIns;
     }
 
-    const piezasPayload = Array.from(cards).map((node, i) => {
-      const suborden = i + 1;
-      const base = {
-        orden, suborden, op: etiquetaOrden(orden) + '-' + suborden,
-        pieza: node.querySelector('.f-pieza').value.trim() || null,
-        cantidad: parseFloat(node.querySelector('.f-cantidad').value) || null,
-        procesos_requeridos: procesosOrdenados(node)
-      };
-
-      if(!esLitografia){
-        // ficha simplificada: nada de imposición/pliego, solo lo relevante
-        // para Impresión Digital, Gran Formato, Servicio de Impresión
-        // Externo o Trabajo Externo.
-        return {
-          ...base,
-          proveedor: node.querySelector('.f-proveedor')?.value.trim() || null,
-          costo_externo: parseFloat(node.querySelector('.f-costo-externo')?.value) || null,
-          fecha_entrega_estimada: node.querySelector('.f-fecha-entrega')?.value || null,
-          otros_acabados: node.querySelector('.f-otros-simple')?.value.trim() || null
-        };
-      }
-
-      const pliego = node.querySelector('.f-pliego').value.split('x').map(Number);
-      const extrasPieza = leerMaterialesExtra(node);
-      return {
-        ...base,
-        ...(esExterno ? {
-          proveedor: node.querySelector('.f-proveedor')?.value.trim() || null,
-          costo_externo: parseFloat(node.querySelector('.f-costo-externo')?.value) || null,
-          fecha_entrega_estimada: node.querySelector('.f-fecha-entrega')?.value || null
-        } : {}),
-        tamano_ancho: parseFloat(node.querySelector('.f-tam-ancho').value) || null,
-        tamano_alto: parseFloat(node.querySelector('.f-tam-alto').value) || null,
-        papel: node.querySelector('.f-papel').value.trim() || null,
-        ...(extrasPieza.length ? { materiales_adicionales: extrasPieza } : {}),
-        pliego_ancho: pliego[0] || null, pliego_alto: pliego[1] || null,
-        tintas_frente: parseInt(node.querySelector('.f-tintas-frente').value) || 0,
-        tintas_atras: parseInt(node.querySelector('.f-tintas-atras').value) || 0,
-        tintas_detalle_tiro: node.querySelector('.f-tintas-detalle-tiro')?.value.trim() || null,
-        tintas_detalle_retiro: node.querySelector('.f-tintas-detalle-retiro')?.value.trim() || null,
-        ctp: node.querySelector('.f-ctp').value,
-        tira_retira: node.querySelector('.f-tira').value,
-        giro: node.querySelector('.f-giro')?.value.trim() || null,
-        laminado: node.querySelector('.f-laminado').value || null,
-        laminado_lados: parseInt(node.querySelector('.f-laminado-lados').value) || 0,
-        barniz_uv: node.querySelector('.f-barniz').checked,
-        troquelado: node.querySelector('.f-troquelado').checked,
-        troquel_detalle: node.querySelector('.f-troquel-detalle').value.trim() || null,
-        talonarios: node.querySelector('.f-talonarios').checked,
-        otros_acabados: node.querySelector('.f-otros').value.trim() || null,
-        unidades_por_montaje: parseFloat(node.querySelector('.f-unidades-montaje').value) || 1,
-        tamanos_solicitados: parseFloat(node.querySelector('.f-tam-solicitados').value) || null,
-        tamanos_programados: parseFloat(node.querySelector('.f-tam-programados').value) || null,
-        medida_tamano_ancho: parseFloat(node.querySelector('.f-medida-ancho').value) || null,
-        medida_tamano_alto: parseFloat(node.querySelector('.f-medida-alto').value) || null,
-        tamanos_por_pliego: parseFloat(node.querySelector('.f-tam-por-pliego').value) || null,
-        pliegos: parseFloat(node.querySelector('.f-pliegos-result').textContent.replace(/\./g,'')) || null
-      };
-    });
+    const piezasPayload = Array.from(cards).map((node, i) => leerPiezaDeCard(node, orden, i + 1, esLitografia, esExterno));
 
     const { error: errPiezas } = await sb.from('opp_piezas').insert(piezasPayload);
     if(errPiezas) throw errPiezas;
