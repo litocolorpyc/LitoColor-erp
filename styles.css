@@ -304,3 +304,9 @@ select, input, textarea{ font-family:inherit; font-size:13px; padding:7px 9px; b
 .ev-pdf{ height:92px; display:flex; align-items:center; justify-content:center; background:var(--brand-soft); color:var(--brand); border-radius:6px; font-weight:700; }
 .ev-nombre{ font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
+
+/* Filas de totales de las tablas por mes y del Dashboard OP: legibles y alineadas como las cifras */
+#tbl-dop-despliegue tbody th, #tbl-dop-presupuesto tbody th, #tbl-dop-meses tfoot th, #tbl-prod-mes tfoot th, #ra-mes tfoot th{
+  text-transform:none; letter-spacing:0; color:var(--ink); font-weight:700; font-size:12px;
+}
+#tbl-dop-despliegue th.num, #tbl-dop-presupuesto th.num, #tbl-dop-meses tfoot th.num, #tbl-prod-mes tfoot th.num, #ra-mes tfoot th.num{ text-align:right; }

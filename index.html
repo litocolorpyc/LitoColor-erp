@@ -45,6 +45,7 @@
         <button class="tab-btn" data-tab="dashboard-gerente" role="tab">Resumen gerencial</button>
         <button class="tab-btn" data-tab="resultado-areas" role="tab">Resultado por Área Comercial</button>
         <button class="tab-btn active" data-tab="gerencial" role="tab">Gerencial</button>
+        <button class="tab-btn" data-tab="dashboard-op" role="tab">Dashboard OP</button>
         <button class="tab-btn" data-tab="produccion" role="tab">Producción</button>
         <button class="tab-btn" data-tab="operario" role="tab">Operario</button>
       </div>
@@ -224,6 +225,57 @@
       </div>
     </section>
 
+    <section class="tab-panel" id="panel-dashboard-op">
+      <div class="card">
+        <h2 class="card-title">Dashboard OP</h2>
+        <p class="card-hint" style="margin-top:0">Cuánto se presupuestó y cuánto ha costado cada orden. <b>Margen</b> = costo presupuestado − mano de obra − otros costos. Haz clic en una orden para desplegar sus subórdenes.</p>
+        <div class="form-row">
+          <div class="field" style="max-width:200px"><label>Mes de la orden</label><select id="dop-mes"></select></div>
+          <div class="field" style="max-width:200px"><label>Estado</label><select id="dop-estado"><option value="">Todos</option><option>Pendiente</option><option>En proceso</option><option>Completada</option><option>Cerrada</option><option>Cancelada</option></select></div>
+          <div class="field"><label>Buscar</label><input type="search" id="dop-buscar" placeholder="OP, cliente o trabajo…"></div>
+        </div>
+      </div>
+      <div class="kpi-row" id="dop-kpis"></div>
+      <div class="card">
+        <div class="card-head"><h3>Costos por orden</h3><span class="card-hint"><button type="button" class="row-btn" id="dop-imprimir">🖨 Imprimir</button></span></div>
+        <div class="table-wrap" style="max-height:480px;overflow-y:auto"><table id="tbl-dop">
+          <thead><tr><th>Orden</th><th class="num">Costo presupuestado</th><th class="num">Costo mano de obra</th><th class="num">Otros costos</th><th class="num">Margen</th><th>Estado</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <div id="dop-despliegue-card" style="display:none">
+        <div class="card">
+          <div class="card-head"><h3 id="dop-despliegue-titulo">Orden</h3><span class="card-hint"><button type="button" class="row-btn" id="dop-abrir-orden">Abrir la orden completa</button> <button type="button" class="row-btn" id="dop-cerrar">Cerrar ✕</button></span></div>
+          <div class="table-wrap" data-excel-nombre="Costos por suborden"><table id="tbl-dop-despliegue" class="detalle-mini-table"></table></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Presupuesto por suborden</h3><span class="card-hint">como viene en el Excel de la orden</span></div>
+          <div class="table-wrap"><table id="tbl-dop-presupuesto" class="detalle-mini-table"></table></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Inductores</h3><span class="card-hint">programado según la orden · real según las cantidades reportadas en cada área</span></div>
+          <div class="table-wrap"><table id="tbl-dop-inductores" class="detalle-mini-table">
+            <thead><tr><th>SubOrden</th><th>Pieza</th><th>Inductor</th><th class="num">Programado</th><th class="num">Real</th><th class="num">Real / prog.</th><th class="num">Cantidad reportada</th><th>Aviso</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Detalle de otros costos</h3><span class="card-hint">cada consumo, compra o costo registrado con la orden</span></div>
+          <div class="table-wrap"><table id="tbl-dop-lineas" class="detalle-mini-table">
+            <thead><tr><th>SubOrden</th><th>Tipo</th><th>Detalle</th><th>Fecha</th><th class="num">Valor</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Mes a mes</h3><span class="card-hint">según la fecha de la orden · clic en un mes para ver sus órdenes</span></div>
+        <div class="table-wrap"><table id="tbl-dop-meses">
+          <thead><tr><th>Mes</th><th class="num">Órdenes</th><th class="num">Con presupuesto</th><th class="num">Costo presupuestado</th><th class="num">Costo mano de obra</th><th class="num">Otros costos</th><th class="num">Margen</th></tr></thead>
+          <tbody></tbody><tfoot></tfoot>
+        </table></div>
+      </div>
+    </section>
+
     <section class="tab-panel" id="panel-produccion">
       <div class="date-range-row">
         <div class="preset-row" id="prod-presets">
@@ -265,12 +317,20 @@
         </p>
       </div>
 
+      <div class="card">
+        <div class="card-head"><h3>Mes a mes por área</h3><span class="card-hint">del rango de fechas elegido arriba</span></div>
+        <div class="form-row"><div class="field" style="max-width:240px"><label>Ver</label>
+          <select id="prod-mes-metrica"><option value="h">Horas registradas</option><option value="c">Costo de mano de obra</option></select></div></div>
+        <canvas id="chart-prod-mes" height="90" style="margin-bottom:12px"></canvas>
+        <div class="table-wrap"><table id="tbl-prod-mes"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+      </div>
+
       <div class="card" id="prod-area-detalle-card" style="display:none">
         <div class="card-head"><h3 id="prod-area-detalle-titulo">Órdenes de esta área</h3><span class="card-hint"><button type="button" class="row-btn" id="prod-area-detalle-cerrar">Cerrar ✕</button></span></div>
         <p class="card-hint">Del rango de fechas elegido arriba. Click en una fila para abrir el detalle completo de esa orden.</p>
         <div class="table-wrap">
           <table id="tbl-prod-area-detalle">
-            <thead><tr><th>Orden</th><th>Cliente</th><th>Pieza</th><th class="num">Horas</th><th class="num">Cantidad</th><th class="num">Registros</th></tr></thead>
+            <thead><tr><th>Orden</th><th>Cliente</th><th>Trabajo</th><th>Pieza</th><th class="num">Horas</th><th class="num">Cantidad</th><th class="num">Registros</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -315,6 +375,7 @@
               <option value="laminadas">OP laminadas (cantidad y área)</option>
               <option value="argolladas">OP argolladas (cantidad)</option>
               <option value="piso">Parámetros de piso: presupuestado vs. real</option>
+              <option value="inductores">Inductores por suborden (tiros y m²)</option>
             </select></div>
           <div class="field" style="max-width:160px"><label>Desde</label><input type="date" id="iop-desde"></div>
           <div class="field" style="max-width:160px"><label>Hasta</label><input type="date" id="iop-hasta"></div>
@@ -329,7 +390,7 @@
         <h3 id="iop-titulo" style="margin-top:14px"></h3>
         <div class="table-wrap"><table id="tbl-iop"><thead></thead><tbody></tbody></table></div>
         <div id="iop-estandares" style="display:none;margin-top:14px">
-          <label><b>Estándar presupuestado por área</b> <span class="card-hint">(unidades por hora; litografía, corte, guillotina, plastificado y troquelado se miden en pliegos)</span></label>
+          <label><b>Estándar presupuestado por área</b> <span class="card-hint">(por hora: litografía y troquelado en tiros; plastificado y engomado en m²; corte y guillotina en pliegos; el resto en unidades)</span></label>
           <div class="iop-est-grid" style="display:flex;flex-wrap:wrap;gap:8px 18px;margin:8px 0"></div>
           <button type="button" class="btn-primary" id="iop-est-guardar">Guardar estándares</button>
         </div>
@@ -595,6 +656,14 @@
       <div class="grid-2">
         <div class="card"><div class="card-head"><h3>Por Área Comercial</h3><span class="card-hint">ventas y margen de contribución</span></div><div class="table-wrap" id="ra-areas"></div></div>
         <div class="card"><div class="card-head"><h3>Comparación</h3><span class="card-hint">barras una al lado de la otra</span></div><canvas id="ra-chart" height="210"></canvas></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Mes a mes por Área Comercial</h3><span class="card-hint">del año y los meses elegidos arriba</span></div>
+        <div class="form-row"><div class="field" style="max-width:260px"><label>Ver por área</label>
+          <select id="ra-mes-metrica"><option value="ventas">Ventas</option><option value="contrib">Margen de contribución</option></select></div></div>
+        <canvas id="ra-mes-chart" height="90" style="margin-bottom:12px"></canvas>
+        <div class="table-wrap" id="ra-mes"></div>
       </div>
 
       <div class="card">
@@ -1088,7 +1157,7 @@
               <div class="field full"><label>Cliente / concepto del trabajo</label><input type="text" id="r-concepto" placeholder="ej. Impresión digital tarjetas — Cliente XYZ"></div>
             </div>
             <div class="form-row">
-              <div class="field"><label>Pieza <span class="card-hint" id="r-pieza-hint"></span></label><select id="r-pieza"><option value="">— Sin OPP / general —</option></select></div>
+              <div class="field"><label>SubOrden (pieza) <span class="card-hint" id="r-pieza-hint"></span></label><select id="r-pieza"><option value="">— Sin OPP / general —</option></select></div>
               <div class="field"><label>Área</label><select id="r-area"></select></div>
             </div>
             <div class="form-row">
@@ -1109,7 +1178,7 @@
           <div class="card-head"><h3>Tus registros recientes</h3><span class="card-hint" id="reg-recent-hint">elige tu nombre arriba</span></div>
           <div class="table-wrap">
             <table id="tbl-reg-recent">
-              <thead><tr><th>Fecha</th><th>Actividad</th><th>Orden</th><th>Pieza / OP</th><th>Estado</th></tr></thead>
+              <thead><tr><th>Fecha</th><th>Actividad</th><th>Orden</th><th>SubOrden</th><th>Estado</th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
@@ -1648,6 +1717,7 @@
           <a href="#ayuda-indicadores-danos">Indicadores de daños</a>
           <a href="#ayuda-producto-terminado">Producto terminado</a>
           <a href="#ayuda-danos-equipos">Daños de equipos</a>
+          <a href="#ayuda-dashboard-op">Dashboard OP e inductores</a>
           <a href="#ayuda-informes-op">Informes de órdenes</a>
           <a href="#ayuda-pantalla-planta">Pantalla de planta</a>
           <a href="#ayuda-administrativo">Panel administrativo</a>
@@ -1671,7 +1741,7 @@
             <tr><td>Operario</td><td>Solo la pantalla de Registro de tiempos</td></tr>
             <tr><td>Jefe de Producción / Diseñador</td><td>Producción, Operario, Calendario, Alertas, Órdenes, Registrar, Reprocesos, Inventario, Producto terminado, Daños de equipos, Informes de órdenes, Pantalla de planta, Remisión, y sus maestros</td></tr>
             <tr><td>Administradora</td><td>Panel administrativo (arranca ahí), Gerencial, Registrar costo, Registrar Venta, Remisión, Inventario, Reprocesos, Alertas y maestros de Clientes/Proveedores/Materias primas/Empleados</td></tr>
-            <tr><td>Gerente / Admin</td><td>Todo lo anterior, más Usuarios y la matriz de permisos. <b>Resumen gerencial</b> y <b>Resultado por Área Comercial</b> son solo del Gerente. Lo que ve cada rol se puede cambiar en Usuarios.</td></tr>
+            <tr><td>Gerente / Admin</td><td>Todo lo anterior, más Dashboard OP, Usuarios y la matriz de permisos. <b>Resumen gerencial</b> y <b>Resultado por Área Comercial</b> son solo del Gerente. Lo que ve cada rol se puede cambiar en Usuarios.</td></tr>
           </tbody>
         </table>
       </div>
@@ -1874,9 +1944,15 @@
         <p>Este panel es el punto de partida de la <b>Administradora</b>: al entrar con su usuario se abre aquí y no en el tablero Gerencial. Cada persona debe entrar con <b>su propio correo</b> (Gerente, Administradora, Jefe de Producción) para ver solo lo que le corresponde.</p>
       </div>
 
+      <div class="card" id="ayuda-dashboard-op">
+        <div class="card-head"><h3>Dashboard OP e inductores</h3></div>
+        <p>En <b>Principal → Dashboard OP</b> hay una fila por orden con <b>Costo presupuestado</b>, <b>Costo mano de obra</b>, <b>Otros costos</b>, <b>Margen</b> (presupuestado − mano de obra − otros) y <b>Estado</b>. Se filtra por mes, estado o búsqueda, y abajo está el resumen <b>mes a mes</b>. Al hacer clic en una orden se despliega: costos por suborden (planchas, papel, polipropileno, colbón, argolla, terceros y mano de obra por área), el presupuesto de cada suborden (se guarda al <b>importar la orden desde Excel</b>), los inductores y el detalle de cada costo. Los costos sin suborden aparecen en la columna <b>General</b>. Mientras una orden no esté terminada, su margen es parcial: todavía le faltan costos.</p>
+        <p><b>Inductores.</b> <b>Tiros de litografía</b> = pasadas (tiro + retiro) × tamaños; la máquina sale del área del tamaño (hasta 1750 cm² = GTO: de 1 a 4 tintas es una pasada y más de 4 son dos; si es mayor = Adast: cada tinta es una pasada). <b>Tiros de troqueladora</b> = tamaños de las piezas troqueladas. <b>m² laminados</b> = tamaños × área × lados. <b>m² engomados</b> = tamaños × área de la carátula × 2, si la orden va encaratulada. Lo <b>programado</b> usa los tamaños programados; lo <b>real</b> usa la cantidad que reportan los operarios en esa área (en engomado, solo la actividad de poner carátula). Por eso es importante que cada operario reporte la cantidad en la misma unidad (tamaños o pliegos) y sin repetir lo que ya reportó otra persona; cuando el real supera por mucho lo programado aparece el aviso ⚠️.</p>
+      </div>
+
       <div class="card" id="ayuda-informes-op">
         <div class="card-head"><h3>Informes de órdenes</h3></div>
-        <p>En <b>Operación → Informes de órdenes</b> eliges el informe, el rango de fechas y pulsas <b>Consultar</b>: listar OP, OP por cliente, OP que consumen un material o insumo (con cantidades), OP laminadas (cantidad y área), OP argolladas y <b>Parámetros de piso</b> (unidades por hora reales vs. el estándar de cada área, que se define en la misma pantalla). Todos se pueden imprimir.</p>
+        <p>En <b>Operación → Informes de órdenes</b> eliges el informe, el rango de fechas y pulsas <b>Consultar</b>: listar OP, OP por cliente, OP que consumen un material o insumo (con cantidades), OP laminadas (cantidad y área), OP argolladas <b>Parámetros de piso</b> (producción por hora real vs. el estándar de cada área, que se define en la misma pantalla: litografía y troquelado en tiros, plastificado y engomado en m²) e <b>Inductores por suborden</b>. Todos se pueden imprimir.</p>
         <p>En una orden, cada pieza puede pedir <b>más de un material</b> ("Otros materiales de esta pieza"): por ejemplo 500 pliegos del papel principal y 100 de otro. Al imprimir una orden, cada pieza sale en su propia hoja.</p>
       </div>
 

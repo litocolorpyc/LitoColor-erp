@@ -21,7 +21,7 @@ const COLOR = { 'Litografía': MARCA.blue, 'Servicio': MARCA.violet, 'Digital': 
 const GRUPOS = ['Nómina y cargas', 'Bodega y servicios', 'Maquinaria', 'Seguros y salud', 'Impuestos', 'Administrativos', 'Financieros', 'Adicionales'];
 
 let D = { vaa: [], plan: [], marg: [], cfg: {} };
-let cargado = false, chart = null;
+let cargado = false, chart = null, chartMes = null;
 let anio = null, desde = 1, hasta = 12, reparto = 'ninguno';
 
 const pct = (a, b) => b > 0 ? a / b * 100 : null;
@@ -117,6 +117,33 @@ function calcular(){
   return { filas, ventas, contrib, fijosTotal, utilidad, meses, ultimoMes, margenUtilidad: pct(utilidad, ventas), razon: ventas > 0 ? contrib / ventas : null, cfm, pe: ventas > 0 && contrib > 0 ? cfm / (contrib / ventas) : null, sinArea, promMensual: meses ? ventas / meses : null };
 }
 
+// El mismo cálculo del período, separado mes por mes.
+function pintarPorMes(){
+  const metrica = $('ra-mes-metrica').value;
+  const { m } = ventasPorMes();
+  const contribDe = (area, x) => area === 'Sin área' ? 0 : (x.f + x.r) * margenPct(anio, area) / 100 + x.i;
+  const filas = [];
+  for(let mes = desde; mes <= hasta; mes++){
+    const o = m.get(anio * 100 + mes); if(!o) continue;
+    const por = {}; let contrib = 0;
+    Object.entries(o.v).forEach(([area, x]) => { por[area] = metrica === 'ventas' ? x.f + x.r + x.i : contribDe(area, x); contrib += contribDe(area, x); });
+    const fijos = costoFijoMensual(anio).total;
+    filas.push({ mes, por, total: Object.values(por).reduce((s, v) => s + v, 0), fijos, utilidad: contrib - fijos });
+  }
+  const areas = [...AREAS_COMERCIALES, ...(filas.some(f => f.por['Sin área']) ? ['Sin área'] : [])];
+  const sumaDe = fn => filas.reduce((s, f) => s + (fn(f) || 0), 0);
+  const color = v => v >= 0 ? 'var(--good)' : 'var(--bad)';
+  $('ra-mes').innerHTML = `<table class="detalle-mini-table"><thead><tr><th>Mes</th>${areas.map(a => `<th class="num">${a}</th>`).join('')}<th class="num">Total</th><th class="num">Costos fijos</th><th class="num">Utilidad neta</th></tr></thead>
+    <tbody>${filas.map(f => `<tr><td>${MESES[f.mes - 1]} ${anio}</td>${areas.map(a => `<td class="num">${f.por[a] ? fmtCOP(f.por[a]) : '—'}</td>`).join('')}<td class="num"><b>${fmtCOP(f.total)}</b></td><td class="num">${fmtCOP(f.fijos)}</td><td class="num" style="color:${color(f.utilidad)};font-weight:600">${fmtCOP(f.utilidad)}</td></tr>`).join('') || `<tr><td colspan="${areas.length + 4}" style="text-align:center;color:var(--ink-faint)">Sin ventas en estos meses</td></tr>`}</tbody>
+    ${filas.length ? `<tfoot><tr><th>Total</th>${areas.map(a => `<th class="num">${fmtCOP(sumaDe(f => f.por[a]))}</th>`).join('')}<th class="num">${fmtCOP(sumaDe(f => f.total))}</th><th class="num">${fmtCOP(sumaDe(f => f.fijos))}</th><th class="num">${fmtCOP(sumaDe(f => f.utilidad))}</th></tr></tfoot>` : ''}</table>`;
+  if(typeof Chart !== 'undefined'){
+    if(chartMes) chartMes.destroy();
+    chartMes = new Chart($('ra-mes-chart'), { type: 'bar', data: { labels: filas.map(f => MESES[f.mes - 1]),
+      datasets: areas.map(a => ({ label: a, data: filas.map(f => f.por[a] || 0), backgroundColor: COLOR[a] })) },
+      options: { responsive: true, plugins: { legend: { labels: { boxWidth: 10, font: { size: 11 } } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmtCOP(c.parsed.y)}` } } }, scales: { x: { grid: { display: false } }, y: { grid: { color: 'rgba(150,150,150,.15)' }, ticks: { font: { size: 10 }, callback: v => '$' + fmtNum(v / 1e6, 0) + ' M' } } } } });
+  }
+}
+
 function horasPorArea(){
   const ordenArea = new Map(DB.opp_ordenes.map(o => [o.orden, areaDeOrden(o)]));
   const h = {}; AREAS_COMERCIALES.forEach(a => { h[a] = 0; });
@@ -163,7 +190,7 @@ function pintar(){
       ...(conReparto ? [{ label: 'Resultado después de costos fijos', data: ar.map(a => R.filas[a].contrib - R.filas[a].fijos), backgroundColor: MARCA.magenta }] : [])] },
       options: { responsive: true, plugins: { legend: { labels: { boxWidth: 10, font: { size: 11 } } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmtCOP(c.parsed.y)}` } } }, scales: { x: { grid: { display: false } }, y: { grid: { color: 'rgba(150,150,150,.15)' }, ticks: { font: { size: 10 }, callback: v => '$' + fmtNum(v / 1e6, 0) + ' M' } } } } });
   }
-  pintarMargenReal(); pintarSinArea(R); pintarUtilizacion(); pintarMargenes();
+  pintarPorMes(); pintarMargenReal(); pintarSinArea(R); pintarUtilizacion(); pintarMargenes();
 }
 
 // Margen real con los datos del aplicativo: ingreso de cada orden menos los costos registrados con esa orden.
@@ -320,6 +347,7 @@ export function initResultadoAreas(){
   $('ra-desde').addEventListener('change', e => { desde = parseInt(e.target.value, 10); if(desde > hasta){ hasta = desde; ajustarMeses(false); } pintar(); });
   $('ra-hasta').addEventListener('change', e => { hasta = parseInt(e.target.value, 10); if(hasta < desde){ desde = hasta; ajustarMeses(false); } pintar(); });
   $('ra-reparto').addEventListener('change', e => { reparto = e.target.value; pintar(); });
+  $('ra-mes-metrica').addEventListener('change', () => { if(cargado) pintarPorMes(); });
   $('ra-exportar').addEventListener('click', () => { if(!cargado){ toast('Espera a que carguen los datos'); return; } exportar(); });
   $('ra-n-agregar').addEventListener('click', agregarLinea);
 }

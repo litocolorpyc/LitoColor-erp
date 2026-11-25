@@ -1,7 +1,7 @@
-import { loadAll } from './store.js';
+import { loadAll, DB } from './store.js';
 import { etiquetaOrden } from './helpers.js';
 import { initRegistrar } from './registrar.js';
-import { getPiezasPendientesPorPrioridad, chipsProcesosHTML, fichaOrdenParaOperarioHTML, tipoTrabajoLabel, estadoOrden, estadoBadgeHTML, imprimirDetalleOrden } from './ordenes.js';
+import { getPiezasPendientesPorPrioridad, chipsProcesosHTML, fichaOrdenParaOperarioHTML, tipoTrabajoLabel, nombreOrden, estadoOrden, estadoBadgeHTML, imprimirDetalleOrden } from './ordenes.js';
 
 document.getElementById('ayuda-toggle').addEventListener('click', () => {
   const box = document.getElementById('ayuda-box');
@@ -25,7 +25,7 @@ function renderPrioridadOperario(){
     return `<div class="prioridad-row" data-orden="${o.orden}">
       <span class="prioridad-num">${i + 1}</span>
       <span class="prioridad-info">
-        <div><b>Orden ${etiquetaOrden(o.orden)}-${p.suborden}</b> — ${o.cliente || '—'} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span>${p.pieza ? ' · ' + p.pieza : ''}</div>
+        <div><b>SubOrden ${etiquetaOrden(o.orden)}-${p.suborden}</b> — ${o.cliente || '—'}${o.producto ? ' · <b>' + o.producto + '</b>' : ''} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span>${p.pieza ? ' · ' + p.pieza : ''}</div>
         <div class="detalle-pieza-chips" style="margin-top:4px;margin-bottom:0">${chipsProcesosHTML(p)}</div>
       </span>
       ${estadoBadgeHTML(estadoOrden(o))}
@@ -41,7 +41,8 @@ let ordenDetalleOperarioActual = null;
 
 function mostrarDetalleOperario(orden){
   ordenDetalleOperarioActual = orden;
-  document.getElementById('reg-detalle-titulo').textContent = `Orden ${etiquetaOrden(orden)}`;
+  const info = DB.opp_ordenes.find(x => x.orden === orden);
+  document.getElementById('reg-detalle-titulo').textContent = info ? nombreOrden(info) : `Orden ${etiquetaOrden(orden)}`;
   document.getElementById('reg-detalle-body').innerHTML = fichaOrdenParaOperarioHTML(orden);
   const card = document.getElementById('reg-detalle-card');
   card.style.display = '';

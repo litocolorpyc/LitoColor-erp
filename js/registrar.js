@@ -240,7 +240,7 @@ export function unidadNumericaDelMaterial(area, nombre){
 // la actividad/máquina puntual y le da "Empezar" para que arranque el reloj.
 function runningCardPendienteHTML(row){
   return `<div class="reg-running-card reg-running-pendiente" data-id="${row.id}" data-area="${row.area || ''}">
-    <div class="reg-running-row"><span>Orden / Pieza</span><b>${row.orden ? etiquetaOrden(row.orden) : '—'}${row.op ? ' / ' + row.op : ''}</b></div>
+    <div class="reg-running-row"><span>SubOrden</span><b>${row.orden ? etiquetaOrden(row.orden) : '—'}${row.op ? ' / ' + row.op : ''}</b></div>
     <div class="reg-running-row"><span>Área asignada</span><b>${row.area || '—'}</b></div>
     ${row.asignado_por ? `<div class="reg-running-row"><span>Asignada por</span><b>${row.asignado_por}</b></div>` : ''}
     <span class="estado-chip pending">📌 asignada, sin iniciar</span>
@@ -267,7 +267,7 @@ function runningCardHTML(row){
     ? [...new Set(DB.opp_piezas.filter(p => p.orden === row.orden).map(p => p.papel).filter(Boolean))]
     : [];
   return `<div class="reg-running-card" data-id="${row.id}" data-area="${row.area || ''}">
-    <div class="reg-running-row"><span>Orden / Pieza</span><b>${row.orden ? etiquetaOrden(row.orden) : '—'}${row.op ? ' / ' + row.op : ''}</b></div>
+    <div class="reg-running-row"><span>SubOrden</span><b>${row.orden ? etiquetaOrden(row.orden) : '—'}${row.op ? ' / ' + row.op : ''}</b></div>
     <div class="reg-running-row"><span>Actividad</span><b>${row.actividad || '—'}</b></div>
     <div class="reg-running-row"><span>Máquina</span><b>${row.maquina || 'Trabajo manual'}</b></div>
     <div class="reg-running-row"><span>Hora inicio</span><b>${row.hora_ini || '—'}</b></div>

@@ -11,6 +11,7 @@ import { initCostos, poblarDatalistProveedores } from './costos.js';
 import { initRecibosCaja } from './recibos.js';
 import { initVentas, repararValorNetoFacturasVenta } from './ventas.js';
 import { initInformesOP } from './informes-op.js';
+import { initDashboardOP, renderDashboardOP } from './dashboard-op.js';
 import { initAdministrativo, renderAdministrativo } from './administrativo.js';
 import { initPantallaPlanta, renderPantallaPlanta } from './pantalla-planta.js';
 import { initDashboardGerente } from './dashboard-gerente.js';
@@ -36,6 +37,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
 function onRegistrarChange(){
   pasoSeguro('refrescar Gerencial', renderGerencial);
+  pasoSeguro('refrescar Dashboard OP', renderDashboardOP);
   pasoSeguro('refrescar Resultado por Área Comercial', renderResultadoAreas);
   pasoSeguro('refrescar Pantalla de planta', renderPantallaPlanta);
   pasoSeguro('refrescar Panel administrativo', renderAdministrativo);
@@ -117,6 +119,7 @@ async function arrancarApp(){
   });
   pasoSeguro('Consulta de tiempos por operario', initConsultaTiempos);
   pasoSeguro('Informes de órdenes', initInformesOP);
+  pasoSeguro('Dashboard OP', initDashboardOP);
   pasoSeguro('Panel administrativo', initAdministrativo);
   pasoSeguro('Pantalla de planta', initPantallaPlanta);
   pasoSeguro('Resumen gerencial', initDashboardGerente);

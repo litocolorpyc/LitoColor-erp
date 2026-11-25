@@ -1,6 +1,7 @@
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
 import { AREAS_COMERCIALES, areaPorDefecto } from './areas-comerciales.js';
+import { inductoresDePieza } from './inductores.js';
 import { toast, fmtNum, exportarExcel, fechaHoyLocal, wireTableScroll, agregarBotonExcelVentana, etiquetaOrden, parseOrden, esOrdenServicio, BASE_ORDEN_SERVICIO, requerimientosMaterialPieza, MARCA, MARCA_CSS, encabezadoMarca } from './helpers.js';
 import { getCurrentUser, puedeEditarProduccion } from './auth.js';
 import { poblarDatalistProveedores } from './costos.js';
@@ -898,6 +899,14 @@ function apellidoOrden(o){
   return nombres.slice(0, 3).join(', ') + (nombres.length > 3 ? '…' : '');
 }
 
+// Nombre completo de una orden: "Orden 6018 — Bell Chem — Cuaderno 2027 ·
+// Litografía" (pedido nov-2026: siempre cliente Y nombre del trabajo).
+export function trabajoDeOrden(o){ return o ? apellidoOrden(o) : ''; }
+export function nombreOrden(o){
+  const trabajo = trabajoDeOrden(o);
+  return `${esOrdenServicio(o.orden) ? 'Orden de servicio' : 'Orden'} ${etiquetaOrden(o.orden)} — ${o.cliente || 'sin cliente'}${trabajo ? ' — ' + trabajo : ''} · ${tipoTrabajoLabel(o)}`;
+}
+
 function renderPrioridadOrdenes(){
   const cont = document.getElementById('opp-prioridad-list');
   if(!cont) return;
@@ -1115,7 +1124,7 @@ function renderPrioridadArea(){
     return `<div class="prioridad-row" data-orden="${o.orden}" data-suborden="${p.suborden}" draggable="${puede}">
       <span class="prioridad-handle">${puede ? '⠿' : '·'}</span>
       <span class="prioridad-num">${i + 1}</span>
-      <span class="prioridad-info fila-clicable"><b>Orden ${etiquetaOrden(o.orden)}-${p.suborden}</b> — ${clienteTexto(o)} ${p.pieza ? '· ' + p.pieza : ''} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></span>
+      <span class="prioridad-info fila-clicable"><b>SubOrden ${etiquetaOrden(o.orden)}-${p.suborden}</b> — ${clienteTexto(o)}${o.producto ? ' · <b>' + o.producto + '</b>' : ''} ${p.pieza ? '· ' + p.pieza : ''} <span class="tipo-trabajo-chip">${tipoTrabajoLabel(o)}</span></span>
       ${selectorAsignar}
     </div>`;
   }).join('');
@@ -1246,7 +1255,7 @@ export function renderEstadoOrdenes(){
     }).join('');
     const estado = estadoOrden(o);
     return `<div class="estado-orden fila-clicable" data-orden="${o.orden}">
-      <div class="estado-orden-head"><b>Orden ${etiquetaOrden(o.orden)} — ${o.cliente || ''}</b>${estadoBadgeHTML(estado)}</div>
+      <div class="estado-orden-head"><b>Orden ${etiquetaOrden(o.orden)} — ${o.cliente || ''}${apellidoOrden(o) ? ' — ' + apellidoOrden(o) : ''}</b>${estadoBadgeHTML(estado)}</div>
       ${filas}
     </div>`;
   }).join('') || '<p style="color:var(--ink-faint);font-size:13px">Sin piezas asociadas todavía.</p>';
@@ -1523,7 +1532,7 @@ export function mostrarDetalleOrden(orden){
   const costo = registros.reduce((s,r)=>s+(r.valorActividad||0),0);
   const costoMateriales = costoMaterialesDeOrden(orden);
 
-  document.getElementById('opp-detalle-titulo').textContent = `${esOrdenServicio(orden) ? 'Orden de servicio' : 'Orden'} ${etiquetaOrden(orden)} — ${o.cliente || ''}${o.cliente_produccion && o.cliente_produccion !== o.cliente ? ' (produce para ' + o.cliente_produccion + ')' : ''} · ${tipoTrabajoLabel(o)}`;
+  document.getElementById('opp-detalle-titulo').textContent = `${esOrdenServicio(orden) ? 'Orden de servicio' : 'Orden'} ${etiquetaOrden(orden)} — ${o.cliente || ''}${o.cliente_produccion && o.cliente_produccion !== o.cliente ? ' (produce para ' + o.cliente_produccion + ')' : ''}${apellidoOrden(o) ? ' — ' + apellidoOrden(o) : ''} · ${tipoTrabajoLabel(o)}`;
   ordenDetalleActual = orden;
 
   // ---- horas por área de TODA la orden, para el gráfico ----
@@ -1572,15 +1581,18 @@ export function mostrarDetalleOrden(orden){
     ].join('');
 
     const filasOM = agruparPorAreaOperarioMaquina(recsPieza);
+    const inductores = inductoresDePieza(p, registros).map(i =>
+      `<span${i.aviso ? ` title="${i.aviso}"` : ''}>${i.nombre}: programado ${fmtNum(i.programado,i.dec)} · real ${i.real == null ? '—' : fmtNum(i.real,i.dec)}${i.aviso ? ' ⚠️' : ''}</span>`);
 
     return `<div class="detalle-pieza-card" data-excel-nombre="${(p.suborden + '. ' + (p.pieza || 'Pieza')).replace(/"/g,'')}">
       <div class="detalle-pieza-head">
-        <b>${p.pieza || ('Pieza ' + p.suborden)}</b>
+        <b>SubOrden ${etiquetaOrden(orden)}-${p.suborden} · ${p.pieza || ('Pieza ' + p.suborden)}</b>
         <span class="card-hint">${p.cantidad ? fmtNum(p.cantidad,0)+' uds solicitadas' : ''}</span>
       </div>
       <div class="detalle-ficha-grid">${ficha}</div>
       <div class="detalle-pieza-chips">${chips}</div>
       ${materiales.length ? `<div class="detalle-pieza-materiales"><b>Materiales consumidos:</b> ${materiales.join(' · ')}</div>` : ''}
+      ${inductores.length ? `<div class="detalle-pieza-materiales"><b>Inductores:</b> ${inductores.join(' &nbsp;|&nbsp; ')}</div>` : ''}
       <table class="detalle-mini-table">
         <thead><tr><th>Área</th><th>Operario · Máquina</th><th class="num">Horas</th><th class="num">Cantidad</th></tr></thead>
         <tbody>${filasOM}</tbody>
@@ -1763,7 +1775,7 @@ export function imprimirDetalleOrden(orden){
      .map(([l,v]) => `<tr><td class="lbl">${l}</td><td>${v}</td></tr>`).join('');
 
     return `<div class="pieza-print">
-      <h3>${p.pieza || ('Pieza ' + p.suborden)}${p.cantidad ? ' — ' + fmtNum(p.cantidad,0) + ' uds' : ''}</h3>
+      <h3>SubOrden ${etiquetaOrden(orden)}-${p.suborden} · ${p.pieza || ('Pieza ' + p.suborden)}${p.cantidad ? ' — ' + fmtNum(p.cantidad,0) + ' uds' : ''}</h3>
       <table class="ficha-print"><tbody>${ficha}</tbody></table>
       <p class="procesos-print"><b>Procesos:</b> ${procesosTxt}</p>
       ${materiales.length ? `<p class="materiales-print"><b>Materiales consumidos:</b> ${materiales.join(' · ')}</p>` : ''}
@@ -1777,7 +1789,7 @@ export function imprimirDetalleOrden(orden){
   const historialHTML = historialOrdenPrintHTML(registros, piezas);
 
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
-<title>Orden ${etiquetaOrden(orden)} — ${o.cliente || ''}</title>
+<title>Orden ${etiquetaOrden(orden)} — ${o.cliente || ''}${apellidoOrden(o) ? ' — ' + apellidoOrden(o) : ''}</title>
 <style>
   body{ font-family: Arial, Helvetica, sans-serif; color:#111; margin:20px; }
   h1{ font-size:20px; margin:0 0 2px; }
@@ -1807,7 +1819,7 @@ export function imprimirDetalleOrden(orden){
 </head><body>
   ${encabezadoMarca()}
   <h1>${esOrdenServicio(orden) ? 'Orden de servicio' : 'Orden de producción'} ${etiquetaOrden(orden)}</h1>
-  <div class="sub">${o.cliente || '—'}${o.cliente_produccion && o.cliente_produccion !== o.cliente ? ' (produce para ' + o.cliente_produccion + ')' : ''} ${o.producto ? '· ' + o.producto : ''} · ${tipoTrabajoLabel(o)} · ${(o.fecha||'').slice(0,10)} · Estado: ${estado.label}${estado.pct!=null ? ' (' + estado.pct + '%)' : ''}</div>
+  <div class="sub">${o.cliente || '—'}${o.cliente_produccion && o.cliente_produccion !== o.cliente ? ' (produce para ' + o.cliente_produccion + ')' : ''} ${apellidoOrden(o) ? '· ' + apellidoOrden(o) : ''} · ${tipoTrabajoLabel(o)} · ${(o.fecha||'').slice(0,10)} · Estado: ${estado.label}${estado.pct!=null ? ' (' + estado.pct + '%)' : ''}</div>
   ${o.observaciones ? `<p><b>Observaciones:</b> ${o.observaciones}</p>` : ''}
   ${piezasHTML}
   ${historialHTML}
@@ -1921,6 +1933,29 @@ function extraerPiezasDelGrid(grid){
   const filaPrecioVentaSinIva = buscarFila(grid, ['Precio Venta Antes De Iva', 'Precio Venta Antes de IVA']);
   const filaPrecioConIva = buscarFila(grid, ['Precio Total Con Iva', 'Precio Total Con IVA']);
 
+  // Presupuesto detallado de cada suborden: las filas entre "ITEMS" y "COSTO"
+  // (CTP, Papel, Impresión, Laminado, Acabado 1…).
+  const filaItems = buscarFila(grid, ['Items']);
+  const filaFinItems = filaItems === -1 ? -1 : buscarFila(grid, ['Costo'], filaItems + 1);
+  // "ACABADO 1" no dice qué es: el nombre está arriba, en el bloque "ACABADOS 8".
+  const nombreAcabado = etiqueta => {
+    const m = String(etiqueta).match(/^acabado\s*(\d+)$/i);
+    if(!m) return etiqueta;
+    const fila = buscarFila(grid, ['Acabados ' + (7 + Number(m[1]))]);
+    const nombre = fila === -1 ? null : valorCelda(grid, fila + 2, 0);
+    return typeof nombre === 'string' && nombre.trim() ? nombre.trim() : etiqueta;
+  };
+  const itemsPresupuesto = c => {
+    if(filaItems === -1 || filaFinItems === -1) return [];
+    const items = [];
+    for(let r = filaItems + 1; r < filaFinItems; r++){
+      const etiqueta = valorCelda(grid, r, 0);
+      const valor = parseFloat(valorCelda(grid, r, c));
+      if(typeof etiqueta === 'string' && etiqueta.trim() && valor > 0) items.push({ item: nombreAcabado(etiqueta.trim()), valor });
+    }
+    return items;
+  };
+
   const bloques = cols.map(c => {
     const otrosLineas = [];
     if(filaOtros !== -1){
@@ -1967,7 +2002,8 @@ function extraerPiezasDelGrid(grid){
       costo: valorCelda(grid, filaCosto, c),
       imprevistos: valorCelda(grid, filaImprevistos, c),
       precio_venta_antes_iva: valorCelda(grid, filaPrecioVentaSinIva, c),
-      precio_con_iva: valorCelda(grid, filaPrecioConIva, c)
+      precio_con_iva: valorCelda(grid, filaPrecioConIva, c),
+      items_presupuesto: itemsPresupuesto(c)
     };
   }).filter(b => b.orden != null && parseOrden(b.orden) != null);
 
@@ -2033,7 +2069,12 @@ function aplicarImportacion(ordenNum, piezas){
     costo: sumar('costo'),
     imprevistos: sumar('imprevistos'),
     precio_venta_antes_iva: sumar('precio_venta_antes_iva'),
-    precio_con_iva: sumar('precio_con_iva')
+    precio_con_iva: sumar('precio_con_iva'),
+    piezas: piezas.map(p => ({
+      pieza: p.pieza ? String(p.pieza).trim() : null, items: p.items_presupuesto || [],
+      costo: parseFloat(p.costo) || 0, imprevistos: parseFloat(p.imprevistos) || 0,
+      precio_venta_antes_iva: parseFloat(p.precio_venta_antes_iva) || 0, precio_con_iva: parseFloat(p.precio_con_iva) || 0
+    }))
   };
   const hayPresupuesto = presupuestoPendienteImportacion.costo || presupuestoPendienteImportacion.precio_venta_antes_iva;
 
@@ -2240,6 +2281,29 @@ async function alertarStockPapelInsuficiente(orden, piezasPayload){
   }
 }
 
+// Guarda el presupuesto de cada suborden que venía en el Excel (lo usa el
+// Dashboard OP). Se empareja por nombre de pieza y, si no, por posición.
+async function guardarPresupuestoPorPieza(orden, importadas, piezasPayload){
+  const norm = s => String(s || '').trim().toLowerCase();
+  const rows = piezasPayload.map((p, i) => {
+    const x = importadas.find(y => y.pieza && norm(y.pieza) === norm(p.pieza)) || importadas[i];
+    if(!x || !(x.costo || x.items.length)) return null;
+    return { orden, suborden: p.suborden, pieza: p.pieza, items: x.items, costo: x.costo, imprevistos: x.imprevistos,
+      total_costo: x.costo + x.imprevistos, precio_venta_antes_iva: x.precio_venta_antes_iva, precio_con_iva: x.precio_con_iva,
+      actualizado_en: new Date().toISOString() };
+  }).filter(Boolean);
+  if(!rows.length) return;
+  try{
+    const { error: errDel } = await sb.from('presupuesto_pieza').delete().eq('orden', orden);
+    if(errDel) throw errDel;
+    const { error } = await sb.from('presupuesto_pieza').insert(rows);
+    if(error) throw error;
+  }catch(err){
+    console.warn('No se pudo guardar el presupuesto por suborden:', err);
+    toast('La orden se guardó, pero no el presupuesto por suborden — revisa la consola');
+  }
+}
+
 async function saveOpp(){
   const btn = document.getElementById('opp-save');
   const ordenTexto = document.getElementById('opp-orden').value;
@@ -2383,6 +2447,7 @@ async function saveOpp(){
       }catch(err){
         console.warn('No se pudo guardar el presupuesto importado automáticamente:', err);
       }
+      await guardarPresupuestoPorPieza(orden, pres.piezas || [], piezasPayload);
     }
 
     resetOppForm(suggestNextOrden());
@@ -2681,7 +2746,7 @@ export function fichaOrdenParaOperarioHTML(orden){
 
     return `<div class="detalle-pieza-card" data-excel-nombre="${(p.suborden + '. ' + (p.pieza || 'Pieza')).replace(/"/g,'')}">
       <div class="detalle-pieza-head">
-        <b>${p.pieza || ('Pieza ' + p.suborden)}</b>
+        <b>SubOrden ${etiquetaOrden(orden)}-${p.suborden} · ${p.pieza || ('Pieza ' + p.suborden)}</b>
         <span class="card-hint">${p.cantidad ? fmtNum(p.cantidad,0)+' uds solicitadas' : ''}</span>
       </div>
       <div class="detalle-ficha-grid">${ficha}</div>
@@ -2696,7 +2761,7 @@ export function fichaOrdenParaOperarioHTML(orden){
 
   return `
     <div class="detalle-orden-obs" style="margin-bottom:12px">
-      <b>Orden ${etiquetaOrden(orden)} — ${o.cliente || ''}</b> · ${tipoTrabajoLabel(o)} · ${(o.fecha||'').slice(0,10)} ${estadoBadgeHTML(estado)}
+      <b>Orden ${etiquetaOrden(orden)} — ${o.cliente || ''}${apellidoOrden(o) ? ' — ' + apellidoOrden(o) : ''}</b> · ${tipoTrabajoLabel(o)} · ${(o.fecha||'').slice(0,10)} ${estadoBadgeHTML(estado)}
     </div>
     ${o.observaciones ? `<div class="detalle-orden-obs"><b>Observaciones:</b> ${o.observaciones}</div>` : ''}
     <div class="detalle-piezas-grid">${piezasHTML}</div>

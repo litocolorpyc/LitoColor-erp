@@ -1,7 +1,7 @@
 import { sb } from './supabase-client.js';
 import { DB, normProd } from './store.js';
 import { fmtCOP, fmtNum, areaColor, rangoFechas, rangoAnterior, deltaBadge, exportarExcel, imprimirInforme, toast, wireTableScroll, etiquetaOrden } from './helpers.js';
-import { mostrarDetalleOrden, tipoTrabajoLabel, renderOppRecent, subprocesosDeArea, getOrdenDetalleActual } from './ordenes.js';
+import { mostrarDetalleOrden, tipoTrabajoLabel, trabajoDeOrden, renderOppRecent, subprocesosDeArea, getOrdenDetalleActual } from './ordenes.js';
 import { puedeEditarProduccion } from './auth.js';
 import { listaAreasDisponibles, materialSelectOptionsHTML, unidadNumericaDelMaterial, parseCantidadConsumo, descontarInventarioYCargarCosto, revertirConsumoDeRegistro, avisoConsumoNoReflejado, actualizarCostoAdicionalReproceso } from './registrar.js';
 import { renderInventario } from './inventario.js';
@@ -587,6 +587,34 @@ export function renderProduccion(){
   document.querySelectorAll('#tbl-prod-area [data-area]').forEach(tr => {
     tr.addEventListener('click', () => mostrarDetalleProduccionArea(tr.dataset.area));
   });
+  renderProduccionPorMes();
+}
+
+// "Por área, pero también por meses" (pedido nov-2026): una fila por mes y
+// una columna por área, con barras lado a lado.
+const MESES_CORTOS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const etiquetaMes = k => `${MESES_CORTOS[+k.slice(5,7)-1]} ${k.slice(0,4)}`;
+function renderProduccionPorMes(){
+  const tbl = document.getElementById('tbl-prod-mes');
+  if(!tbl) return;
+  const metrica = document.getElementById('prod-mes-metrica').value;
+  const { desde, hasta } = rangoProd;
+  const mapa = {}, totArea = {};
+  DB.produccion.filter(r => enRango(r.fecha, desde, hasta)).forEach(r => {
+    const m = r.fecha.slice(0,7), a = r.area || 'General';
+    const v = metrica === 'h' ? (r.tiempoHr||0) : (r.valorActividad||0);
+    mapa[m] = mapa[m] || {}; mapa[m][a] = (mapa[m][a]||0) + v; totArea[a] = (totArea[a]||0) + v;
+  });
+  const meses = Object.keys(mapa).sort();
+  const areas = Object.keys(totArea).sort((a,b) => totArea[b] - totArea[a]);
+  const f = v => !v ? '—' : (metrica === 'h' ? fmtNum(v,1) : fmtCOP(v));
+  const total = m => areas.reduce((s,a) => s + (mapa[m][a]||0), 0);
+  tbl.querySelector('thead').innerHTML = `<tr><th>Mes</th>${areas.map(a=>`<th class="num">${a}</th>`).join('')}<th class="num">Total</th></tr>`;
+  tbl.querySelector('tbody').innerHTML = meses.map(m => `<tr><td>${etiquetaMes(m)}</td>${areas.map(a=>`<td class="num">${f(mapa[m][a])}</td>`).join('')}<td class="num"><b>${f(total(m))}</b></td></tr>`).join('')
+    || '<tr><td style="text-align:center;color:var(--ink-faint)">Sin datos en este rango</td></tr>';
+  tbl.querySelector('tfoot').innerHTML = meses.length ? `<tr><th>Total</th>${areas.map(a=>`<th class="num">${f(totArea[a])}</th>`).join('')}<th class="num">${f(meses.reduce((s,m)=>s+total(m),0))}</th></tr>` : '';
+  makeChart('chart-prod-mes', { type:'bar', data:{ labels: meses.map(etiquetaMes),
+    datasets: areas.map(a => ({ label:a, data: meses.map(m => mapa[m][a]||0), backgroundColor: areaColor(a) })) }, options: baseBarOpts(false) });
 }
 
 function imprimirProduccion(){
@@ -618,11 +646,12 @@ function mostrarDetalleProduccionArea(area){
   document.querySelector('#tbl-prod-area-detalle tbody').innerHTML = filas.map(f => `<tr class="fila-clicable" data-orden="${f.orden}">
       <td>${etiquetaOrden(f.orden)}${f.suborden!=null ? '-' + f.suborden : ''}</td>
       <td>${f.cliente || '—'}</td>
+      <td>${trabajoDeOrden(DB.opp_ordenes.find(o => o.orden === f.orden)) || '—'}</td>
       <td>${f.pieza || '—'}</td>
       <td class="num">${fmtNum(f.horas,2)}</td>
       <td class="num">${fmtNum(f.cantidad,0)}</td>
       <td class="num">${f.registros}</td>
-    </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint)">Sin órdenes asociadas en este rango (puede ser trabajo "sin orden asignada")</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint)">Sin órdenes asociadas en este rango (puede ser trabajo "sin orden asignada")</td></tr>';
 
   document.querySelectorAll('#tbl-prod-area-detalle [data-orden]').forEach(tr => {
     tr.addEventListener('click', () => irAOrdenYVerDetalle(parseInt(tr.dataset.orden, 10)));
@@ -1262,6 +1291,7 @@ export function initDashboardFilters(){
   wireExportButtons();
   wireEdicionRegistro();
   wireScrollBitacora();
+  document.getElementById('prod-mes-metrica')?.addEventListener('change', renderProduccionPorMes);
   wireTableScroll('tbl-ger-ordenes', 'ger-rent-ir-inicio', 'ger-rent-ir-final');
   const selRentVista = document.getElementById('ger-rent-vista');
   if(selRentVista) selRentVista.addEventListener('change', () => {

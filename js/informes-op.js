@@ -2,6 +2,7 @@ import { sb } from './supabase-client.js';
 import { DB } from './store.js';
 import { fmtNum, rangoFechas, toast, etiquetaOrden, imprimirInforme } from './helpers.js';
 import { parseCantidadConsumo } from './registrar.js';
+import { inductoresDePieza, inductorDeArea, piezasDeOrden } from './inductores.js';
 
 // Pedido 21oct26: informes por rango de fechas sobre las órdenes (listar OP,
 // por cliente, consumo de un material, laminadas, argolladas) y los
@@ -84,6 +85,21 @@ function repPorProceso(d, h, filtro, titulo, area){
     columnas: [COL('orden','Orden'), COL('cliente','Cliente'), COL('pieza','Pieza'), COL('op','OP'), COL('detalle','Detalle'), COL('cant','Cantidad',1), COL('area','Área')] };
 }
 
+// Inductores por suborden (tiros y m²), programado contra real.
+function repInductores(d, h){
+  const filas = [];
+  ordenesEnRango(d, h).sort((a,b) => a.orden - b.orden).forEach(o => {
+    piezasDeOrden(o.orden).forEach(p => inductoresDePieza(p).forEach(i => {
+      filas.push({ orden: etiquetaOrden(o.orden) + '-' + p.suborden, cliente: o.cliente || '—', trabajo: o.producto || '—', pieza: p.pieza || ('Pieza ' + p.suborden),
+        inductor: i.nombre, prog: fmtNum(i.programado, i.dec), real: i.real == null ? '—' : fmtNum(i.real, i.dec),
+        pct: i.real != null && i.programado ? fmtNum(i.real / i.programado * 100, 0) + '%' : '—', revisar: i.aviso ? '⚠️ revisar' : '' });
+    }));
+  });
+  return { titulo: 'Inductores por suborden: programado vs. real', extra: 'Órdenes con fecha en el rango', filas,
+    columnas: [COL('orden','SubOrden'), COL('cliente','Cliente'), COL('trabajo','Trabajo'), COL('pieza','Pieza'), COL('inductor','Inductor'),
+      COL('prog','Programado',1), COL('real','Real',1), COL('pct','Real / programado',1), COL('revisar','Aviso')] };
+}
+
 // Real = cantidad / horas de los registros del rango; presupuestado = lo
 // programado en la orden contra el estándar de unidades/hora del área.
 function repParametrosPiso(d, h){
@@ -97,18 +113,31 @@ function repParametrosPiso(d, h){
   const filas = [];
   Array.from(grupos.values()).sort((a,b) => a.area.localeCompare(b.area) || a.orden - b.orden).forEach(g => {
     if(g.horas <= 0 || g.cant <= 0) return;
-    const prog = DB.opp_piezas.filter(p => p.orden === g.orden)
-      .reduce((s,p) => s + (AREA_PLIEGOS.test(g.area) ? (Number(p.pliegos) || 0) : (Number(p.cantidad) || 0)), 0);
+    // Litografía, troquelado, plastificado y engomado se miden con su inductor
+    // (tiros o m²); las demás áreas, en pliegos o unidades como antes.
+    const ind = inductorDeArea(g.area);
+    let prog, hecho = g.cant, unidad = AREA_PLIEGOS.test(g.area) ? 'pliegos' : 'unid.', dec = 0;
+    if(ind){
+      const regs = DB.produccion.filter(r => r.orden === g.orden && r.area === g.area && enRango(r.fecha, d, h));
+      const valores = piezasDeOrden(g.orden).flatMap(p => inductoresDePieza(p, regs)).filter(i => i.clave === ind.clave);
+      prog = valores.reduce((s,i) => s + i.programado, 0);
+      hecho = valores.reduce((s,i) => s + (i.real || 0), 0);
+      unidad = ind.unidad; dec = ind.dec;
+      if(!hecho) return; // la orden no tiene datos para calcular el inductor
+    } else {
+      prog = DB.opp_piezas.filter(p => p.orden === g.orden)
+        .reduce((s,p) => s + (AREA_PLIEGOS.test(g.area) ? (Number(p.pliegos) || 0) : (Number(p.cantidad) || 0)), 0);
+    }
     const est = estandares[g.area];
-    const real = g.cant / g.horas;
-    filas.push({ area: g.area, orden: etiquetaOrden(g.orden), cliente: clienteDe(g.orden) || '—',
-      prog: prog ? fmtNum(prog,0) : '—', cant: fmtNum(g.cant,0), horas: fmtNum(g.horas,1),
+    const real = hecho / g.horas;
+    filas.push({ area: g.area, unidad, orden: etiquetaOrden(g.orden), cliente: clienteDe(g.orden) || '—',
+      prog: prog ? fmtNum(prog,dec) : '—', cant: fmtNum(hecho,dec), horas: fmtNum(g.horas,1),
       hpres: est && prog ? fmtNum(prog / est, 1) : '—', est: est ? fmtNum(est,0) : '—', real: fmtNum(real,0),
       desv: est ? fmtNum((real/est - 1)*100,0) + '%' : '—' });
   });
-  return { titulo: 'Parámetros de piso: presupuestado vs. real (unidades por hora)', filas, esPiso: true,
+  return { titulo: 'Parámetros de piso: presupuestado vs. real (producción por hora)', filas, esPiso: true,
     extra: Object.keys(estandares).length ? 'Presupuestado = estándar por área' : 'Aún no hay estándares por área: defínelos abajo para ver el presupuestado',
-    columnas: [COL('area','Área'), COL('orden','Orden'), COL('cliente','Cliente'), COL('prog','Programado',1), COL('cant','Real hecho',1),
+    columnas: [COL('area','Área'), COL('orden','Orden'), COL('cliente','Cliente'), COL('unidad','Se mide en'), COL('prog','Programado',1), COL('cant','Real hecho',1),
       COL('horas','Horas reales',1), COL('hpres','Horas presup.',1), COL('est','Presup. u/h',1), COL('real','Real u/h',1), COL('desv','Real vs presup.',1)] };
 }
 
@@ -142,7 +171,7 @@ function consultar(){
     ops: () => repListarOP(d, h), cliente: () => repPorCliente(d, h), material: () => repMaterial(d, h),
     laminadas: () => repPorProceso(d, h, esLaminada, 'Órdenes laminadas', 'Plastificado'),
     argolladas: () => repPorProceso(d, h, esArgollada, 'Órdenes argolladas', 'Terminado'),
-    piso: () => repParametrosPiso(d, h)
+    piso: () => repParametrosPiso(d, h), inductores: () => repInductores(d, h)
   };
   const res = mapa[tipo]();
   if(res.error){ hint.textContent = res.error; return; }
