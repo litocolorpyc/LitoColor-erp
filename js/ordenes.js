@@ -9,6 +9,9 @@ import { poblarDatalistProveedores } from './costos.js';
 import { movimientosPorProduccion, costosDeRegistro, sumarCostos } from './reproceso-costos.js';
 
 const ROLES_REORDENAN_PRIORIDAD = ['admin', 'gerente', 'jefe_produccion'];
+// Cambiar el N° de una orden: solo Gerente y Jefe de Producción (pedido del
+// cliente, 26nov26). La base de datos lo exige igual.
+const puedeCambiarNumero = () => ['gerente', 'jefe_produccion'].includes(getCurrentUser()?.rol);
 
 let oppPiezaCount = 0;
 let editingOrden = null; // si no es null, Guardar actualiza esa orden en vez de crear una nueva
@@ -862,6 +865,7 @@ function renderOppLista(rows){
         <button type="button" class="row-btn" data-detalle="${o.orden}">Ver detalle</button>
         <button type="button" class="row-btn" data-edit="${o.orden}">Editar</button>
         <button type="button" class="row-btn" data-dup="${o.orden}">Duplicar</button>
+        ${puedeCambiarNumero() ? `<button type="button" class="row-btn" data-renum="${o.orden}">Cambiar N°</button>` : ''}
         ${o.estado!=='Cancelada' ? `<button type="button" class="row-btn row-btn-danger" data-cancel="${o.orden}">Cancelar</button>` : ''}
       </div></td>
     </tr>`;
@@ -871,6 +875,28 @@ function renderOppLista(rows){
   document.querySelectorAll('#tbl-opp-recent [data-edit]').forEach(b => b.addEventListener('click', () => loadOrdenParaEditar(parseInt(b.dataset.edit,10))));
   document.querySelectorAll('#tbl-opp-recent [data-dup]').forEach(b => b.addEventListener('click', () => duplicarOrden(parseInt(b.dataset.dup,10))));
   document.querySelectorAll('#tbl-opp-recent [data-cancel]').forEach(b => b.addEventListener('click', () => cancelarOrden(parseInt(b.dataset.cancel,10))));
+  document.querySelectorAll('#tbl-opp-recent [data-renum]').forEach(b => b.addEventListener('click', () => cambiarNumeroOrden(parseInt(b.dataset.renum,10))));
+}
+
+// Corrige el número de una orden mal digitada. La base de datos mueve todo lo
+// asociado (piezas, tiempos, costos, remisiones…) en un solo paso y vuelve a
+// validar el rol y que el número nuevo esté libre (cambiar_numero_orden).
+async function cambiarNumeroOrden(orden){
+  const actual = etiquetaOrden(orden);
+  const o = DB.opp_ordenes.find(x => x.orden === orden);
+  if(!o || !puedeCambiarNumero()) return;
+  const resp = prompt(`Cambiar el número de la orden ${actual} (${o.cliente || 'sin cliente'} — ${o.producto || 'sin producto'}).\n\nEscribe el número correcto:`);
+  if(resp == null || !resp.trim()) return;
+  const nuevo = parseOrden(resp);
+  if(!nuevo){ alert('N° de orden no válido — usa un número (ej. 6090) o S- y un número para servicio (ej. S-0001).'); return; }
+  const nuevaEtiqueta = etiquetaOrden(nuevo);
+  if(nuevo === orden){ alert('Es el mismo número que ya tiene.'); return; }
+  if(!confirm(`¿Cambiar la orden ${actual} por ${nuevaEtiqueta}?\n\nTodo lo que tiene (piezas, tiempos registrados, costos, presupuesto y remisiones) pasa al número ${nuevaEtiqueta}. Si ya imprimiste la hoja, vuelve a imprimirla.`)) return;
+
+  const { error } = await sb.rpc('cambiar_numero_orden', { p_actual: orden, p_nuevo: nuevo });
+  if(error){ console.error(error); alert('No se pudo cambiar el número:\n\n' + error.message); return; }
+  alert(`Listo: la orden ${actual} ahora es la ${nuevaEtiqueta}.\n\nLa página se va a recargar para mostrar los datos actualizados.`);
+  location.reload();
 }
 function fmtCOPlocal(n){ if(n==null||isNaN(n)) return '—'; return '$' + Math.round(n).toLocaleString('es-CO'); }
 
