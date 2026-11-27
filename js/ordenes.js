@@ -9,8 +9,8 @@ import { poblarDatalistProveedores } from './costos.js';
 import { movimientosPorProduccion, costosDeRegistro, sumarCostos } from './reproceso-costos.js';
 
 const ROLES_REORDENAN_PRIORIDAD = ['admin', 'gerente', 'jefe_produccion'];
-// Cambiar el N° de una orden: solo Gerente y Jefe de Producción (pedido del
-// cliente, 26nov26). La base de datos lo exige igual.
+// Cambiar el N° de una orden o eliminarla: solo Gerente y Jefe de Producción
+// (pedido del cliente, 26nov26). La base de datos lo exige igual.
 const puedeCambiarNumero = () => ['gerente', 'jefe_produccion'].includes(getCurrentUser()?.rol);
 
 let oppPiezaCount = 0;
@@ -865,7 +865,8 @@ function renderOppLista(rows){
         <button type="button" class="row-btn" data-detalle="${o.orden}">Ver detalle</button>
         <button type="button" class="row-btn" data-edit="${o.orden}">Editar</button>
         <button type="button" class="row-btn" data-dup="${o.orden}">Duplicar</button>
-        ${puedeCambiarNumero() ? `<button type="button" class="row-btn" data-renum="${o.orden}">Cambiar N°</button>` : ''}
+        ${puedeCambiarNumero() ? `<button type="button" class="row-btn" data-renum="${o.orden}">Cambiar N°</button>
+        <button type="button" class="row-btn row-btn-danger" data-eliminar="${o.orden}">Eliminar</button>` : ''}
         ${o.estado!=='Cancelada' ? `<button type="button" class="row-btn row-btn-danger" data-cancel="${o.orden}">Cancelar</button>` : ''}
       </div></td>
     </tr>`;
@@ -876,6 +877,23 @@ function renderOppLista(rows){
   document.querySelectorAll('#tbl-opp-recent [data-dup]').forEach(b => b.addEventListener('click', () => duplicarOrden(parseInt(b.dataset.dup,10))));
   document.querySelectorAll('#tbl-opp-recent [data-cancel]').forEach(b => b.addEventListener('click', () => cancelarOrden(parseInt(b.dataset.cancel,10))));
   document.querySelectorAll('#tbl-opp-recent [data-renum]').forEach(b => b.addEventListener('click', () => cambiarNumeroOrden(parseInt(b.dataset.renum,10))));
+  document.querySelectorAll('#tbl-opp-recent [data-eliminar]').forEach(b => b.addEventListener('click', () => eliminarOrden(parseInt(b.dataset.eliminar,10))));
+}
+
+// Borra una orden montada por error y libera su número. La base de datos solo
+// lo permite si no tiene tiempos, costos ni documentos (eliminar_orden).
+async function eliminarOrden(orden){
+  const lbl = etiquetaOrden(orden);
+  const o = DB.opp_ordenes.find(x => x.orden === orden);
+  if(!o || !puedeCambiarNumero()) return;
+  const resp = prompt(`ELIMINAR la orden ${lbl} (${o.cliente || 'sin cliente'} — ${o.producto || 'sin producto'}).\n\nSe borra con sus piezas y presupuesto, y el número queda libre. Para solo anularla usa "Cancelar".\n\nPara confirmar, escribe el número de la orden:`);
+  if(resp == null) return;
+  if(parseOrden(resp) !== orden){ alert('El número no coincide. No se eliminó nada.'); return; }
+
+  const { error } = await sb.rpc('eliminar_orden', { p_orden: orden });
+  if(error){ console.error(error); alert('No se pudo eliminar:\n\n' + error.message); return; }
+  alert(`La orden ${lbl} fue eliminada.\n\nLa página se va a recargar para mostrar los datos actualizados.`);
+  location.reload();
 }
 
 // Corrige el número de una orden mal digitada. La base de datos mueve todo lo
